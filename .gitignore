@@ -21,6 +21,7 @@
 *.dylib
 
 # Executables
+bam2gtf
 *.exe
 *.out
 *.app
@@ -34,3 +35,7 @@
 
 #data
 data/*
+
+#tags
+tags
+cscope.*

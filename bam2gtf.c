@@ -1,48 +1,28 @@
-/*  test/test_view.c -- simple view tool, purely for use in a test harness.
-
-    Copyright (C) 2012 Broad Institute.
-    Copyright (C) 2013-2014 Genome Research Ltd.
-
-    Author: Heng Li <lh3@sanger.ac.uk>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.  */
-
-#include <config.h>
+/* bam2gtf.c
+ *   generate junction information based on sorted bam file
+ * 
+ * Author:  Yan Gao
+ * Contact: yangao07@hit.edu.cn                             */
 
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "cram/cram.h"
+#include "htslib/cram/cram.h"
+#include "htslib/htslib/sam.h"
+#include "utils.h"
 
-#include "htslib/sam.h"
-
-int main(int argc, char *argv[])
+int old_main(int argc, char *argv[])
 {
-    samFile *in;
+    samFile *in; // sam fp
+    bam_hdr_t *h; // header
+    bam1_t *b;   // bam fp
+    char moder[8];
+    htsFile *out; // out fp
+
     char *fn_ref = 0;
     int flag = 0, c, clevel = -1, ignore_sam_err = 0;
-    char moder[8];
-    bam_hdr_t *h;
-    bam1_t *b;
-    htsFile *out;
     char modew[800];
     int r = 0, exit_code = 0;
     hts_opt *in_opts = NULL, *out_opts = NULL;
@@ -53,19 +33,19 @@ int main(int argc, char *argv[])
 
     while ((c = getopt(argc, argv, "IbDCSl:t:i:o:N:BZ:@:")) >= 0) {
         switch (c) {
-        case 'S': flag |= 1; break;
-        case 'b': flag |= 2; break;
-        case 'D': flag |= 4; break;
-        case 'C': flag |= 8; break;
-        case 'B': benchmark = 1; break;
-        case 'l': clevel = atoi(optarg); flag |= 2; break;
-        case 't': fn_ref = optarg; break;
-        case 'I': ignore_sam_err = 1; break;
-        case 'i': if (hts_opt_add(&in_opts,  optarg)) return 1; break;
-        case 'o': if (hts_opt_add(&out_opts, optarg)) return 1; break;
-        case 'N': nreads = atoi(optarg); break;
-        case 'Z': extra_hdr_nuls = atoi(optarg); break;
-        case '@': nthreads = atoi(optarg); break;
+            case 'S': flag |= 1; break;
+            case 'b': flag |= 2; break;
+            case 'D': flag |= 4; break;
+            case 'C': flag |= 8; break;
+            case 'B': benchmark = 1; break;
+            case 'l': clevel = atoi(optarg); flag |= 2; break;
+            case 't': fn_ref = optarg; break;
+            case 'I': ignore_sam_err = 1; break;
+            case 'i': if (hts_opt_add(&in_opts,  optarg)) return 1; break;
+            case 'o': if (hts_opt_add(&out_opts, optarg)) return 1; break;
+            case 'N': nreads = atoi(optarg); break;
+            case 'Z': extra_hdr_nuls = atoi(optarg); break;
+            case '@': nthreads = atoi(optarg); break;
         }
     }
     if (argc == optind) {
@@ -88,7 +68,7 @@ int main(int argc, char *argv[])
     }
     h->ignore_sam_err = ignore_sam_err;
     if (extra_hdr_nuls) {
-        char *new_text = realloc(h->text, h->l_text + extra_hdr_nuls);
+        char *new_text = (char*)realloc(h->text, h->l_text + extra_hdr_nuls);
         if (new_text == NULL) {
             fprintf(stderr, "Error reallocing header text\n");
             return EXIT_FAILURE;
@@ -213,4 +193,38 @@ int main(int argc, char *argv[])
         hts_tpool_destroy(p.pool);
 
     return exit_code;
+}
+
+int bam2gtf_usage(void)
+{
+    err_printf("\n");
+	err_printf("Program: bam2gtf\n");
+    err_printf("Usage:   bam2gtf <in.bam> > out.gtf\n");
+	//err_printf("Usage:   bam2gtf <command> [options]\n\n");
+	//err_printf("Commands: \n");
+	//err_printf("         unipath     generate unipath seq from bwt-str\n");
+    //err_printf("         index       index unipath's bwt-str\n");
+	//err_printf("         query       query the unipath with the bwt index\n");
+	err_printf("\n");
+	return 1;
+}
+
+int main(int argc, char *argv[])
+{
+    samFile *in; bam_hdr_t *h; bam1_t *b;
+    int r;
+    if (argc < 2) {
+        return bam2gtf_usage();
+    }
+    in = sam_open(argv[optind], "rb");
+    if (in == NULL) err_printf("Error opening \"%s\"\n", argv[optind]);
+    h = sam_hdr_read(in);
+    if (h == NULL) err_printf("Couldn't read header for \"%s\"\n", argv[optind]);
+    b = bam_init1();
+    while ((r = sam_read1(in, h, b)) >= 0) {
+        stdout_printf("%d %d\n", b->core.tid, b->core.pos);
+    }
+
+    bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+    return 0;
 }
