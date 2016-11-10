@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "htslib/htslib/sam.h"
 
 /* TAB-separated standard GTF columns */
 /*
@@ -46,7 +47,12 @@ typedef struct {
     exon_t *exon; int exon_n, exon_m;
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
+    char qname[1024];
 } trans_t;
+
+typedef struct {
+    trans_t *t; int trans_n, trans_m;
+} read_trans_t;
 
 typedef struct {
     trans_t *trans; int trans_n, trans_m;
@@ -63,12 +69,19 @@ int set_trans(trans_t **t);
 trans_t *exon_realloc(trans_t *t);
 void trans_free(trans_t *t);
 
+read_trans_t *read_trans_init(void);
+void add_read_trans(read_trans_t *r, trans_t t, char *qname);
+read_trans_t *read_trans_realloc(read_trans_t *r);
+void read_trans_free(read_trans_t *r);
+int set_read_trans(read_trans_t *r);
+
 gene_t *gene_init(void);
 gene_t *trans_realloc(gene_t *g);
 void gene_free(gene_t *g);
 
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, FILE *out);
+int print_read_trans(read_trans_t r, bam_hdr_t *h, char *src, FILE *out);
 int print_gene(gene_t g, FILE *out);
 
 #define INTRON_MIN_LEN 50

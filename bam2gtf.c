@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <getopt.h>
 #include "htslib/htslib/sam.h"
 #include "utils.h"
 #include "gtf.h"
@@ -20,19 +20,20 @@
 int bam2gtf_usage(void)
 {
     err_printf("\n");
-	err_printf("Program: bam2gtf\n");
-    err_printf("Usage:   bam2gtf <in.bam> > out.gtf\n");
-	//err_printf("Usage:   bam2gtf <command> [options]\n\n");
-	//err_printf("Commands: \n");
-	//err_printf("         unipath     generate unipath seq from bwt-str\n");
-    //err_printf("         index       index unipath's bwt-str\n");
-	//err_printf("         query       query the unipath with the bwt index\n");
+	err_printf("Program: bam2gtf \n");
+    err_printf("Usage:   bam2gtf [option] <in.bam> > out.gtf\n");
+    err_printf("Options:\n");
+    err_printf("                 -b --only-best   for reads with multi-alignments, only use the best one.\n");
+    err_printf("                                  1=only-best, 0=all-alignments [Def=1]\n");
+    err_printf("                 -s --source      source field in GTF, program, database or project name.\n");
+    err_printf("                                  [Def=NONE]\n");
 	err_printf("\n");
 	return 1;
 }
 
 int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
 {
+    t->exon_n = 0;
     int32_t tid = b->core.tid; int32_t start = b->core.pos+1, end = start-1, qstart = 1, qend = 0;/*1-base*/
     uint8_t is_rev = bam_is_rev(b);
     uint32_t i;
@@ -76,27 +77,44 @@ int gen_trans(bam1_t *b, trans_t *t)
 
     uint32_t *c = bam_get_cigar(b), n_cigar = b->core.n_cigar;
     gen_exon(t, b, c, n_cigar);
-
-    if (0) {
-        uint8_t *p = bam_aux_get(b, "XA"); // alternative alignment
-        if (p) { 
-            if (*p == 'Z') {
-                char *s = bam_aux2Z(p);
-                //printf("XA:Z:%s\n", s);
-            }
-        }
-    }
-    // construct trans based all the exons
-    // XXX two split-alignments => two trans
-    int res = 0;
-    return res;
+    return 1;
+    /*
+       if (0) {
+       uint8_t *p = bam_aux_get(b, "XA"); // alternative alignment
+       if (p) { 
+       if (*p == 'Z') {
+       char *s = bam_aux2Z(p);
+       printf("XA:Z:%s\n", s);
+       }
+       }
+       }
+    */
 }
 
-int main(int argc, char *argv[])
+int bam2gtf(int argc, char *argv[])
 {
-    samFile *in; bam_hdr_t *h; bam1_t *b; int r;
+    int c;
+    char src[1024]="NONE"; int only_best=1;
+	while ((c =getopt(argc, argv, "b:s:")) >= 0)
+    {
+        switch(c)
+        {
+            case 'b':
+                only_best=atoi(optarg);
+                if (only_best != 0 && only_best != 1) return bam2gtf_usage();
+                break;
+            case 's':
+                strcpy(src, optarg);
+                break;
+            default:
+                err_printf("Error: unknown option: %s.\n", optarg);
+                return bam2gtf_usage();
+                break;
+        }
+    }
+    if (argc -optind != 1) return bam2gtf_usage();
 
-    if (argc < 2) return bam2gtf_usage();
+    samFile *in; bam_hdr_t *h; bam1_t *b;
 
     in = sam_open(argv[optind], "rb");
     if (in == NULL) err_printf("Error opening \"%s\"\n", argv[optind]);
@@ -105,23 +123,28 @@ int main(int argc, char *argv[])
     b = bam_init1();
 
     char qname[1024], lqname[1024]="\0"; 
+    read_trans_t *r = read_trans_init();
     trans_t *t = trans_init(1);
 
-    while ((r = sam_read1(in, h, b)) >= 0) {
-        stdout_printf("%s %d %d\n", bam_get_qname(b), b->core.tid, b->core.pos);
-        // gen trans{exon,exon}
+    while (sam_read1(in, h, b) >= 0) {
+        //stdout_printf("%s %d %d\n", bam_get_qname(b), b->core.tid, b->core.pos);
         strcpy(qname, bam_get_qname(b));
         if (strcmp(qname, lqname) != 0) {
-            set_trans(&t);
-            print_trans(*t, stdout);
+            set_read_trans(r);
+            print_read_trans(*r, h, src, stdout);
             strcpy(lqname, qname);
-            t->exon_n = 0;
+            r->trans_n = 0;
+            // gen trans{exon,exon}
+            if (gen_trans(b, t)) add_read_trans(r, *t, qname);
+        } else if (!only_best) {
+            // gen trans{exon,exon}
+            if (gen_trans(b, t)) add_read_trans(r, *t, qname);
         }
-        r = gen_trans(b, t);
     }
-    set_trans(&t);
-    print_trans(*t, stdout);
+    set_read_trans(r);
+    print_read_trans(*r, h, src, stdout);
 
+    read_trans_free(r), trans_free(t);
     bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     return 0;
 }

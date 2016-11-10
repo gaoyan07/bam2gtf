@@ -14,10 +14,10 @@ HTS_ALL =   hts_all
 SOURCE  =	$(wildcard ${SRC_DIR}/*.c) 
 OBJS    =	$(SOURCE:.c=.o)
 
-BIN     =	$(BIN_DIR)/bam2gtf
+BIN     =	$(BIN_DIR)/gtools
 
-GDB_DEBUG   =   $(BIN_DIR)/gdb_bam2gtf
-NOR_DEBUG   =   $(BIN_DIR)/debug_bam2gtf
+GDB_DEBUG   =   $(BIN_DIR)/gdb_gtools
+NOR_DEBUG   =   $(BIN_DIR)/debug_gtools
 DMARCRO =	-D __DEBUG__
 
 .c.o:
@@ -25,8 +25,8 @@ DMARCRO =	-D __DEBUG__
 
 #all:       $(SOURCE) $(BIN) 
 all:       $(HTS_ALL) $(BIN) 
-gdb_lamsa: $(SOURCE) $(GDB_DEBUG) 
-debug_lamsa: $(SOURCE) $(NOR_DEBUG)
+gdb_gtools: $(SOURCE) $(GDB_DEBUG) 
+debug_gtools: $(SOURCE) $(NOR_DEBUG)
 
 
 $(HTS_ALL):
