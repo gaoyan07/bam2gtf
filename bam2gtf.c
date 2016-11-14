@@ -20,13 +20,12 @@
 int bam2gtf_usage(void)
 {
     err_printf("\n");
-	err_printf("Program: bam2gtf \n");
-    err_printf("Usage:   bam2gtf [option] <in.bam> > out.gtf\n");
-    err_printf("Options:\n");
-    err_printf("                 -b --only-best   for reads with multi-alignments, only use the best one.\n");
-    err_printf("                                  1=only-best, 0=all-alignments [Def=1]\n");
-    err_printf("                 -s --source      source field in GTF, program, database or project name.\n");
-    err_printf("                                  [Def=NONE]\n");
+    err_printf("Usage:   gtools bam2gtf [option] <in.bam> > out.gtf\n");
+    err_printf("Options:\n\n");
+    err_printf("    -b --only-best   [INT]    for reads with multi-alignments, only use the best one.\n");
+    err_printf("                              1=only-best, 0=all-alignments [Def=1]\n");
+    err_printf("    -s --source      [STR]    source field in GTF, program, database or project name.\n");
+    err_printf("                              [Def=NONE]\n");
 	err_printf("\n");
 	return 1;
 }
