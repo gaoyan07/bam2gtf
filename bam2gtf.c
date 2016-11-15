@@ -14,13 +14,13 @@
 #include "utils.h"
 #include "gtf.h"
 
-
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
 
+extern const char PROG[20];
 int bam2gtf_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   gtools bam2gtf [option] <in.bam> > out.gtf\n");
+    err_printf("Usage:   %s bam2gtf [option] <in.bam> > out.gtf\n", PROG);
     err_printf("Options:\n\n");
     err_printf("    -b --only-best   [INT]    for reads with multi-alignments, only use the best one.\n");
     err_printf("                              1=only-best, 0=all-alignments [Def=1]\n");
@@ -116,9 +116,9 @@ int bam2gtf(int argc, char *argv[])
     samFile *in; bam_hdr_t *h; bam1_t *b;
 
     in = sam_open(argv[optind], "rb");
-    if (in == NULL) err_printf("Error opening \"%s\"\n", argv[optind]);
+    if (in == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
     h = sam_hdr_read(in);
-    if (h == NULL) err_printf("Couldn't read header for \"%s\"\n", argv[optind]);
+    if (h == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1();
 
     char qname[1024], lqname[1024]="\0"; 
@@ -126,17 +126,15 @@ int bam2gtf(int argc, char *argv[])
     trans_t *t = trans_init(1);
 
     while (sam_read1(in, h, b) >= 0) {
-        //stdout_printf("%s %d %d\n", bam_get_qname(b), b->core.tid, b->core.pos);
+        err_printf("%d %s\n", b->core.l_qname, bam_get_qname(b));
         strcpy(qname, bam_get_qname(b));
         if (strcmp(qname, lqname) != 0) {
             set_read_trans(r);
             print_read_trans(*r, h, src, stdout);
             strcpy(lqname, qname);
             r->trans_n = 0;
-            // gen trans{exon,exon}
             if (gen_trans(b, t)) add_read_trans(r, *t, qname);
         } else if (!only_best) {
-            // gen trans{exon,exon}
             if (gen_trans(b, t)) add_read_trans(r, *t, qname);
         }
     }

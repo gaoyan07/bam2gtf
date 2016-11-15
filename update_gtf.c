@@ -2,10 +2,11 @@
 #include <stdlib.h>
 #include "utils.h"
 
+extern const char PROG[20];
 int update_gtf_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   gtools update_gtf <old.gtf> <new.gtf> > out.gtf\n");
+    err_printf("Usage:   %s update_gtf <old.gtf> <new.gtf> > out.gtf\n", PROG);
 	err_printf("\n");
 	return 1;
 }
