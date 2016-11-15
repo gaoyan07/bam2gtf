@@ -22,10 +22,8 @@ int bam2gtf_usage(void)
     err_printf("\n");
     err_printf("Usage:   %s bam2gtf [option] <in.bam> > out.gtf\n", PROG);
     err_printf("Options:\n\n");
-    err_printf("    -b --only-best   [INT]    for reads with multi-alignments, only use the best one.\n");
-    err_printf("                              1=only-best, 0=all-alignments [Def=1]\n");
-    err_printf("    -s --source      [STR]    source field in GTF, program, database or project name.\n");
-    err_printf("                              [Def=NONE]\n");
+    err_printf("         -s --source      [STR]    source field in GTF, program, database or project name.\n");
+    err_printf("                                   [NONE]\n");
 	err_printf("\n");
 	return 1;
 }
@@ -93,16 +91,12 @@ int gen_trans(bam1_t *b, trans_t *t)
 int bam2gtf(int argc, char *argv[])
 {
     int c;
-    char src[1024]="NONE"; int only_best=1;
-	while ((c =getopt(argc, argv, "b:s:")) >= 0)
+    char src[1024]="NONE";
+	while ((c = getopt(argc, argv, "b:s:")) >= 0)
     {
         switch(c)
         {
-            case 'b':
-                only_best=atoi(optarg);
-                if (only_best != 0 && only_best != 1) return bam2gtf_usage();
-                break;
-            case 's':
+           case 's':
                 strcpy(src, optarg);
                 break;
             default:
@@ -126,17 +120,14 @@ int bam2gtf(int argc, char *argv[])
     trans_t *t = trans_init(1);
 
     while (sam_read1(in, h, b) >= 0) {
-        err_printf("%d %s\n", b->core.l_qname, bam_get_qname(b));
         strcpy(qname, bam_get_qname(b));
         if (strcmp(qname, lqname) != 0) {
             set_read_trans(r);
             print_read_trans(*r, h, src, stdout);
             strcpy(lqname, qname);
             r->trans_n = 0;
-            if (gen_trans(b, t)) add_read_trans(r, *t, qname);
-        } else if (!only_best) {
-            if (gen_trans(b, t)) add_read_trans(r, *t, qname);
         }
+        if (gen_trans(b, t)) add_read_trans(r, *t, qname);
     }
     set_read_trans(r);
     print_read_trans(*r, h, src, stdout);
