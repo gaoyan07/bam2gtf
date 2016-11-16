@@ -31,7 +31,7 @@ debug_gtools: $(SOURCE) $(NOR_DEBUG)
 
 _end_flag = '$'
 $(HTS_ALL):
-	cd $(HTSLIB_DIR); sed -i 's/^LDFLAGS\s*=\s*$$/LDFLAGS  = -D BAM_NO_ID/' Makefile; make ; cd ../
+	cd $(HTSLIB_DIR); make ; cd ../
 $(BIN): $(OBJS)
 		$(CC) $(OBJS) -o $@ $(LIB)
 
