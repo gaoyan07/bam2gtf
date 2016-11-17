@@ -40,7 +40,6 @@
 typedef struct {
     int32_t tid; uint8_t is_rev;
     int32_t start, end; //1-base, ref
-    int32_t qstart, qend; //1-base, read
 } exon_t;
 
 typedef struct {
@@ -64,23 +63,24 @@ exon_t *exon_init(int n);
 void exon_free(exon_t *e);
 
 trans_t *trans_init(int n);
-int add_exon(trans_t *t, int32_t tid, int32_t start, int32_t end, int32_t qstart, int32_t qend, uint8_t is_rev);
-int set_trans(trans_t **t);
+int add_exon(trans_t *t, int32_t tid, int32_t start, int32_t end, uint8_t is_rev);
+int set_trans(trans_t *t, char *qname);
 trans_t *exon_realloc(trans_t *t);
 void trans_free(trans_t *t);
 
 read_trans_t *read_trans_init(void);
-void add_read_trans(read_trans_t *r, trans_t t, char *qname);
+void add_read_trans(read_trans_t *r, trans_t t);
 read_trans_t *read_trans_realloc(read_trans_t *r);
 void read_trans_free(read_trans_t *r);
-int set_read_trans(read_trans_t *r);
+//int set_read_trans(read_trans_t *r);
 
 gene_t *gene_init(void);
+void add_trans(gene_t *g, trans_t t);
 gene_t *trans_realloc(gene_t *g);
 void gene_free(gene_t *g);
 
 int print_exon(exon_t e, FILE *out);
-int print_trans(trans_t t, FILE *out);
+int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);
 int print_read_trans(read_trans_t r, bam_hdr_t *h, char *src, FILE *out);
 int print_gene(gene_t g, FILE *out);
 

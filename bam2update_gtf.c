@@ -18,6 +18,9 @@
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
 
 extern const char PROG[20];
+extern int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar);
+extern int gen_trans(bam1_t *b, trans_t *t);
+
 int bam2update_gtf_usage(void)
 {
     err_printf("\n");
@@ -31,82 +34,64 @@ int bam2update_gtf_usage(void)
 	return 1;
 }
 
-int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
+char *fgets_gene(FILE *gfp)
 {
-    t->exon_n = 0;
-    int32_t tid = b->core.tid; int32_t start = b->core.pos+1, end = start-1, qstart = 1, qend = 0;/*1-base*/
-    uint8_t is_rev = bam_is_rev(b);
-    uint32_t i;
-    for (i = 0; i < n_cigar; ++i) {
-        int l = bam_cigar_oplen(c[i]);
-        switch (bam_cigar_op(c[i])) {
-            case BAM_CREF_SKIP:  // N/D(0 1)
-            case BAM_CDEL :
-                if (l >= INTRON_MIN_LEN) {
-                    add_exon(t, tid, start, end, qstart, qend, is_rev);
-                    qstart = qend+1;
-                    start = end + l + 1;
-                }
-                end += l;
-                break;
-            case BAM_CMATCH: // 1 1
-            case BAM_CEQUAL:
-            case BAM_CDIFF:
-                qend += l, end += l;
-                break;
-            case BAM_CINS: // 1 0
-            case BAM_CSOFT_CLIP:
-            case BAM_CHARD_CLIP:
-                qend += l;
-                break;
-            case BAM_CPAD: // 0 0
-            case BAM_CBACK:
-                break;
-            default:
-                err_printf("Error: unknown cigar type: %d.\n", bam_cigar_op(c[i]));
-                break;
-        }
-    }
-    add_exon(t, tid, start, end, qstart, qend, is_rev);
-    return 0;
-}
-
-int gen_trans(bam1_t *b, trans_t *t)
-{
-    if (bam_unmap(b)) return 0;
-
-    uint32_t *c = bam_get_cigar(b), n_cigar = b->core.n_cigar;
-    gen_exon(t, b, c, n_cigar);
-    return 1;
-    /*
-       if (0) {
-       uint8_t *p = bam_aux_get(b, "XA"); // alternative alignment
-       if (p) { 
-       if (*p == 'Z') {
-       char *s = bam_aux2Z(p);
-       printf("XA:Z:%s\n", s);
-       }
-       }
-       }
-    */
-}
-
-char *fgets_gene(FILE *gfp, char *line, int size)
-{
-    char s[100];
-    while (fgets(line, size, gfp) != NULL) {
-        if ((sscanf(line, "%*s\t%*s\t%s", s) == 1) && strcmp(s, "gene") == 0) {
-            return line;
-        }
-        else return NULL;
+    char s[100]; char *line = (char*)_err_malloc(1024);
+    while (fgets(line, 1024, gfp) != NULL) {
+        if ((sscanf(line, "%*s\t%*s\t%s", s) == 1) && strcmp(s, "gene") == 0) return line;
     }
     return NULL;
 }
 
+char *read_gene(char *gtf_line, FILE *gfp, bam_hdr_t *h, gene_t *g, FILE *outfp)
+{
+    g->trans_n = 0;
+    if (gtf_line == NULL) return NULL;
+    char ref[100]="\0"; int start, end; char strand;
+    char type[20]="\0";
+    sscanf(gtf_line, "%s\t%*s\t%*s\t%d\t%d\t%*s\t%c", ref, &start, &end, &strand);
+    fputs(gtf_line, outfp);
+    // add to gene_t
+    trans_t *t = trans_init(1);
+    while (fgets(gtf_line, 1024, gfp) != NULL) {
+        // trans/exon => add to gene_t and print
+        // else(CDS, start, stop, UTR) => print
+        sscanf(gtf_line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c", ref, type, &start, &end, &strand);
+        uint8_t is_rev = (strand == '-' ? 1 : 0);
+        if (strcmp(type, "gene") == 0) goto ret;
+        else if (strcmp(type, "transcript") == 0) {
+            // add 
+            if (t->exon_n != 0) add_trans(g, *t);
+            t->exon_n = 0;
+        } else if (strcmp(type, "exon") == 0) {
+            // add
+            add_exon(t, bam_name2id(h, ref), start, end, is_rev);
+        }
+        fputs(gtf_line, outfp);
+    }
+    gtf_line = NULL;
+ret:
+    trans_free(t);
+    return gtf_line;
+}
+
+int check_novel(trans_t *t, gene_t *g)
+{
+    if (g->is_rev != t->is_rev) return 0;
+    int i, j, k;
+    for (i = 0; i < g->trans_n; ++i) {
+        for (j = 0; j < g->trans[i].exon_n; ++j) {
+            for (k = 0; k < t->exon_n; ++k) {
+
+            }
+        }
+    }
+    return 1;
+}
+
 int bam2update_gtf(int argc, char *argv[])
 {
-    int c;
-    char src[1024]="NONE";
+    int c; char src[1024]="NONE";
 	while ((c = getopt(argc, argv, "b:s:")) >= 0)
     {
         switch(c)
@@ -123,29 +108,40 @@ int bam2update_gtf(int argc, char *argv[])
     if (argc - optind != 2) return bam2update_gtf_usage();
 
     samFile *in; bam_hdr_t *h; bam1_t *b;
-
-    in = sam_open(argv[optind], "rb");
-    if (in == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
-    h = sam_hdr_read(in);
-    if (h == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
+    if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1();
 
-    FILE *gfp = fopen(argv[optind+1], "r"); char *gtf_line = (char*)malloc(sizeof(char)*1024);
+    FILE *gfp = fopen(argv[optind+1], "r"); char *gtf_line;
+    if ((gtf_line = fgets_gene(gfp)) == NULL) err_fatal(__func__, "Wrong format of GTF file: \"%s\"\n", argv[optind+1]);
 
-    read_trans_t *r = read_trans_init();
-    trans_t *t = trans_init(1);
+    // init for trans/exons from gene in GTF
+    gene_t *g = gene_init(); trans_t *t = trans_init(1);
+    gtf_line = read_gene(gtf_line, gfp, h, g, stdout);
+    // init for trans from sam record
+    int sam_ret = sam_read1(in, h, b); gen_trans(b, t); set_trans(t, bam_get_qname(b));
 
-    int sam_ret = sam_read1(in, h, b); gtf_line = fgets_gene(gfp, gtf_line, 1024);
-    while (sam_ret >= 0 && gtf_line != NULL) {
+    // merge loop
+    while (sam_ret >= 0 && g->trans_n != 0) {
+        // TODO: print_trans(t, h, src, outfp); // print all trans
+        // sam_end < gene_s: sam++
+        if (t->tid < g->tid || (t->tid == g->tid && t->end < g->start)) {
+            if ((sam_ret = sam_read1(in, h, b)) >= 0) {
+                gen_trans(b, t); set_trans(t, bam_get_qname(b));
+            }
+        } // gene_e < sam_s: gene++
+        else if (t->tid > g->tid || (t->tid == g->tid && t->start > g->end)) {
+            gtf_line = read_gene(gtf_line, gfp, h, g, stdout);
+        } // overlap and novel: add & merge & print
+        else {
+            if (check_novel(t, g)) {
+                add_trans(g, *t);
+                print_trans(*t, h, src, stdout);
+            }
+        }
     }
-    while (sam_read1(in, h, b) >= 0) {
-        r->trans_n = 0;
-        if (gen_trans(b, t)) add_read_trans(r, *t, bam_get_qname(b));
-        set_read_trans(r);
-        print_read_trans(*r, h, src, stdout);
-    }
 
-    read_trans_free(r), trans_free(t); free(gtf_line);
+    gene_free(g); trans_free(t); free(gtf_line);
     bam_destroy1(b); bam_hdr_destroy(h); sam_close(in); fclose(gfp);
     return 0;
 }

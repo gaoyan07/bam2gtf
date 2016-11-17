@@ -115,24 +115,14 @@ int bam2gtf(int argc, char *argv[])
     if (h == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1();
 
-    char qname[1024], lqname[1024]="\0"; 
-    read_trans_t *r = read_trans_init();
     trans_t *t = trans_init(1);
 
     while (sam_read1(in, h, b) >= 0) {
-        strcpy(qname, bam_get_qname(b));
-        if (strcmp(qname, lqname) != 0) {
-            set_read_trans(r);
-            print_read_trans(*r, h, src, stdout);
-            strcpy(lqname, qname);
-            r->trans_n = 0;
-        }
-        if (gen_trans(b, t)) add_read_trans(r, *t, qname);
+        if (gen_trans(b, t)) set_trans(t, bam_get_qname(b));
+        print_trans(*t, h, src, stdout);
     }
-    set_read_trans(r);
-    print_read_trans(*r, h, src, stdout);
 
-    read_trans_free(r), trans_free(t);
+    trans_free(t);
     bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     return 0;
 }

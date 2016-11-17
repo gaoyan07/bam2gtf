@@ -21,16 +21,44 @@ trans_t *trans_init(int n) {
     return t;
 }
 
-int add_exon(trans_t *t, int32_t tid, int32_t start, int32_t end, int32_t qstart, int32_t qend, uint8_t is_rev)
+int add_exon(trans_t *t, int32_t tid, int32_t start, int32_t end, uint8_t is_rev)
 {
     if (t->exon_n == t->exon_m) t = exon_realloc(t);
     t->exon[t->exon_n].tid = tid;
     t->exon[t->exon_n].start = start;
     t->exon[t->exon_n].end = end;
-    t->exon[t->exon_n].qstart = qstart;
-    t->exon[t->exon_n].qend = qend;
     t->exon[t->exon_n].is_rev = is_rev;
     t->exon_n++;
+    return 0;
+}
+
+// '+': s->e => S->E
+// '-': S->E => s->e
+int sort_exon(trans_t *t)
+{
+    int i, j; exon_t e1, e2; int res=0;
+    for (i = 0; i < t->exon_n-1; ++i) {
+        for (j = i+1; j < t->exon_n; ++j) {
+            e1 = t->exon[i], e2 = t->exon[j];
+            if ((e1.is_rev == e2.is_rev && ((!e1.is_rev && e1.start > e2.start) || (e1.is_rev && e1.start < e2.start))) //same strand
+             || (e1.is_rev && !e2.is_rev)) { // '-' and '+'
+                exon_t tmp = e1;
+                t->exon[i] = t->exon[j];
+                t->exon[j] = tmp;
+            }
+        }
+    }
+    return res;
+}
+
+int set_trans(trans_t *t, char *qname)
+{
+    sort_exon(t);
+    t->tid = t->exon[0].tid;
+    t->is_rev = t->exon[0].is_rev;
+    t->start = t->is_rev ? t->exon[t->exon_n-1].start : t->exon[0].start;
+    t->end = t->is_rev ? t->exon[0].end: t->exon[t->exon_n-1].end;
+    strcpy(t->qname, qname);
     return 0;
 }
 
@@ -51,14 +79,14 @@ read_trans_t *read_trans_init(void)
     return r;
 }
 
-void add_read_trans(read_trans_t *r, trans_t t, char *qname)
+void add_read_trans(read_trans_t *r, trans_t t)
 {
     if (r->trans_n == r->trans_m) r = read_trans_realloc(r);
     int i;
     r->t[r->trans_n].exon_n = 0;
     for (i = 0; i < t.exon_n; ++i)
-        add_exon(r->t+r->trans_n, t.exon[i].tid, t.exon[i].start, t.exon[i].end, t.exon[i].qstart, t.exon[i].qend, t.exon[i].is_rev);
-    strcpy(r->t[r->trans_n].qname, qname);
+        add_exon(r->t+r->trans_n, t.exon[i].tid, t.exon[i].start, t.exon[i].end, t.exon[i].is_rev);
+    strcpy(r->t[r->trans_n].qname, t.qname);
     r->trans_n++;
 }
 
@@ -81,47 +109,23 @@ void read_trans_free(read_trans_t *r)
     free(r->t); free(r);
 }
 
-// '+': s->e => S->E
-// '-': S->E => s->e
-int sort_exon(trans_t *t)
-{
-    int i, j; exon_t e1, e2; int res=0;
-    for (i = 0; i < t->exon_n-1; ++i) {
-        for (j = i+1; j < t->exon_n; ++j) {
-            e1 = t->exon[i], e2 = t->exon[j];
-            if ((e1.is_rev == e2.is_rev && ((!e1.is_rev && e1.start > e2.start) || (e1.is_rev && e1.start < e2.start))) //same strand
-             || (e1.is_rev && !e2.is_rev)) { // '-' and '+'
-                exon_t tmp = e1;
-                t->exon[i] = t->exon[j];
-                t->exon[j] = tmp;
-            }
-        }
-    }
-    return res;
-}
-
-// for split and/or alternative-alignments:
-//   construct full transcript with multi exons
-//   filter with specific strategy XXX
-int set_read_trans(read_trans_t *r)
-{
-    int i;
-    for (i = 0; i < r->trans_n; ++i) {
-        sort_exon(r->t+i);
-        r->t[i].tid = r->t[i].exon[0].tid;
-        r->t[i].is_rev = r->t[i].exon[0].is_rev;
-        r->t[i].start = r->t[i].is_rev ? r->t[i].exon[r->t[i].exon_n-1].start : r->t[i].exon[0].start;
-        r->t[i].end = r->t[i].is_rev ? r->t[i].exon[0].end: r->t[i].exon[r->t[i].exon_n-1].end;
-    }
-    return 0;
-}
-
 //gene
 gene_t *gene_init(void) {
     gene_t *g = (gene_t*)_err_malloc(sizeof(gene_t));
     g->trans_n = 0, g->trans_m = 1;
     g->trans = trans_init(1);
     return g; 
+}
+
+void add_trans(gene_t *g, trans_t t)
+{
+    if (g->trans_n == g->trans_m) g = trans_realloc(g);
+    int i;
+    g->trans[g->trans_n].exon_n = 0;
+    for (i = 0; i < t.exon_n; ++i) {
+        add_exon(g->trans+g->trans_n, t.exon[i].tid, t.exon[i].start, t.exon[i].end, t.exon[i].is_rev);
+    }
+    g->trans_n++;
 }
 
 gene_t *trans_realloc(gene_t *g) {
@@ -149,11 +153,12 @@ int print_exon(exon_t e, FILE *out)
     return 0;
 }
 
-int print_trans(trans_t t, FILE *out)
+int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out)
 {
     int i;
+    fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "transcript", t.start, t.end, "+-"[t.is_rev], t.qname);
     for (i = 0; i < t.exon_n; ++i)
-        fprintf(out, "\t[exon]\t%d\t%s\t%s\t%d\t%d\t.\t%c\t.\n", t.exon[i].tid+1, "TEST", "exon", t.exon[i].start, t.exon[i].end, "+-"[t.exon[i].is_rev]);
+        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\n", h->target_name[t.tid], src, "exon", t.exon[i].start, t.exon[i].end, "+-"[t.exon[i].is_rev]);
     return 0;
 }
 
