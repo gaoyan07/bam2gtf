@@ -20,10 +20,9 @@ extern const char PROG[20];
 int bam2gtf_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s bam2gtf [option] <in.bam> > out.gtf\n", PROG);
+    err_printf("Usage:   %s bam2gtf [option] <in.bam> > out.gtf\n\n", PROG);
     err_printf("Options:\n\n");
-    err_printf("         -s --source      [STR]    source field in GTF, program, database or project name.\n");
-    err_printf("                                   [NONE]\n");
+    err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
 	err_printf("\n");
 	return 1;
 }
@@ -31,7 +30,7 @@ int bam2gtf_usage(void)
 int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
 {
     t->exon_n = 0;
-    int32_t tid = b->core.tid; int32_t start = b->core.pos+1, end = start-1, qstart = 1, qend = 0;/*1-base*/
+    int32_t tid = b->core.tid; int32_t start = b->core.pos+1, end = start-1;/*1-base*/
     uint8_t is_rev = bam_is_rev(b);
     uint32_t i;
     for (i = 0; i < n_cigar; ++i) {
@@ -40,8 +39,7 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
             case BAM_CREF_SKIP:  // N/D(0 1)
             case BAM_CDEL :
                 if (l >= INTRON_MIN_LEN) {
-                    add_exon(t, tid, start, end, qstart, qend, is_rev);
-                    qstart = qend+1;
+                    add_exon(t, tid, start, end, is_rev);
                     start = end + l + 1;
                 }
                 end += l;
@@ -49,12 +47,11 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
             case BAM_CMATCH: // 1 1
             case BAM_CEQUAL:
             case BAM_CDIFF:
-                qend += l, end += l;
+                end += l;
                 break;
             case BAM_CINS: // 1 0
             case BAM_CSOFT_CLIP:
             case BAM_CHARD_CLIP:
-                qend += l;
                 break;
             case BAM_CPAD: // 0 0
             case BAM_CBACK:
@@ -64,7 +61,7 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
                 break;
         }
     }
-    add_exon(t, tid, start, end, qstart, qend, is_rev);
+    add_exon(t, tid, start, end, is_rev);
     return 0;
 }
 
@@ -88,11 +85,17 @@ int gen_trans(bam1_t *b, trans_t *t)
     */
 }
 
+const struct option bam2gtf_long_opt [] = {
+    { "source", 1, NULL, 's' },
+
+    { 0, 0, 0, 0}
+};
+
 int bam2gtf(int argc, char *argv[])
 {
     int c;
     char src[1024]="NONE";
-	while ((c = getopt(argc, argv, "b:s:")) >= 0)
+	while ((c = getopt_long(argc, argv, "s:", bam2gtf_long_opt, NULL)) >= 0)
     {
         switch(c)
         {

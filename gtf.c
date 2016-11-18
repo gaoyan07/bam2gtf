@@ -16,7 +16,8 @@ void exon_free(exon_t *e) { free(e); }
 //transcript
 trans_t *trans_init(int n) { 
     trans_t *t = (trans_t*)_err_malloc(n * sizeof(trans_t));
-    t->exon_n = 0, t->exon_m = 2;
+    strcpy(t->qname, "");
+    t->exon_n = 0; t->exon_m = 2;
     t->exon = exon_init(2);
     return t;
 }
@@ -58,7 +59,7 @@ int set_trans(trans_t *t, char *qname)
     t->is_rev = t->exon[0].is_rev;
     t->start = t->is_rev ? t->exon[t->exon_n-1].start : t->exon[0].start;
     t->end = t->is_rev ? t->exon[0].end: t->exon[t->exon_n-1].end;
-    strcpy(t->qname, qname);
+    if (qname) strcpy(t->qname, qname);
     return 0;
 }
 
@@ -121,6 +122,12 @@ void add_trans(gene_t *g, trans_t t)
 {
     if (g->trans_n == g->trans_m) g = trans_realloc(g);
     int i;
+    g->trans[g->trans_n].tid = t.tid;
+    g->trans[g->trans_n].is_rev = t.is_rev;
+    g->trans[g->trans_n].start = t.start;
+    g->trans[g->trans_n].end = t.end;
+    strcpy(g->trans[g->trans_n].qname, t.qname);
+
     g->trans[g->trans_n].exon_n = 0;
     for (i = 0; i < t.exon_n; ++i) {
         add_exon(g->trans+g->trans_n, t.exon[i].tid, t.exon[i].start, t.exon[i].end, t.exon[i].is_rev);
@@ -158,7 +165,7 @@ int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out)
     int i;
     fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "transcript", t.start, t.end, "+-"[t.is_rev], t.qname);
     for (i = 0; i < t.exon_n; ++i)
-        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\n", h->target_name[t.tid], src, "exon", t.exon[i].start, t.exon[i].end, "+-"[t.exon[i].is_rev]);
+        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "exon", t.exon[i].start, t.exon[i].end, "+-"[t.exon[i].is_rev], t.qname);
     return 0;
 }
 

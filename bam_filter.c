@@ -6,13 +6,16 @@
 #include "htslib/htslib/sam.h"
 
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
+#define COV_RATE 0.9
 
 extern const char PROG[20];
 int filter_usage(void)
 {
-    err_printf("Usage:   %s filter [option] <in.bam/sam> | samtools sort > out.sort.bam\n", PROG);
+    err_printf("\n");
+    err_printf("Usage:   %s filter [option] <in.bam/sam> | samtools sort > out.sort.bam\n\n", PROG);
     err_printf("Options:\n");
-    err_printf("         -b --only-best    only keep the BEST ONE alignment record for each query. [false]\n");
+    err_printf("         -b --only-best            only keep the BEST ONE alignment record for each query. [false]\n");
+    err_printf("         -v --cov-rate  [FLOAT]    minimum coverage of output alignment record. [%.2f]\n", COV_RATE);
     err_printf("\n");
     return 1;
 }
@@ -34,8 +37,7 @@ void add_pathid(bam1_t *b, int id)
     b->core.l_qname += l;
 }
 
-#define COV_RATE 0.9
-int gtf_filter(bam1_t *b, int *score)
+int gtf_filter(bam1_t *b, int *score, float cov_rate)
 {
     if (bam_unmap(b)) return 1;
     uint32_t *c = bam_get_cigar(b), n_c = b->core.n_cigar;
@@ -44,7 +46,7 @@ int gtf_filter(bam1_t *b, int *score)
     int op0 = bam_cigar_op(c[0]), op1 = bam_cigar_op(c[n_c-1]);
     if (op0 == BAM_CSOFT_CLIP || op0 == BAM_CHARD_CLIP) cigar_qlen -= bam_cigar_oplen(c[0]);
     if (n_c > 1 && (op1 == BAM_CSOFT_CLIP || op1 == BAM_CHARD_CLIP)) cigar_qlen -= bam_cigar_oplen(c[n_c-1]);
-    if ((cigar_qlen+0.0) / b->core.l_qseq < COV_RATE) return 1;
+    if ((cigar_qlen+0.0) / b->core.l_qseq < cov_rate) return 1;
     // NM 
     uint8_t *p = bam_aux_get(b, "NM"); // Edit Distance
     int ed; 
@@ -53,12 +55,20 @@ int gtf_filter(bam1_t *b, int *score)
     return 0;
 }
 
+const struct option filter_long_opt [] = {
+    { "only-best", 0, NULL, 'b' },
+    { "cov-rate", 1, NULL, 'v' },
+
+    { 0, 0, 0, 0}
+};
+
 int bam_filter(int argc, char *argv[])
 {
-    int c; int only_best=0;
-    while ((c = getopt(argc, argv, "b")) >= 0) {
+    int c; int only_best=0; float cov_rate=COV_RATE;
+    while ((c = getopt_long(argc, argv, "bv:", filter_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'b': only_best = 1; break;
+            case 'v': cov_rate = atof(optarg); break;
             default : return filter_usage();
         }
     }
@@ -75,7 +85,7 @@ int bam_filter(int argc, char *argv[])
     if (sam_hdr_write(out, h) != 0) err_fatal_simple("Error in writing SAM header\n"); //sam header
     char lqname[1024]="\0"; int id=1;
     while (sam_read1(in, h, b) >= 0) {
-        if (gtf_filter(b, &score)) continue;
+        if (gtf_filter(b, &score, cov_rate)) continue;
 
         if (only_best) {
             if (strcmp(bam_get_qname(b), lqname) == 0) {
