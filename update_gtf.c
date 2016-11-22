@@ -46,10 +46,12 @@ int read_gene(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_t *g, FILE *outfp)
 {
     g->trans_n = 0;
     if (gtf_line == NULL) return 0;
-    char ref[100]="\0", type[20]="\0"; int start, end; char strand;
+    char ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024];
 
-    sscanf(gtf_line, "%s\t%*s\t%*s\t%d\t%d\t%*s\t%c", ref, &start, &end, &strand);
+    sscanf(gtf_line, "%s\t%*s\t%*s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, &start, &end, &strand, add_info);
     g->tid = bam_name2id(h, ref), g->start = start, g->end = end, g->is_rev = (strand == '-' ? 1 : 0);
+    char tag[10] = "gene_id";
+    gtf_add_info(add_info, tag, g->gname);
     fputs(gtf_line, outfp);
     // add to gene_t
     trans_t *t = trans_init(1);
@@ -59,19 +61,19 @@ int read_gene(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_t *g, FILE *outfp)
         sscanf(gtf_line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c", ref, type, &start, &end, &strand);
         uint8_t is_rev = (strand == '-' ? 1 : 0);
         if (strcmp(type, "gene") == 0) {
-            if (t->exon_n != 0) add_trans(g, *t);
+            if (t->exon_n != 0) add_trans(g, *t, 0);
             goto ret;
         } else if (strcmp(type, "transcript") == 0) {
             t->is_rev = is_rev; t->tid = bam_name2id(h, ref); t->start = start, t->end = end;
 
-            if (t->exon_n != 0) add_trans(g, *t);
+            if (t->exon_n != 0) add_trans(g, *t, 0);
             t->exon_n = 0;
         } else if (strcmp(type, "exon") == 0) {
             add_exon(t, bam_name2id(h, ref), start, end, is_rev);
         }
         fputs(gtf_line, outfp);
     }
-    if (t->exon_n != 0) add_trans(g, *t);
+    if (t->exon_n != 0) add_trans(g, *t, 0);
     gtf_line = NULL;
 ret:
     trans_free(t);
@@ -79,23 +81,70 @@ ret:
     else return 1;
 }
 
-int check_novel(trans_t *t, gene_t *g)
+// check if t is novel and has identical splice site
+// if t has all identical splice sites with other novel t, merge two ends
+// @return value
+//    0: novel, and NOT share any identical splice-site
+//    1: novel, and shared identical splice-site to existing gene
+//    2: identical to existing gene, OR other cases that cannot be added to anno
+int check_novel(trans_t *t, gene_t *g, int anno_t_n)
 {
-    if (g->is_rev != t->is_rev) return 0; // different strand: can NOT be added to the anno
-    //int i;
-    for (int i = 0; i < g->trans_n; ++i) {
-        if (g->trans[i].exon_n != t->exon_n) continue;
-        // compare each exon
-        int j = 0, iden=0; 
-        for (j = 0; j < t->exon_n; ++j) {
-            if (g->trans[i].exon[j].start == t->exon[j].start && g->trans[i].exon[j].end == t->exon[j].end) iden++;
-            else break;
-        }
-        if (iden == t->exon_n) return 0;
-    }
-    return 1;
-}
+    if (g->is_rev != t->is_rev || t->exon_n < 2) return 2; // different strand: can NOT be added to the anno
+                                                           // one-exon transcript
 
+    int i, j, k, iden_n=0, iden1=0;
+
+    if (t->is_rev) { // '-' strand
+        for (i = 0; i < g->trans_n; ++i) {
+            iden_n = j = k = 0;
+            while (j < g->trans[i].exon_n-1 && k < t->exon_n-1) {
+                // 5' start and 3' end
+                if (g->trans[i].exon[j].start == t->exon[k].start) iden_n++;
+                if (g->trans[i].exon[j+1].end == t->exon[k+1].end) iden_n++;
+
+                if (g->trans[i].exon[j+1].start == t->exon[k+1].start) j++, k++;
+                else if (g->trans[i].exon[j+1].start > t->exon[k+1].start) j++;
+                else k++;
+            }
+            // check
+            if (iden_n > 0 && iden1 == 0) iden1=1;
+            if (t->exon_n == g->trans[i].exon_n && iden_n == (t->exon_n-1)*2) {
+                if (i >= anno_t_n) { // merge
+                    if (g->trans[i].exon[0].end < t->end)
+                        g->trans[i].end = g->trans[i].exon[0].end = t->end;
+                    if (g->trans[i].exon[t->exon_n-1].start > t->start) 
+                        g->trans[i].start = g->trans[i].exon[t->exon_n-1].start = t->start;
+                }
+                return 2;
+            }
+        }
+    } else { // '+' strand
+        for (i = 0; i < g->trans_n; ++i) {
+            iden_n = j = k = 0;
+            while (j < g->trans[i].exon_n-1 && k < t->exon_n-1) {
+                // 3' end and 5' start
+                if (g->trans[i].exon[j].end == t->exon[k].end) iden_n++;
+                if (g->trans[i].exon[j+1].start == t->exon[k+1].start) iden_n++;
+
+                if (g->trans[i].exon[j+1].end == t->exon[k+1].end) j++, k++;
+                else if (g->trans[i].exon[j+1].end < t->exon[j+1].end) j++;
+                else k++;
+            }
+            // check
+            if (iden_n > 0 && iden1 == 0) iden1=1;
+            if (t->exon_n == g->trans[i].exon_n && iden_n == (t->exon_n-1)*2) {
+                if (i >= anno_t_n) { // merge
+                    if (g->trans[i].exon[0].start > t->start)
+                        g->trans[i].start = g->trans[i].exon[0].start = t->start;
+                    if (g->trans[i].exon[t->exon_n-1].end < t->end)
+                        g->trans[i].end = g->trans[i].exon[t->exon_n-1].end = t->end;
+                }
+                return 2;
+            }
+        }
+    }
+    return iden1;
+}
 
 const struct option update_long_opt [] = {
     { "source", 1, NULL, 's' },
@@ -103,9 +152,10 @@ const struct option update_long_opt [] = {
 
     { 0, 0, 0, 0}
 };
+
 int update_gtf(int argc, char *argv[])
 {
-    int c; char src[1024]="NONE"; FILE *full_gfp=NULL;
+    int c; char src[1024]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
 	while ((c = getopt_long(argc, argv, "s:f:", update_long_opt, NULL)) >= 0)
     {
         switch(c)
@@ -134,7 +184,8 @@ int update_gtf(int argc, char *argv[])
 
     // init for trans/exons from gene in GTF
     gene_t *g = gene_init(); trans_t *t = trans_init(1);
-    read_gene(gtf_line, gfp, h, g, stdout);
+    read_gene(gtf_line, gfp, h, g, new_gfp);
+    int anno_t_n = g->trans_n;
     // init for trans from sam record
     int sam_ret = sam_read1(in, h, b); 
     if (sam_ret >= 0) {
@@ -152,22 +203,24 @@ int update_gtf(int argc, char *argv[])
             }
         } // gene_e < sam_s: gene++
         else if (t->tid > g->tid || (t->tid == g->tid && t->start > g->end)) {
-            read_gene(gtf_line, gfp, h, g, stdout);
+            print_gtf_trans(g, anno_t_n, h, src, new_gfp);
+            read_gene(gtf_line, gfp, h, g, new_gfp);
+            anno_t_n = g->trans_n;
         } // overlap and novel: add & merge & print
         else {
-            if (check_novel(t, g)) {
-                add_trans(g, *t);
-                print_trans(*t, h, src, stdout);
-            }
+            int ret = check_novel(t, g, anno_t_n);
+            if (ret < 2) add_trans(g, *t, 1-ret);
+
             if ((sam_ret = sam_read1(in, h, b)) >= 0) {
                 gen_trans(b, t); set_trans(t, bam_get_qname(b));
                 if (full_gfp) print_trans(*t, h, src, full_gfp);
             }
         }
     }
+    print_gtf_trans(g, anno_t_n, h, src, new_gfp);
 
     while (g->trans_n != 0) 
-        read_gene(gtf_line, gfp, h, g, stdout);
+        read_gene(gtf_line, gfp, h, g, new_gfp);
     while (full_gfp && sam_ret >= 0) {
         if ((sam_ret = sam_read1(in, h, b)) >= 0) {
             gen_trans(b, t); set_trans(t, bam_get_qname(b));

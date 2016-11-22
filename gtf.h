@@ -46,7 +46,8 @@ typedef struct {
     exon_t *exon; int exon_n, exon_m;
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
-    char qname[1024];
+    char tname[1024];
+    int novel_gene_flag;
 } trans_t;
 
 typedef struct {
@@ -57,6 +58,7 @@ typedef struct {
     trans_t *trans; int trans_n, trans_m;
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
+    char gname[1024];
 } gene_t;
 
 exon_t *exon_init(int n);
@@ -75,14 +77,16 @@ void read_trans_free(read_trans_t *r);
 //int set_read_trans(read_trans_t *r);
 
 gene_t *gene_init(void);
-void add_trans(gene_t *g, trans_t t);
+void add_trans(gene_t *g, trans_t t, int novel_gene_flag);
 gene_t *trans_realloc(gene_t *g);
 void gene_free(gene_t *g);
+void gtf_add_info(char add_info[], char tag[], char *info);
 
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);
 int print_read_trans(read_trans_t r, bam_hdr_t *h, char *src, FILE *out);
 int print_gene(gene_t g, FILE *out);
+void print_gtf_trans(gene_t *g, int anno_t_n, bam_hdr_t *h, char *src, FILE *out);
 
 #define INTRON_MIN_LEN 50
 

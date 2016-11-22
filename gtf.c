@@ -16,7 +16,7 @@ void exon_free(exon_t *e) { free(e); }
 //transcript
 trans_t *trans_init(int n) { 
     trans_t *t = (trans_t*)_err_malloc(n * sizeof(trans_t));
-    strcpy(t->qname, "");
+    strcpy(t->tname, "");
     t->exon_n = 0; t->exon_m = 2;
     t->exon = exon_init(2);
     return t;
@@ -52,14 +52,14 @@ int sort_exon(trans_t *t)
     return res;
 }
 
-int set_trans(trans_t *t, char *qname)
+int set_trans(trans_t *t, char *tname)
 {
     sort_exon(t);
     t->tid = t->exon[0].tid;
     t->is_rev = t->exon[0].is_rev;
     t->start = t->is_rev ? t->exon[t->exon_n-1].start : t->exon[0].start;
     t->end = t->is_rev ? t->exon[0].end: t->exon[t->exon_n-1].end;
-    if (qname) strcpy(t->qname, qname);
+    if (tname) strcpy(t->tname, tname);
     return 0;
 }
 
@@ -87,7 +87,7 @@ void add_read_trans(read_trans_t *r, trans_t t)
     r->t[r->trans_n].exon_n = 0;
     for (i = 0; i < t.exon_n; ++i)
         add_exon(r->t+r->trans_n, t.exon[i].tid, t.exon[i].start, t.exon[i].end, t.exon[i].is_rev);
-    strcpy(r->t[r->trans_n].qname, t.qname);
+    strcpy(r->t[r->trans_n].tname, t.tname);
     r->trans_n++;
 }
 
@@ -118,7 +118,7 @@ gene_t *gene_init(void) {
     return g; 
 }
 
-void add_trans(gene_t *g, trans_t t)
+void add_trans(gene_t *g, trans_t t, int novel_gene_flag)
 {
     if (g->trans_n == g->trans_m) g = trans_realloc(g);
     int i;
@@ -126,7 +126,8 @@ void add_trans(gene_t *g, trans_t t)
     g->trans[g->trans_n].is_rev = t.is_rev;
     g->trans[g->trans_n].start = t.start;
     g->trans[g->trans_n].end = t.end;
-    strcpy(g->trans[g->trans_n].qname, t.qname);
+    g->trans[g->trans_n].novel_gene_flag = novel_gene_flag;
+    strcpy(g->trans[g->trans_n].tname, t.tname);
 
     g->trans[g->trans_n].exon_n = 0;
     for (i = 0; i < t.exon_n; ++i) {
@@ -154,6 +155,17 @@ void gene_free(gene_t *g) {
     free(g->trans); free(g);
 }
 
+// gtf additional information
+void gtf_add_info(char add_info[], char tag[], char *info)
+{
+    for (int i=0; add_info[i] != '\0'; ++i) {
+        if (strncmp(add_info+i, tag, strlen(tag)) == 0) {
+            sscanf(add_info+i+strlen(tag)+2, "%[^\"]", info);
+            return;
+        }
+    }
+}
+
 //print
 int print_exon(exon_t e, FILE *out)
 {
@@ -163,9 +175,9 @@ int print_exon(exon_t e, FILE *out)
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out)
 {
     int i;
-    fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "transcript", t.start, t.end, "+-"[t.is_rev], t.qname);
+    fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "transcript", t.start, t.end, "+-"[t.is_rev], t.tname);
     for (i = 0; i < t.exon_n; ++i)
-        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "exon", t.exon[i].start, t.exon[i].end, "+-"[t.exon[i].is_rev], t.qname);
+        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "exon", t.exon[i].start, t.exon[i].end, "+-"[t.exon[i].is_rev], t.tname);
     return 0;
 }
 
@@ -174,9 +186,9 @@ int print_read_trans(read_trans_t r, bam_hdr_t *h, char *src, FILE *out)
 {
     int i, j;
     for (i = 0; i < r.trans_n; ++i) {
-        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[r.t[i].tid], src, "transcript", r.t[i].start, r.t[i].end, "+-"[r.t[i].is_rev], r.t[i].qname);
+        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[r.t[i].tid], src, "transcript", r.t[i].start, r.t[i].end, "+-"[r.t[i].is_rev], r.t[i].tname);
         for (j = 0; j < r.t[i].exon_n; ++j)
-            fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[r.t[i].exon[j].tid], src, "exon", r.t[i].exon[j].start, r.t[i].exon[j].end, "+-"[r.t[i].exon[j].is_rev], r.t[i].qname);
+            fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[r.t[i].exon[j].tid], src, "exon", r.t[i].exon[j].start, r.t[i].exon[j].end, "+-"[r.t[i].exon[j].is_rev], r.t[i].tname);
     }
     return 0;
 }
@@ -184,4 +196,18 @@ int print_read_trans(read_trans_t r, bam_hdr_t *h, char *src, FILE *out)
 int print_gene(gene_t g, FILE *out)
 {
     return 0;
+}
+
+void print_gtf_trans(gene_t *g, int anno_t_n, bam_hdr_t *h, char *src, FILE *out)
+{
+    if (g->trans_n <= anno_t_n) return;
+    int i, j; char gene_name[1024];
+    for (i = anno_t_n; i < g->trans_n; ++i) {
+        if (g->trans[i].novel_gene_flag) strcpy(gene_name, "UNCLASSIFIED");
+        else strcpy(gene_name, g->gname);
+        trans_t t = g->trans[i];
+        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\tgene_id \"%s\"; transcript_id \"%s\";\n", h->target_name[t.tid], src, "transcript", t.start, t.end, "+-"[t.is_rev], gene_name, t.tname);
+        for (j = 0; j < t.exon_n; ++j)
+            fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\tgene_id \"%s\"; transcript_id \"%s\";\n", h->target_name[t.tid], src, "exon", t.exon[j].start, t.exon[j].end, "+-"[t.exon[j].is_rev], gene_name, t.tname);
+    }
 }
