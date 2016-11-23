@@ -93,7 +93,7 @@ int check_novel(trans_t *t, gene_t *g, int anno_t_n)
                                                            // one-exon transcript
 
     int i, j, k, iden_n=0, iden1=0;
-    int dis=5;
+    int dis=0;
 
     if (t->is_rev) { // '-' strand
         for (i = 0; i < g->trans_n; ++i) {
@@ -108,7 +108,7 @@ int check_novel(trans_t *t, gene_t *g, int anno_t_n)
                 else k++;
             }
             // check
-            if (iden_n > 0 && iden1 == 0) iden1=1;
+            if (iden_n > 0 && iden1 == 0 && i < anno_t_n) iden1=1;
             if (t->exon_n == g->trans[i].exon_n && iden_n == (t->exon_n-1)*2) {
                 if (i >= anno_t_n) { // merge
                     if (g->trans[i].exon[0].end < t->end)
@@ -132,7 +132,7 @@ int check_novel(trans_t *t, gene_t *g, int anno_t_n)
                 else k++;
             }
             // check
-            if (iden_n > 0 && iden1 == 0) iden1=1;
+            if (iden_n > 0 && iden1 == 0 && i < anno_t_n) iden1=1;
             if (t->exon_n == g->trans[i].exon_n && iden_n == (t->exon_n-1)*2) {
                 if (i >= anno_t_n) { // merge
                     if (g->trans[i].exon[0].start > t->start)
