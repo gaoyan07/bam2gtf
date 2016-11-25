@@ -55,11 +55,16 @@ typedef struct {
 } read_trans_t;
 
 typedef struct {
-    trans_t *trans; int trans_n, trans_m;
+    trans_t *trans; int trans_n, anno_tran_n, trans_m;
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
     char gname[1024];
 } gene_t;
+
+typedef struct {
+    gene_t *g; int gene_n, gene_m;
+    int32_t tid, start, end;
+} gene_group_t;
 
 exon_t *exon_init(int n);
 void exon_free(exon_t *e);
@@ -82,11 +87,18 @@ gene_t *trans_realloc(gene_t *g);
 void gene_free(gene_t *g);
 void gtf_add_info(char add_info[], char tag[], char *info);
 
+gene_group_t *gene_group_init(void);
+gene_group_t *gene_group_realloc(gene_group_t *gg);
+void add_gene(gene_group_t *gg, gene_t g, int novel_gene_flag);
+void set_gene_group(gene_group_t *gg);
+void gene_group_free(gene_group_t *gg);
+
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);
 int print_read_trans(read_trans_t r, bam_hdr_t *h, char *src, FILE *out);
 int print_gene(gene_t g, FILE *out);
-void print_gtf_trans(gene_t *g, int anno_t_n, bam_hdr_t *h, char *src, FILE *out);
+void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char **group_line, int *group_line_n);
+void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 
 #define INTRON_MIN_LEN 50
 

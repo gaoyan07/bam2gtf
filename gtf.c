@@ -166,6 +166,61 @@ void gtf_add_info(char add_info[], char tag[], char *info)
     }
 }
 
+// gene_group
+gene_group_t *gene_group_init(void)
+{
+    gene_group_t *gg = (gene_group_t*)_err_malloc(sizeof(gene_group_t));
+    gg->start = gg->end = gg->gene_n = 0; gg->gene_m = 1;
+    gg->g = gene_init();
+    return gg;
+}
+
+gene_group_t *gene_group_realloc(gene_group_t *gg)
+{
+    gg->gene_m <<= 1;
+    gg->g = (gene_t*)_err_realloc(gg->g, gg->gene_m * sizeof(gene_t));
+    for (int i=gg->gene_m>>1; i < gg->gene_m; ++i) {
+        gg->g[i].trans_n = 0; gg->g[i].trans_m = 1;
+        gg->g[i].trans = trans_init(1);
+    }
+    return gg;
+}
+
+void add_gene(gene_group_t *gg, gene_t g, int novel_gene_flag)
+{
+    if (gg->gene_n == gg->gene_m) gg = gene_group_realloc(gg);
+    for (int i = 0; i < g.trans_n; ++i)
+        add_trans(gg->g+gg->gene_n, g.trans[i], novel_gene_flag);
+    strcpy(gg->g[gg->gene_n].gname, g.gname);
+    gg->g[gg->gene_n].tid = g.tid;
+    gg->g[gg->gene_n].start = g.start;
+    gg->g[gg->gene_n].end = g.end;
+    gg->g[gg->gene_n].is_rev = g.is_rev;
+    gg->gene_n++;
+}
+
+void set_gene_group(gene_group_t *gg)
+{
+    gg->tid =  gg->g[0].tid;
+    gg->start = gg->g[0].start; 
+    gg->end = gg->g[0].end;
+    for (int i = 1; i < gg->gene_n; ++i) {
+        if (gg->g[i].start < gg->start) gg->start = gg->g[i].start;
+        if (gg->g[i].end > gg->end) gg->end = gg->g[i].end;
+    }
+}
+
+void gene_group_free(gene_group_t *gg)
+{
+    int i, j;
+    for (i = 0; i < gg->gene_m; ++i) {
+        for (j = 0; j < gg->g[i].trans_m; ++j)
+            free(gg->g[i].trans[j].exon);
+        free(gg->g[i].trans);
+    }
+    free(gg->g); free(gg);
+}
+
 //print
 int print_exon(exon_t e, FILE *out)
 {
@@ -198,16 +253,29 @@ int print_gene(gene_t g, FILE *out)
     return 0;
 }
 
-void print_gtf_trans(gene_t *g, int anno_t_n, bam_hdr_t *h, char *src, FILE *out)
+void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out)
 {
-    if (g->trans_n <= anno_t_n) return;
+    if (g.trans_n <= g.anno_tran_n) return;
     int i, j; char gene_name[1024];
-    for (i = anno_t_n; i < g->trans_n; ++i) {
-        if (g->trans[i].novel_gene_flag) strcpy(gene_name, "UNCLASSIFIED");
-        else strcpy(gene_name, g->gname);
-        trans_t t = g->trans[i];
+    for (i = g.anno_tran_n; i < g.trans_n; ++i) {
+        if (g.trans[i].novel_gene_flag) strcpy(gene_name, "UNCLASSIFIED");
+        else strcpy(gene_name, g.gname);
+        trans_t t = g.trans[i];
         fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\tgene_id \"%s\"; transcript_id \"%s\";\n", h->target_name[t.tid], src, "transcript", t.start, t.end, "+-"[t.is_rev], gene_name, t.tname);
         for (j = 0; j < t.exon_n; ++j)
             fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\tgene_id \"%s\"; transcript_id \"%s\";\n", h->target_name[t.tid], src, "exon", t.exon[j].start, t.exon[j].end, "+-"[t.exon[j].is_rev], gene_name, t.tname);
     }
 }
+
+void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char **group_line, int *group_line_n)
+{
+    int l_i = 0;
+    for (int i = 0; i < gg.gene_n; ++i) {
+        // print anno
+        for (int j = 0; j < group_line_n[i]; ++i)
+            fprintf(out, "%s\n", group_line[l_i++]);
+        // print novel trans
+        print_gtf_trans(gg.g[i], h, src, out);        
+    }
+}
+
