@@ -15,7 +15,7 @@ static int usage(void)
     err_printf("Usage:   %s <command> [options]\n\n", PROG);
 	err_printf("Commands: \n");
     err_printf("         filter       filter out alignment records with low confidence\n");
-	err_printf("         update-gtf  generate new GTF file based on BAM/SAM and existing GTF file\n");
+	err_printf("         update-gtf   generate new GTF file based on BAM/SAM and existing GTF file\n");
 	err_printf("         bam2gtf      generate transcript and exon information based on BAM/SAM file\n");
 	err_printf("\n");
 	return 1;

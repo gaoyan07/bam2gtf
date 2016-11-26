@@ -260,10 +260,9 @@ int update_gtf(int argc, char *argv[])
     FILE *gfp = fopen(argv[optind+1], "r"); char *gtf_line = (char*)_err_malloc(1024);
     if ((gtf_line = fgets_gene(gfp, gtf_line, 1024)) == NULL) err_fatal(__func__, "Wrong format of GTF file: \"%s\"\n", argv[optind+1]);
     char **group_line; int group_line_m; int *group_line_n, group_line_n_m; // anno lines
-    group_line_m = group_line_n_m = 1;
-    group_line_n = (int*)_err_calloc(1, sizeof(int));
-    group_line = (char**)_err_malloc(sizeof(char*));
-    *group_line = (char*)_err_malloc(1024 * sizeof(char));
+    group_line_m = group_line_n_m = 1; group_line_n = (int*)_err_calloc(1, sizeof(int));
+    group_line = (char**)_err_malloc(sizeof(char*)); *group_line = (char*)_err_malloc(1024 * sizeof(char));
+
     // init for trans/exons from gene in GTF
     gene_group_t *gg = gene_group_init();
     read_gene_group(gtf_line, gfp, h, gg, &group_line, &group_line_m, &group_line_n, &group_line_n_m);

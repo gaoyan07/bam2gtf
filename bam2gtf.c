@@ -30,8 +30,11 @@ int bam2gtf_usage(void)
 int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
 {
     t->exon_n = 0;
-    int32_t tid = b->core.tid; int32_t start = b->core.pos+1, end = start-1;/*1-base*/
-    uint8_t is_rev = bam_is_rev(b);
+    int32_t tid = b->core.tid; int32_t start = b->core.pos+1, end = start-1;/*1-base*/ uint8_t is_rev, *p;
+    p = bam_aux_get(b, "XS"); // strand orientation for a splice
+    if (p == 0) is_rev = bam_is_rev(b);
+    else is_rev = ((bam_aux2A(p) == '+' )? 0 : 1);
+
     uint32_t i;
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
@@ -72,17 +75,6 @@ int gen_trans(bam1_t *b, trans_t *t)
     uint32_t *c = bam_get_cigar(b), n_cigar = b->core.n_cigar;
     gen_exon(t, b, c, n_cigar);
     return 1;
-    /*
-       if (0) {
-       uint8_t *p = bam_aux_get(b, "XA"); // alternative alignment
-       if (p) { 
-       if (*p == 'Z') {
-       char *s = bam_aux2Z(p);
-       printf("XA:Z:%s\n", s);
-       }
-       }
-       }
-    */
 }
 
 const struct option bam2gtf_long_opt [] = {
