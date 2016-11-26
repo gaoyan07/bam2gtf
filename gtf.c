@@ -158,7 +158,8 @@ void gene_free(gene_t *g) {
 // gtf additional information
 void gtf_add_info(char add_info[], char tag[], char *info)
 {
-    for (int i=0; add_info[i] != '\0'; ++i) {
+    int i;
+    for (i=0; add_info[i] != '\0'; ++i) {
         if (strncmp(add_info+i, tag, strlen(tag)) == 0) {
             sscanf(add_info+i+strlen(tag)+2, "%[^\"]", info);
             return;
@@ -177,9 +178,10 @@ gene_group_t *gene_group_init(void)
 
 gene_group_t *gene_group_realloc(gene_group_t *gg)
 {
+    int i;
     gg->gene_m <<= 1;
     gg->g = (gene_t*)_err_realloc(gg->g, gg->gene_m * sizeof(gene_t));
-    for (int i=gg->gene_m>>1; i < gg->gene_m; ++i) {
+    for (i=gg->gene_m>>1; i < gg->gene_m; ++i) {
         gg->g[i].trans_n = 0; gg->g[i].trans_m = 1;
         gg->g[i].trans = trans_init(1);
     }
@@ -189,7 +191,8 @@ gene_group_t *gene_group_realloc(gene_group_t *gg)
 void add_gene(gene_group_t *gg, gene_t g, int novel_gene_flag)
 {
     if (gg->gene_n == gg->gene_m) gg = gene_group_realloc(gg);
-    for (int i = 0; i < g.trans_n; ++i)
+    int i;
+    for (i = 0; i < g.trans_n; ++i)
         add_trans(gg->g+gg->gene_n, g.trans[i], novel_gene_flag);
     strcpy(gg->g[gg->gene_n].gname, g.gname);
     gg->g[gg->gene_n].tid = g.tid;
@@ -204,7 +207,8 @@ void set_gene_group(gene_group_t *gg)
     gg->tid =  gg->g[0].tid;
     gg->start = gg->g[0].start; 
     gg->end = gg->g[0].end;
-    for (int i = 1; i < gg->gene_n; ++i) {
+    int i;
+    for (i = 1; i < gg->gene_n; ++i) {
         if (gg->g[i].start < gg->start) gg->start = gg->g[i].start;
         if (gg->g[i].end > gg->end) gg->end = gg->g[i].end;
     }
@@ -269,10 +273,10 @@ void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out)
 
 void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char **group_line, int *group_line_n)
 {
-    int l_i = 0;
-    for (int i = 0; i < gg.gene_n; ++i) {
+    int l_i = 0, i, j;
+    for (i = 0; i < gg.gene_n; ++i) {
         // print anno
-        for (int j = 0; j < group_line_n[i]; ++i)
+        for (j = 0; j < group_line_n[i]; ++i)
             fprintf(out, "%s\n", group_line[l_i++]);
         // print novel trans
         print_gtf_trans(gg.g[i], h, src, out);        
