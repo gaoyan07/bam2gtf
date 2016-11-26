@@ -56,7 +56,8 @@ int read_gene(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_t *g, char ***line,
     if (*line_n == *line_m) {
         *line_m <<= 1;
         *line = (char**)_err_realloc(*line, *line_m * sizeof(char*));
-        for (int i=*line_m>>1; i < *line_m; ++i)
+        int i;
+        for (i=*line_m>>1; i < *line_m; ++i)
             (*line)[i] = (char*)_err_malloc(1024);
     }
     strcpy((*line)[*line_n], gtf_line); (*line_n)++;
@@ -82,7 +83,8 @@ int read_gene(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_t *g, char ***line,
         if (*line_n == *line_m) {
             *line_m <<= 1;
             *line = (char**)_err_realloc(*line, *line_m * sizeof(char*));
-            for (int i=*line_m>>1; i < *line_m; ++i)
+            int i;
+            for (i=*line_m>>1; i < *line_m; ++i)
                 (*line)[i] = (char*)_err_malloc(1024);
         }
         strcpy((*line)[*line_n], gtf_line); (*line_n)++;
@@ -114,18 +116,17 @@ int check_overlap(char gtf_line[], gene_t _g, bam_hdr_t *h)
 int read_gene_group(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_group_t *gg, char ***group_line, int *group_line_m, int **group_line_n, int *group_line_n_m)
 {
     char **line = (char**)_err_malloc(sizeof(char*)); line[0] = (char*)_err_malloc(1024);
-    int line_n = 0, line_m = 1;
-
+    int line_n = 0, line_m = 1; int i;
     int tot_line_n = 0;
     gg->gene_n = 0;
     while (read_gene(gtf_line, gfp, h, gg->g+gg->gene_n, &line, &line_n, &line_m)) {
         if (tot_line_n+line_n > *group_line_m) {
             *group_line_m <<= 1;
             *group_line = (char**)_err_realloc(*group_line, *group_line_m * sizeof(char*));
-            for (int i=*group_line_m>>1; i < *group_line_m; ++i)
+            for (i=*group_line_m>>1; i < *group_line_m; ++i)
                 (*group_line)[i] = (char*)_err_malloc(1024);
         }
-        for (int i = tot_line_n; i < tot_line_n+line_n; ++i)
+        for (i = tot_line_n; i < tot_line_n+line_n; ++i)
             strcpy((*group_line)[i], line[i-tot_line_n]);
         tot_line_n += line_n;
         if (gg->gene_n == *group_line_n_m) {
@@ -299,7 +300,8 @@ int update_gtf(int argc, char *argv[])
         }
     }
 
-    for (int i = 0; i < group_line_m; ++i) free(group_line[i]); free(group_line); free(group_line_n);
+    int i;
+    for (i = 0; i < group_line_m; ++i) free(group_line[i]); free(group_line); free(group_line_n);
     gene_group_free(gg); trans_free(t); free(gtf_line);
     bam_destroy1(b); bam_hdr_destroy(h); sam_close(in); fclose(gfp); if(full_gfp) fclose(full_gfp);
     return 0;
