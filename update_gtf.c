@@ -213,8 +213,14 @@ void group_check_novel(trans_t t, gene_group_t *gg)
     int i;
     for (i = 0; i < gg->gene_n; ++i) {
         int ret = check_novel(t, gg->g+i);
-        if (ret < 2) add_trans(gg->g+i, t, 1-ret);
+        if (ret == 1) {
+            add_trans(gg->g+i, t, 0);
+            return;
+        } else if (ret == 2) return;
     }
+    // not share any identical splice-site
+    add_trans(gg->g+gg->gene_n-1, t, 1);
+    
 }
 
 const struct option update_long_opt [] = {
