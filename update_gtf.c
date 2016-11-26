@@ -107,9 +107,10 @@ int check_overlap(char gtf_line[], gene_t _g, bam_hdr_t *h)
     sscanf(gtf_line, "%s\t%*s\t%*s\t%d\t%d", ref, &start, &end);
     g->tid = bam_name2id(h, ref), g->start = start, g->end = end;
 
-    if (g->tid != _g.tid || g->start < _g.end || g->end > _g.start)
-        return 0;
-    return 1;
+    int ret = 1;
+    if (g->tid != _g.tid || g->start < _g.end || g->end > _g.start) ret = 0;
+    gene_free(g);
+    return ret;
 }
 
 // read all ovelaped gene into one group
@@ -121,10 +122,10 @@ int read_gene_group(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_group_t *gg, 
     gg->gene_n = 0;
     while (read_gene(gtf_line, gfp, h, gg->g+gg->gene_n, &line, &line_n, &line_m)) {
         if (tot_line_n+line_n > *group_line_m) {
-            *group_line_m <<= 1;
-            *group_line = (char**)_err_realloc(*group_line, *group_line_m * sizeof(char*));
-            for (i=*group_line_m>>1; i < *group_line_m; ++i)
+            *group_line = (char**)_err_realloc(*group_line, (tot_line_n+line_n) * sizeof(char*));
+            for (i=*group_line_m; i < tot_line_n+line_n; ++i)
                 (*group_line)[i] = (char*)_err_malloc(1024);
+            *group_line_m = tot_line_n+line_n;
         }
         for (i = tot_line_n; i < tot_line_n+line_n; ++i)
             strcpy((*group_line)[i], line[i-tot_line_n]);
@@ -139,6 +140,7 @@ int read_gene_group(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_group_t *gg, 
         if (check_overlap(gtf_line, gg->g[gg->gene_n-1], h) == 0) break;
     }
     set_gene_group(gg);
+    for (i = 0; i < line_m; ++i) free(line[i]); free(line);
     return gg->gene_n;
 }
 
@@ -295,10 +297,9 @@ int update_gtf(int argc, char *argv[])
     print_gene_group(*gg, h, src, new_gfp, group_line, group_line_n);
 
     // just print all the remaining anno-line
-    while (gtf_line != NULL) {
+    fputs(gtf_line, new_gfp);
+    while (fgets(gtf_line, 1024, gfp) != NULL)
         fputs(gtf_line, new_gfp);
-        fgets(gtf_line, 1024, gfp);
-    }
     while (full_gfp && sam_ret >= 0) {
         if ((sam_ret = sam_read1(in, h, b)) >= 0) {
             gen_trans(b, t); set_trans(t, bam_get_qname(b));
