@@ -234,9 +234,9 @@ int print_exon(exon_t e, FILE *out)
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out)
 {
     int i;
-    fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "transcript", t.start, t.end, "+-"[t.is_rev], t.tname);
+    fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\tgene_id \"%s\"; transcript_id \"%s\";\n", h->target_name[t.tid], src, "transcript", t.start, t.end, "+-"[t.is_rev], "UNCLASSIFIED", t.tname);
     for (i = 0; i < t.exon_n; ++i)
-        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\";\n", h->target_name[t.tid], src, "exon", t.exon[i].start, t.exon[i].end, "+-"[t.exon[i].is_rev], t.tname);
+        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\tgene_id \"%s\"; transcript_id \"%s\";\n", h->target_name[t.tid], src, "exon", t.exon[i].start, t.exon[i].end, "+-"[t.exon[i].is_rev], "UNCLASSIFIED",t.tname);
     return 0;
 }
 

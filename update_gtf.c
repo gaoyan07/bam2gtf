@@ -27,6 +27,7 @@ int update_gtf_usage(void)
     err_printf("Usage:   %s update-gtf [option] <in.bam> <old.gtf> > new.gtf\n\n", PROG);
     err_printf("Notice:  the BAM and GTF files should be sorted in advance.\n\n");
     err_printf("Options:\n\n");
+    err_printf("         -u --unclassified         output UNCLASSIFIED novel transcript. [False]\n");
     err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
     err_printf("         -f --full-gtf    [STR]    use this option to output the full GTF information of SAM/BAM to file. [false].\n");
 	err_printf("\n");
@@ -72,9 +73,8 @@ int read_gene(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_t *g, char ***line,
             if (t->exon_n != 0) add_trans(g, *t, 0);
             goto ret;
         } else if (strcmp(type, "transcript") == 0) {
-            t->is_rev = is_rev; t->tid = bam_name2id(h, ref); t->start = start, t->end = end;
-
             if (t->exon_n != 0) add_trans(g, *t, 0);
+            t->is_rev = is_rev; t->tid = bam_name2id(h, ref); t->start = start, t->end = end;
             t->exon_n = 0;
         } else if (strcmp(type, "exon") == 0) {
             add_exon(t, bam_name2id(h, ref), start, end, is_rev);
@@ -210,22 +210,26 @@ int check_novel(trans_t t, gene_t *g)
     return iden1;
 }
 
-void group_check_novel(trans_t t, gene_group_t *gg)
+void group_check_novel(trans_t t, gene_group_t *gg, int uncla)
 {
     int i;
+    int gene_i = -1;
     for (i = 0; i < gg->gene_n; ++i) {
         int ret = check_novel(t, gg->g+i);
         if (ret == 1) {
-            add_trans(gg->g+i, t, 0);
-            return;
+            if (gene_i < 0) gene_i = i;
         } else if (ret == 2) return;
     }
     // not share any identical splice-site
-    add_trans(gg->g+gg->gene_n-1, t, 1);
-    
+    if (gene_i >= 0) {
+        add_trans(gg->g+gene_i, t, 0);
+    } else if (uncla){ // UNCLASSIFIED
+        add_trans(gg->g+gg->gene_n-1, t, 1);
+    }
 }
 
 const struct option update_long_opt [] = {
+    { "unclassified", 0, NULL, 'u' },
     { "source", 1, NULL, 's' },
     { "full-gtf", 1, NULL, 'f' },
 
@@ -234,20 +238,21 @@ const struct option update_long_opt [] = {
 
 int update_gtf(int argc, char *argv[])
 {
-    int c; char src[1024]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
+    int c; int uncla = 0; char src[1024]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
 	while ((c = getopt_long(argc, argv, "s:f:", update_long_opt, NULL)) >= 0) {
         switch(c)
         {
-           case 's': strcpy(src, optarg); break;
-           case 'f': if ((full_gfp = fopen(optarg, "w")) == NULL) {
-                         err_fatal(__func__, "Can not open full-gtf output file \"%s\"\n", optarg);
-                         return update_gtf_usage();
-                     }
-                     break;
+            case 'u': uncla = 1;
+            case 's': strcpy(src, optarg); break;
+            case 'f': if ((full_gfp = fopen(optarg, "w")) == NULL) {
+                          err_fatal(__func__, "Can not open full-gtf output file \"%s\"\n", optarg);
+                          return update_gtf_usage();
+                      }
+                      break;
             default:
-                err_printf("Error: unknown option: %s.\n", optarg);
-                return update_gtf_usage();
-                break;
+                      err_printf("Error: unknown option: %s.\n", optarg);
+                      return update_gtf_usage();
+                      break;
         }
     }
     if (argc - optind != 2) return update_gtf_usage();
@@ -286,7 +291,7 @@ int update_gtf(int argc, char *argv[])
             print_gene_group(*gg, h, src, new_gfp, group_line, group_line_n);
             read_gene_group(gtf_line, gfp, h, gg, &group_line, &group_line_m, &group_line_n, &group_line_n_m);
         } else { // overlap and novel: add & merge & print
-            group_check_novel(*t, gg);
+            group_check_novel(*t, gg, uncla);
             if ((sam_ret = sam_read1(in, h, b)) >= 0) {
                 gen_trans(b, t); set_trans(t, bam_get_qname(b));
                 if (full_gfp) print_trans(*t, h, src, full_gfp);
