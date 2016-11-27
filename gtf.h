@@ -101,5 +101,7 @@ void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char 
 void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 
 #define INTRON_MIN_LEN 50
+#define SPLICE_DISTANCE 20
+
 
 #endif

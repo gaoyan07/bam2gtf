@@ -27,7 +27,8 @@ int update_gtf_usage(void)
     err_printf("Usage:   %s update-gtf [option] <in.bam> <old.gtf> > new.gtf\n\n", PROG);
     err_printf("Notice:  the BAM and GTF files should be sorted in advance.\n\n");
     err_printf("Options:\n\n");
-    err_printf("         -u --unclassified         output UNCLASSIFIED novel transcript. [False]\n");
+    err_printf("         -d --distance    [INT]    consider same if distance between two splice site is less than d. [%d]\n", SPLICE_DISTANCE);
+    err_printf("         -u --unclassified         output UNCLASSIFIED novel transcript. [false]\n");
     err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
     err_printf("         -f --full-gtf    [STR]    use this option to output the full GTF information of SAM/BAM to file. [false].\n");
 	err_printf("\n");
@@ -150,13 +151,12 @@ int read_gene_group(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_group_t *gg, 
 //    0: novel, and NOT share any identical splice-site
 //    1: novel, and shared identical splice-site to existing gene
 //    2: identical to existing gene, OR other cases that cannot be added to anno
-int check_novel(trans_t t, gene_t *g)
+int check_novel(trans_t t, gene_t *g, int dis)
 {
     if (g->is_rev != t.is_rev || t.exon_n < 2) return 2; // different strand: can NOT be added to the anno
                                                            // one-exon transcript
     int anno_t_n = g->anno_tran_n;
     int i, j, k, iden_n=0, iden1=0;
-    int dis=0;
 
     if (t.is_rev) { // '-' strand
         for (i = 0; i < g->trans_n; ++i) {
@@ -210,12 +210,12 @@ int check_novel(trans_t t, gene_t *g)
     return iden1;
 }
 
-void group_check_novel(trans_t t, gene_group_t *gg, int uncla)
+void group_check_novel(trans_t t, gene_group_t *gg, int dis, int uncla)
 {
     int i;
     int gene_i = -1;
     for (i = 0; i < gg->gene_n; ++i) {
-        int ret = check_novel(t, gg->g+i);
+        int ret = check_novel(t, gg->g+i, dis);
         if (ret == 1) {
             if (gene_i < 0) gene_i = i;
         } else if (ret == 2) return;
@@ -229,6 +229,7 @@ void group_check_novel(trans_t t, gene_group_t *gg, int uncla)
 }
 
 const struct option update_long_opt [] = {
+    { "distance", 1, NULL, 'd' },
     { "unclassified", 0, NULL, 'u' },
     { "source", 1, NULL, 's' },
     { "full-gtf", 1, NULL, 'f' },
@@ -238,10 +239,11 @@ const struct option update_long_opt [] = {
 
 int update_gtf(int argc, char *argv[])
 {
-    int c; int uncla = 0; char src[1024]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
-	while ((c = getopt_long(argc, argv, "s:f:", update_long_opt, NULL)) >= 0) {
+    int c; int dis=SPLICE_DISTANCE, uncla = 0; char src[1024]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
+	while ((c = getopt_long(argc, argv, "d:us:f:", update_long_opt, NULL)) >= 0) {
         switch(c)
         {
+            case 'd': dis = atoi(optarg); break;
             case 'u': uncla = 1;
             case 's': strcpy(src, optarg); break;
             case 'f': if ((full_gfp = fopen(optarg, "w")) == NULL) {
@@ -291,7 +293,7 @@ int update_gtf(int argc, char *argv[])
             print_gene_group(*gg, h, src, new_gfp, group_line, group_line_n);
             read_gene_group(gtf_line, gfp, h, gg, &group_line, &group_line_m, &group_line_n, &group_line_n_m);
         } else { // overlap and novel: add & merge & print
-            group_check_novel(*t, gg, uncla);
+            group_check_novel(*t, gg, dis, uncla);
             if ((sam_ret = sam_read1(in, h, b)) >= 0) {
                 gen_trans(b, t); set_trans(t, bam_get_qname(b));
                 if (full_gfp) print_trans(*t, h, src, full_gfp);
