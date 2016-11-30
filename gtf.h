@@ -47,7 +47,7 @@ typedef struct {
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
     char tname[1024];
-    int novel_gene_flag;
+    int novel_gene_flag, cov;
 } trans_t;
 
 typedef struct {

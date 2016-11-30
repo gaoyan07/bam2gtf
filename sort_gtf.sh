@@ -23,7 +23,7 @@ chrom["chr21"]=21; chrom["chr22"]=22; chrom["chrX"]=23; chrom["chrY"]=24; chrom[
             chr_m += 1;
             chrom[$1] = chr_m;
         }
-        chr = chrom[$1]; start = $4;
+        chr = chrom[$1]; start = $4; end = $5;
     }
-    print chr, start, NR, $0
-} ' $1 | sort -n -k1 -n -k2 -n -k3 -n -k4 | awk 'BEGIN{FS="\t"; OFS="\t"} {print $4,$5,$6,$7,$8,$9,$10,$11,$12}' >> $2
+    print chr, start, end, NR, $0
+} ' $1 | sort -n -k1 -n -k2 -n -k3 -n -k4 -n -k5 | awk 'BEGIN{FS="\t"; OFS="\t"} {print $5,$6,$7,$8,$9,$10,$11,$12,$13}' >> $2

@@ -1,7 +1,7 @@
-/* bam2update_gtf.c
+/* update_gtf.c
  *   generate junction information based on sam/bam file
  *   then, update existing GTF file
- *   currently, only for single-end long read data
+ *   currently, only work for single-end long read data
  * 
  * Author:  Yan Gao
  * Contact: yangao07@hit.edu.cn                             */
@@ -39,6 +39,7 @@ char *fgets_gene(FILE *gfp, char *gtf_line, size_t size)
 {
     char s[100];
     while (fgets(gtf_line, size, gfp) != NULL) {
+        if (gtf_line[0] == '#') continue;
         if ((sscanf(gtf_line, "%*s\t%*s\t%s", s) == 1) && strcmp(s, "gene") == 0) return gtf_line;
     }
     return NULL;
@@ -157,27 +158,28 @@ int check_full(trans_t t, trans_t anno_t)
 // check if t is novel and has identical splice site
 // if t has all identical splice sites with other novel t, merge two ends
 // @return value
-//    0: novel, NOT share any identical splice site
-//    1: novel, and share identical splice site
+//    0: novel, NOT share any identical splice site (unclassified)
+//    1: novel, and share identical splice site (gene_id)
 //    2: totally identical, can NOT be added to any anno
-//    3: other cases that cannot be added to this anno
+//    3: other cases that cannot be added to this anno(not full-length to any anno-trans)
 int check_novel(trans_t t, gene_t *g, int dis)
 {
     if (g->is_rev != t.is_rev || t.exon_n < 2) return 3; // different strand: can NOT be added to the anno
                                                            // one-exon transcript
     int anno_t_n = g->anno_tran_n;
-    int i, j, k, iden_n=0, iden1=3;
+    int i, j, k, iden_n=0, iden1=0, full=0;
 
     if (t.is_rev) { // '-' strand
         for (i = 0; i < g->trans_n; ++i) {
             if (check_full(t, g->trans[i]) == 0) continue;
-            iden1 = iden_n = j = k = 0;
+            else full=1;
+            iden_n = j = k = 0;
             while (j < g->trans[i].exon_n-1 && k < t.exon_n-1) {
                 // 5' start and 3' end
                 if (abs(g->trans[i].exon[j].start - t.exon[k].start) <= dis) iden_n++;
                 if (abs(g->trans[i].exon[j+1].end - t.exon[k+1].end) <= dis) iden_n++;
 
-                if (g->trans[i].exon[j+1].start == t.exon[k+1].start) j++, k++;
+                if (abs(g->trans[i].exon[j+1].start - t.exon[k+1].start) <= dis) j++, k++;
                 else if (g->trans[i].exon[j+1].start > t.exon[k+1].start) j++;
                 else k++;
             }
@@ -185,6 +187,7 @@ int check_novel(trans_t t, gene_t *g, int dis)
             if (iden_n > 0 && i < anno_t_n) iden1=1;
             if (t.exon_n == g->trans[i].exon_n && iden_n == (t.exon_n-1)*2) {
                 if (i >= anno_t_n) { // merge
+                    g->trans[i].cov++;
                     if (g->trans[i].exon[0].end < t.end)
                         g->trans[i].end = g->trans[i].exon[0].end = t.end;
                     if (g->trans[i].exon[t.exon_n-1].start > t.start) 
@@ -196,13 +199,14 @@ int check_novel(trans_t t, gene_t *g, int dis)
     } else { // '+' strand
         for (i = 0; i < g->trans_n; ++i) {
             if (check_full(t, g->trans[i]) == 0) continue;
-            iden1 = iden_n = j = k = 0; // iden1 = 0 ? 3 XXX
+            else full=1;
+            iden_n = j = k = 0;
             while (j < g->trans[i].exon_n-1 && k < t.exon_n-1) {
                 // 3' end and 5' start
                 if (abs(g->trans[i].exon[j].end - t.exon[k].end) <= dis) iden_n++;
                 if (abs(g->trans[i].exon[j+1].start - t.exon[k+1].start) <= dis) iden_n++;
 
-                if (g->trans[i].exon[j+1].end == t.exon[k+1].end) j++, k++;
+                if (abs(g->trans[i].exon[j+1].end-t.exon[k+1].end) <= dis) j++, k++;
                 else if (g->trans[i].exon[j+1].end < t.exon[j+1].end) j++;
                 else k++;
             }
@@ -210,6 +214,7 @@ int check_novel(trans_t t, gene_t *g, int dis)
             if (iden_n > 0 && i < anno_t_n) iden1=1;
             if (t.exon_n == g->trans[i].exon_n && iden_n == (t.exon_n-1)*2) {
                 if (i >= anno_t_n) { // merge
+                    g->trans[i].cov++;
                     if (g->trans[i].exon[0].start > t.start)
                         g->trans[i].start = g->trans[i].exon[0].start = t.start;
                     if (g->trans[i].exon[t.exon_n-1].end < t.end)
@@ -219,7 +224,8 @@ int check_novel(trans_t t, gene_t *g, int dis)
             }
         }
     }
-    return iden1;
+    if (full) return iden1;
+    else return 3;
 }
 
 void group_check_novel(trans_t t, gene_group_t *gg, int dis, int uncla)
@@ -229,9 +235,9 @@ void group_check_novel(trans_t t, gene_group_t *gg, int dis, int uncla)
     for (i = 0; i < gg->gene_n; ++i) {
         int ret = check_novel(t, gg->g+i, dis);
         if (ret == 0) {
-            if (gene_i < 0) novel_gene_i = i;
+            if (novel_gene_i < 0) novel_gene_i = i;
         } else if (ret == 1) {
-            if (novel_gene_i < 0) gene_i = i;
+            if (gene_i < 0) gene_i = i;
         } else if (ret == 2) return;
     }
     // not share any identical splice-site
@@ -309,8 +315,6 @@ int update_gtf(int argc, char *argv[])
         } else { // overlap and novel: add & merge & print
             group_check_novel(*t, gg, dis, uncla);
             if ((sam_ret = sam_read1(in, h, b)) >= 0) {
-                if (strcmp(bam_get_qname(b), "m130613_193436_42175_c100535482550000001823081711101341_s1_p0/113058/ccs.path1")==0)
-                    printf("OK");
                 gen_trans(b, t); set_trans(t, bam_get_qname(b));
                 if (full_gfp) print_trans(*t, h, src, full_gfp);
             }

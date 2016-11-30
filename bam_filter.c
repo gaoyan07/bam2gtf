@@ -15,7 +15,7 @@ int filter_usage(void)
     err_printf("\n");
     err_printf("Usage:   %s filter [option] <in.bam/sam> | samtools sort > out.sort.bam\n\n", PROG);
     err_printf("Options:\n");
-    err_printf("         -v --cov-rat    [FLOAT]    minimum coverage of output alignment record. [%.2f]\n", COV_RATIO);
+    err_printf("         -v --coverage   [FLOAT]    minimum coverage of output alignment record. [%.2f]\n", COV_RATIO);
     err_printf("         -s --sec-rat    [FLOAT]    maximum ratio of second best and best score to retain the best\n");
     err_printf("                                    alignment, or no alignments will be retained. [%.2f]\n", SEC_RATIO);
 
@@ -59,7 +59,7 @@ int gtf_filter(bam1_t *b, int *score, float cov_rate)
 }
 
 const struct option filter_long_opt [] = {
-    { "cov-rat", 1, NULL, 'v' },
+    { "coverage", 1, NULL, 'v' },
     { "sec-rat", 1, NULL, 's' },
 
     { 0, 0, 0, 0}
@@ -86,7 +86,7 @@ int bam_filter(int argc, char *argv[])
 
     if ((out = sam_open_format("-", "wb", NULL)) == NULL) err_fatal_simple("Cannot open \"-\"\n");
     if (sam_hdr_write(out, h) != 0) err_fatal_simple("Error in writing SAM header\n"); //sam header
-    char lqname[1024]="\0"; int id=1;
+    char lqname[1024]="\0"; int id=1, best_id=1;
     while (sam_read1(in, h, b) >= 0) {
         if (gtf_filter(b, &score, cov_rat)) continue;
 
@@ -94,19 +94,20 @@ int bam_filter(int argc, char *argv[])
             id++;
             if (score > b_score) {
                 bam_copy1(best_b, b);
+                best_id = id;
                 s_score = b_score;
                 b_score = score;
             } else if (score > s_score)
                 s_score = score;
         } else { 
             if (strcmp(lqname, "\0") != 0 && s_score < sec_rat * b_score) {
-                add_pathid(best_b, id);
+                add_pathid(best_b, best_id);
                 if (sam_write1(out, h, best_b) < 0) err_fatal_simple("Error in writing SAM record\n");
             }
             bam_copy1(best_b, b);
             b_score = score; s_score = 0;
+            best_id = id = 1;
             strcpy(lqname, bam_get_qname(b)); 
-            id = 1;
         }
     }
 
