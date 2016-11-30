@@ -6,7 +6,8 @@
 #include "htslib/htslib/sam.h"
 
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
-#define COV_RATE 0.9
+#define COV_RATIO 0.9
+#define SEC_RATIO 0.9
 
 extern const char PROG[20];
 int filter_usage(void)
@@ -14,8 +15,10 @@ int filter_usage(void)
     err_printf("\n");
     err_printf("Usage:   %s filter [option] <in.bam/sam> | samtools sort > out.sort.bam\n\n", PROG);
     err_printf("Options:\n");
-    err_printf("         -b --only-best            only keep the BEST ONE alignment record for each query. [false]\n");
-    err_printf("         -v --cov-rate  [FLOAT]    minimum coverage of output alignment record. [%.2f]\n", COV_RATE);
+    err_printf("         -v --cov-rat    [FLOAT]    minimum coverage of output alignment record. [%.2f]\n", COV_RATIO);
+    err_printf("         -s --sec-rat    [FLOAT]    maximum ratio of second best and best score to retain the best\n");
+    err_printf("                                    alignment, or no alignments will be retained. [%.2f]\n", SEC_RATIO);
+
     err_printf("\n");
     return 1;
 }
@@ -56,19 +59,19 @@ int gtf_filter(bam1_t *b, int *score, float cov_rate)
 }
 
 const struct option filter_long_opt [] = {
-    { "only-best", 0, NULL, 'b' },
-    { "cov-rate", 1, NULL, 'v' },
+    { "cov-rat", 1, NULL, 'v' },
+    { "sec-rat", 1, NULL, 's' },
 
     { 0, 0, 0, 0}
 };
 
 int bam_filter(int argc, char *argv[])
 {
-    int c; int only_best=0; float cov_rate=COV_RATE;
+    int c; float cov_rat=COV_RATIO, sec_rat=SEC_RATIO;
     while ((c = getopt_long(argc, argv, "bv:", filter_long_opt, NULL)) >= 0) {
         switch (c) {
-            case 'b': only_best = 1; break;
-            case 'v': cov_rate = atof(optarg); break;
+            case 'v': cov_rat = atof(optarg); break;
+            case 's': sec_rat = atof(optarg); break;
             default : return filter_usage();
         }
     }
@@ -76,7 +79,7 @@ int bam_filter(int argc, char *argv[])
     if (argc - optind != 1) return filter_usage();
 
     samFile *in, *out; bam_hdr_t *h; bam1_t *b;
-    bam1_t *best_b; int best_score=0, score; // for only-best
+    bam1_t *best_b; int b_score=0, s_score=0, score;
     if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1();  best_b = bam_init1();
@@ -85,28 +88,25 @@ int bam_filter(int argc, char *argv[])
     if (sam_hdr_write(out, h) != 0) err_fatal_simple("Error in writing SAM header\n"); //sam header
     char lqname[1024]="\0"; int id=1;
     while (sam_read1(in, h, b) >= 0) {
-        if (gtf_filter(b, &score, cov_rate)) continue;
+        if (gtf_filter(b, &score, cov_rat)) continue;
 
-        if (only_best) {
-            if (strcmp(bam_get_qname(b), lqname) == 0) {
-                if (score > best_score) {
-                    bam_copy1(best_b, b);
-                    best_score = score;
-                }
-            } else { 
-                if (strcmp(lqname, "\0") != 0) {
-                    add_pathid(best_b, 1);
-                    if (sam_write1(out, h, best_b) < 0) err_fatal_simple("Error in writing SAM record\n");
-                }
+        if (strcmp(bam_get_qname(b), lqname) == 0) {
+            id++;
+            if (score > b_score) {
                 bam_copy1(best_b, b);
-                best_score = score;
-                strcpy(lqname, bam_get_qname(b)); 
+                s_score = b_score;
+                b_score = score;
+            } else if (score > s_score)
+                s_score = score;
+        } else { 
+            if (strcmp(lqname, "\0") != 0 && s_score < sec_rat * b_score) {
+                add_pathid(best_b, id);
+                if (sam_write1(out, h, best_b) < 0) err_fatal_simple("Error in writing SAM record\n");
             }
-        } else {
-            if (strcmp(bam_get_qname(b), lqname) == 0) id++;
-            else { id = 1; strcpy(lqname, bam_get_qname(b)); }
-            add_pathid(b, id);
-            if (sam_write1(out, h, b) < 0) err_fatal_simple("Error in writing SAM record\n");
+            bam_copy1(best_b, b);
+            b_score = score; s_score = 0;
+            strcpy(lqname, bam_get_qname(b)); 
+            id = 1;
         }
     }
 
