@@ -6,8 +6,9 @@
 #include "htslib/htslib/sam.h"
 
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
-#define COV_RATIO 0.9
-#define SEC_RATIO 0.9
+#define COV_RATIO 0.67
+#define MAP_QUAL  0.75
+#define SEC_RATIO 0.98
 
 extern const char PROG[20];
 int filter_usage(void)
@@ -15,7 +16,8 @@ int filter_usage(void)
     err_printf("\n");
     err_printf("Usage:   %s filter [option] <in.bam/sam> | samtools sort > out.sort.bam\n\n", PROG);
     err_printf("Options:\n");
-    err_printf("         -v --coverage   [FLOAT]    minimum coverage of output alignment record. [%.2f]\n", COV_RATIO);
+    err_printf("         -v --coverage   [FLOAT]    minimum fraction of aligned bases. [%.2f]\n", COV_RATIO);
+    err_printf("         -q --map-qual   [FLOAT]    minimum fraction of identically aligned bases. [%.2f]\n", MAP_QUAL);
     err_printf("         -s --sec-rat    [FLOAT]    maximum ratio of second best and best score to retain the best\n");
     err_printf("                                    alignment, or no alignments will be retained. [%.2f]\n", SEC_RATIO);
 
@@ -40,7 +42,7 @@ void add_pathid(bam1_t *b, int id)
     b->core.l_qname += l;
 }
 
-int gtf_filter(bam1_t *b, int *score, float cov_rate)
+int gtf_filter(bam1_t *b, int *score, float cov_rate, float map_qual)
 {
     if (bam_unmap(b)) return 1;
     uint32_t *c = bam_get_cigar(b), n_c = b->core.n_cigar;
@@ -54,12 +56,14 @@ int gtf_filter(bam1_t *b, int *score, float cov_rate)
     uint8_t *p = bam_aux_get(b, "NM"); // Edit Distance
     int ed; 
     ed = bam_aux2i(p);
+    if (cigar_qlen - ed < map_qual * cigar_qlen) return 1;
     *score = cigar_qlen - ed;
     return 0;
 }
 
 const struct option filter_long_opt [] = {
     { "coverage", 1, NULL, 'v' },
+    { "map-quality", 1, NULL, 'q' },
     { "sec-rat", 1, NULL, 's' },
 
     { 0, 0, 0, 0}
@@ -67,10 +71,11 @@ const struct option filter_long_opt [] = {
 
 int bam_filter(int argc, char *argv[])
 {
-    int c; float cov_rat=COV_RATIO, sec_rat=SEC_RATIO;
-    while ((c = getopt_long(argc, argv, "bv:", filter_long_opt, NULL)) >= 0) {
+    int c; float cov_rat=COV_RATIO, map_qual = MAP_QUAL, sec_rat=SEC_RATIO;
+    while ((c = getopt_long(argc, argv, "v:q:s:", filter_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'v': cov_rat = atof(optarg); break;
+            case 'q': map_qual = atof(optarg); break;
             case 's': sec_rat = atof(optarg); break;
             default : return filter_usage();
         }
@@ -88,7 +93,7 @@ int bam_filter(int argc, char *argv[])
     if (sam_hdr_write(out, h) != 0) err_fatal_simple("Error in writing SAM header\n"); //sam header
     char lqname[1024]="\0"; int id=1, best_id=1;
     while (sam_read1(in, h, b) >= 0) {
-        if (gtf_filter(b, &score, cov_rat)) continue;
+        if (gtf_filter(b, &score, cov_rat, map_qual)) continue;
 
         if (strcmp(bam_get_qname(b), lqname) == 0) {
             id++;
