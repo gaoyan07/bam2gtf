@@ -42,7 +42,8 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
             case BAM_CREF_SKIP:  // N/D(0 1)
             case BAM_CDEL :
                 if (l >= INTRON_MIN_LEN) {
-                    add_exon(t, tid, start, end, is_rev);
+                    if (t->exon_n == 0 || (end-start+1) >= INTER_EXON_MIN_LEN)
+                        add_exon(t, tid, start, end, is_rev);
                     start = end + l + 1;
                 }
                 end += l;

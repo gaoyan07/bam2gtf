@@ -279,7 +279,7 @@ void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char 
     for (i = 0; i < gg.gene_n; ++i) {
         // print anno
         for (j = 0; j < group_line_n[i]; ++j)
-            fprintf(out, "%s\n", group_line[l_i++]);
+            fprintf(out, "%s", group_line[l_i++]);
         // print novel trans
         print_gtf_trans(gg.g[i], h, src, out);        
     }
