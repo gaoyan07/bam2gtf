@@ -18,8 +18,8 @@
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
 
 extern const char PROG[20];
-extern int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar);
-extern int gen_trans(bam1_t *b, trans_t *t);
+extern int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar, int exon_min);
+extern int gen_trans(bam1_t *b, trans_t *t, int exon_min);
 
 int update_gtf_usage(void)
 {
@@ -27,6 +27,7 @@ int update_gtf_usage(void)
     err_printf("Usage:   %s update-gtf [option] <in.bam> <old.gtf> > new.gtf\n\n", PROG);
     err_printf("Notice:  the BAM and GTF files should be sorted in advance.\n\n");
     err_printf("Options:\n\n");
+    err_printf("         -e --min-exon    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
     err_printf("         -d --distance    [INT]    consider same if distance between two splice site is less than d. [%d]\n", SPLICE_DISTANCE);
     err_printf("         -l --full-length [INT]    level of strict criterion for considering full-length transcript. \n");
     err_printf("                                   (1->5, most strict->most relaxed) [%d]\n", 5);
@@ -149,10 +150,16 @@ int read_gene_group(char gtf_line[], FILE *gfp, bam_hdr_t *h, gene_group_t *gg, 
     return gg->gene_n;
 }
 
+int exon_overlap(exon_t e1, exon_t e2)
+{
+    if (e1.start > e2.end || e2.start > e1.end) return 0;
+    return 1;
+}
+
 int check_full(trans_t t, trans_t anno_t, int level)
 {
     int i = t.exon_n-1, j = anno_t.exon_n-1;
-    if (level == 1) {
+    if (level == 1) { // identical first and last splice-site
         if (t.is_rev) {
             if (t.exon[i].end != anno_t.exon[i].end) return 0;
             if (t.exon[0].start != anno_t.exon[0].start) return 0;
@@ -160,10 +167,38 @@ int check_full(trans_t t, trans_t anno_t, int level)
             if (t.exon[0].end != anno_t.exon[0].end) return 0;
             if (t.exon[i].start != anno_t.exon[j].start) return 0;
         }
-    } else if (level == 2) {
-        if (t.exon[0].start > anno_t.exon[0].end || anno_t.exon[0].start > t.exon[0].end) return 0;
-        if (t.exon[i].start > anno_t.exon[j].end || anno_t.exon[j].start > t.exon[i].end) return 0;
-    } 
+    } else if (level == 2) { // overlapping first and last exon
+        if (!exon_overlap(t.exon[0], anno_t.exon[0])) return 0;
+        if (!exon_overlap(t.exon[i], anno_t.exon[j])) return 0;
+    } else if (level == 3) { // overlapping first and last exon, or overlapping nothing
+        int ii, a1, a2, a3, a4;
+        a1 = 0, a3 = 0;
+        if (exon_overlap(t.exon[0], anno_t.exon[0])) a1=1;
+        if (exon_overlap(t.exon[i], anno_t.exon[j])) a3=1;
+        if (a1 == 1 && a3 == 1) return 1;
+
+        a2 = 1, a4 = 1;
+        for (ii = 0; ii < anno_t.exon_n; ++ii) {
+            if (exon_overlap(t.exon[0], anno_t.exon[ii])) a2 = 0;
+            if (exon_overlap(t.exon[i], anno_t.exon[ii])) a4 = 0;
+            if (a2 == 0 && a4 == 0) return 0;
+        }
+        if (a1+a2 >= 1 && a3+a4 >= 1) return 1;
+        else return 0;
+    } else if (level == 4) { // most 5' exon meets #3, most 3' exon has a polyA+ tail of 15bp or longer
+        if (t.is_rev) {
+            i = 0; j = 0;
+        } else {
+            i = t.exon_n-1; j = anno_t.exon_n-1;
+        }
+        if (exon_overlap(t.exon[i], anno_t.exon[j])) return 1;
+
+        int ii;
+        for (ii = 0; ii < anno_t.exon_n; ++ii) {
+            if (exon_overlap(t.exon[i], anno_t.exon[ii])) return 0;
+        }
+        return 1;
+    }
     return 1;
 }
 
@@ -259,6 +294,7 @@ void group_check_novel(trans_t t, gene_group_t *gg, int dis, int uncla, int l)
 }
 
 const struct option update_long_opt [] = {
+    { "min-exon", 1, NULL, 'e' },
     { "distance", 1, NULL, 'd' },
     { "unclassified", 0, NULL, 'u' },
     { "source", 1, NULL, 's' },
@@ -269,10 +305,11 @@ const struct option update_long_opt [] = {
 
 int update_gtf(int argc, char *argv[])
 {
-    int c; int dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[1024]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
-	while ((c = getopt_long(argc, argv, "d:l:us:f:", update_long_opt, NULL)) >= 0) {
+    int c; int exon_min = INTER_EXON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[1024]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
+	while ((c = getopt_long(argc, argv, "e:d:l:us:f:", update_long_opt, NULL)) >= 0) {
         switch(c)
         {
+            case 'e': exon_min = atoi(optarg); break;
             case 'd': dis = atoi(optarg); break;
             case 'l': l = atoi(optarg); break;
             case 'u': uncla = 1;
@@ -307,7 +344,7 @@ int update_gtf(int argc, char *argv[])
     // init for trans from sam record
     int sam_ret = sam_read1(in, h, b); 
     if (sam_ret >= 0) {
-        gen_trans(b, t); set_trans(t, bam_get_qname(b));
+        gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
         if (full_gfp) print_trans(*t, h, src, full_gfp);
     }
 
@@ -316,7 +353,7 @@ int update_gtf(int argc, char *argv[])
         // sam_end < gene_s: sam++
         if (t->tid < gg->tid || (t->tid == gg->tid && t->end < gg->start)) {
             if ((sam_ret = sam_read1(in, h, b)) >= 0) {
-                gen_trans(b, t); set_trans(t, bam_get_qname(b));
+                gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
                 if (full_gfp) print_trans(*t, h, src, full_gfp);
             }
         } // gene_e < sam_s: gene++
@@ -326,7 +363,7 @@ int update_gtf(int argc, char *argv[])
         } else { // overlap and novel: add & merge & print
             group_check_novel(*t, gg, dis, uncla, l);
             if ((sam_ret = sam_read1(in, h, b)) >= 0) {
-                gen_trans(b, t); set_trans(t, bam_get_qname(b));
+                gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
                 if (full_gfp) print_trans(*t, h, src, full_gfp);
             }
         }
@@ -339,7 +376,7 @@ int update_gtf(int argc, char *argv[])
         fputs(gtf_line, new_gfp);
     while (full_gfp && sam_ret >= 0) {
         if ((sam_ret = sam_read1(in, h, b)) >= 0) {
-            gen_trans(b, t); set_trans(t, bam_get_qname(b));
+            gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
             print_trans(*t, h, src, full_gfp);
         }
     }

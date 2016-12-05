@@ -22,12 +22,13 @@ int bam2gtf_usage(void)
     err_printf("\n");
     err_printf("Usage:   %s bam2gtf [option] <in.bam> > out.gtf\n\n", PROG);
     err_printf("Options:\n\n");
+    err_printf("         -e --exon-min    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
     err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
 	err_printf("\n");
 	return 1;
 }
 
-int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
+int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar, int exon_min)
 {
     t->exon_n = 0;
     int32_t tid = b->core.tid; int32_t start = b->core.pos+1, end = start-1;/*1-base*/ uint8_t is_rev, *p;
@@ -41,7 +42,7 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
         switch (bam_cigar_op(c[i])) {
             case BAM_CREF_SKIP:  // N/D(0 1)
             case BAM_CDEL :
-                if (l >= INTRON_MIN_LEN) {
+                if (l >= exon_min) {
                     if (t->exon_n == 0 || (end-start+1) >= INTER_EXON_MIN_LEN)
                         add_exon(t, tid, start, end, is_rev);
                     start = end + l + 1;
@@ -69,16 +70,17 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar)
     return 0;
 }
 
-int gen_trans(bam1_t *b, trans_t *t)
+int gen_trans(bam1_t *b, trans_t *t, int exon_min)
 {
     if (bam_unmap(b)) return 0;
 
     uint32_t *c = bam_get_cigar(b), n_cigar = b->core.n_cigar;
-    gen_exon(t, b, c, n_cigar);
+    gen_exon(t, b, c, n_cigar, exon_min);
     return 1;
 }
 
 const struct option bam2gtf_long_opt [] = {
+    { "exon-min", 1, NULL, 'e' },
     { "source", 1, NULL, 's' },
 
     { 0, 0, 0, 0}
@@ -86,19 +88,17 @@ const struct option bam2gtf_long_opt [] = {
 
 int bam2gtf(int argc, char *argv[])
 {
-    int c;
+    int c, exon_min=INTER_EXON_MIN_LEN;
     char src[1024]="NONE";
-	while ((c = getopt_long(argc, argv, "s:", bam2gtf_long_opt, NULL)) >= 0)
+	while ((c = getopt_long(argc, argv, "s:e:", bam2gtf_long_opt, NULL)) >= 0)
     {
         switch(c)
         {
-           case 's':
-                strcpy(src, optarg);
-                break;
-            default:
-                err_printf("Error: unknown option: %s.\n", optarg);
-                return bam2gtf_usage();
-                break;
+            case 'e': exon_min = atoi(optarg); break;
+            case 's': strcpy(src, optarg); break;
+            default: err_printf("Error: unknown option: %s.\n", optarg);
+                     return bam2gtf_usage();
+                     break;
         }
     }
     if (argc -optind != 1) return bam2gtf_usage();
@@ -114,7 +114,7 @@ int bam2gtf(int argc, char *argv[])
     trans_t *t = trans_init(1);
 
     while (sam_read1(in, h, b) >= 0) {
-        if (gen_trans(b, t)) set_trans(t, bam_get_qname(b));
+        if (gen_trans(b, t, exon_min)) set_trans(t, bam_get_qname(b));
         print_trans(*t, h, src, stdout);
     }
 
