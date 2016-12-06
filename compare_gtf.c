@@ -11,7 +11,6 @@ int usage(void)
 	err_printf("         1.gtf is smaller than 2.gtf\n");
 	err_printf("\n");
 	return 1;
-
 }
 
 int check_iden(trans_t t1, trans_t t2)
@@ -21,13 +20,13 @@ int check_iden(trans_t t1, trans_t t2)
     int i;
     if (t1.is_rev) { // '-' strand
         for (i = 0; i < t1.exon_n-1; ++i) {
-            if (abs(t1.exon[i].start - t2.exon[i].start) <= dis) return 0;
-            if (abs(t1.exon[i+1].end - t2.exon[i+1].end) <= dis) return 0;
+            if (abs(t1.exon[i].start - t2.exon[i].start) > dis) return 0;
+            if (abs(t1.exon[i+1].end - t2.exon[i+1].end) > dis) return 0;
         }
     } else { // '+' strand
         for (i = 0; i < t1.exon_n-1; ++i) {
-            if (abs(t1.exon[i].end - t2.exon[i].end) <= dis) return 0;
-            if (abs(t1.exon[i+1].start - t2.exon[i+1].start) <= dis) return 0;
+            if (abs(t1.exon[i].end - t2.exon[i].end) > dis) return 0;
+            if (abs(t1.exon[i+1].start - t2.exon[i+1].start) > dis) return 0;
         }
     }
     return 1;
@@ -56,7 +55,7 @@ int comp_gtf_core(read_trans_t T1, read_trans_t T2)
         }
         j = last_j;
     }
-    printf("Overlap: %d\n#1 Only: %d\n#2 Only: %d\n", iden, T1.trans_n, T2.trans_n);
+    printf("Overlap: %d\n#1 Only: %d\n#2 Only: %d\n", iden, T1.trans_n-iden, T2.trans_n-iden);
     return 0;
 }
 
@@ -77,14 +76,18 @@ int read_trans(read_trans_t *T, FILE *fp)
         uint8_t is_rev = (strand == '-' ? 1 : 0);
         if (strcmp(type, "transcript") == 0) {
             if (t->exon_n != 0) {
-                set_trans(t, NULL); add_read_trans(T, *t);
+                add_read_trans(T, *t);
+                set_trans(T->t+T->trans_n-1, NULL);
             }
             t->exon_n = 0;
         } else { // exon
             add_exon(t, name2id(ref), start, end, is_rev);
         }
     }
-    if (t->exon_n != 0) add_read_trans(T, *t);
+    if (t->exon_n != 0) {
+        add_read_trans(T, *t);
+        set_trans(T->t+T->trans_n-1, NULL);
+    }
     trans_free(t);
     return T->trans_n;
 }

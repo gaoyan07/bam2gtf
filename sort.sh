@@ -7,7 +7,7 @@ if [ $# -ne 2 ]; then
 fi
 
 # 1. cat head lines to 
-awk '{if(NR<=2) {print} else {exit}}' $1 > $2
+#awk '{if(NR<=2) {print} else {exit}}' $1 > $2
 # 2. tag lines based on 'transcript_id'
 awk '
 BEGIN {
@@ -19,7 +19,7 @@ chrom["chr11"]=11; chrom["chr12"]=12; chrom["chr13"]=13; chrom["chr14"]=14; chro
 chrom["chr16"]=16; chrom["chr17"]=17; chrom["chr18"]=18; chrom["chr19"]=19; chrom["chr20"]=20;
 chrom["chr21"]=21; chrom["chr22"]=22; chrom["chrX"]=23; chrom["chrY"]=24; chrom["chrM"]=25;
 } 
-(NR>2) {
+{
     if($12 != id) {
         print chr, start, end, id;
         start=3000000000; end=0; id=$12; 
@@ -43,9 +43,8 @@ NR==FNR {
     array[$4] = $0
 }
 NR!=FNR {
-if (FNR>2) { 
+{ 
     if ($12 != id) {print array[$12], NR-1, $1, 0, "transcript", "", "", "", "", "", ""; id=$12}
     print array[$12], NR, $0
 }
-}' .tmp $1 | sort -n -k1 -n -k2 -n -k3 -n -k5 | awk 'BEGIN{FS="\t"; OFS="\t"} {print $6,$7,$8,$9,$10,$11,$12,$13,$14}' >> $2
-
+}' .tmp $1 | sort -n -k1 -n -k2 -n -k3 -n -k5 | awk 'BEGIN{FS="\t"; OFS="\t"} {print $6,$7,$8,$9,$10,$11,$12,$13,$14}' > $2
