@@ -29,7 +29,6 @@ gdb_gtools: $(SOURCE) $(GDB_DEBUG)
 debug_gtools: $(SOURCE) $(NOR_DEBUG)
 
 
-_end_flag = '$'
 $(HTS_ALL):
 	cd $(HTSLIB_DIR); make; cd ../
 $(BIN): $(OBJS)

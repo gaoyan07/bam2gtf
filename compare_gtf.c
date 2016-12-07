@@ -38,10 +38,13 @@ int comp_gtf_core(read_trans_t T1, read_trans_t T2)
     int i=0, j=0, last_j = 0;
     int iden=0;
     while (i < T1.trans_n && j < T2.trans_n) {
+        //if(T1.t[i].tid==1 && T1.t[i].start==895993 && 901092 == T1.t[i].end)
+            //printf("OK\n");
         if (T1.t[i].start > T2.t[j].end) {
             j++;
             last_j = j;
         } else if (T2.t[j].start > T1.t[i].end) {
+            err_printf("%d\t%d\t%d\n", T1.t[i].tid, T1.t[i].start, T1.t[i].end);
             i++;
         } else {
             if (check_iden(T1.t[i], T2.t[j])) {

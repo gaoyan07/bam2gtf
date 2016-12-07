@@ -222,16 +222,15 @@ int check_novel(trans_t t, gene_t *g, int dis, int l)
             iden_n = 0;
             for (k = 0; k < t.exon_n-1; ++k) {
                 for (j = 0; j < g->trans[i].exon_n-1; ++j) {
-                    if (abs(g->trans[i].exon[j].start - t.exon[k].start) <= dis
-                     && abs(g->trans[i].exon[j+1].end - t.exon[k+1].end) <= dis) {
-                        iden_n++;
-                        break;
+                    if (abs(g->trans[i].exon[j].start - t.exon[k].start) <= dis) iden_n++;
+                    if (abs(g->trans[i].exon[j+1].end - t.exon[k+1].end) <= dis) iden_n++;
+                    if (g->trans[i].exon[j+1].end < t.exon[k+1].end) break;
                     }
                 }
             }
             // check
             if (iden_n > 0 && i < anno_t_n) iden1=1;
-            if (t.exon_n == g->trans[i].exon_n && iden_n == t.exon_n-1) {
+            if (t.exon_n == g->trans[i].exon_n && iden_n == (t.exon_n-1)*2) {
                 if (i >= anno_t_n) { // merge
                     g->trans[i].cov++;
                     if (g->trans[i].exon[0].end < t.end)
@@ -248,16 +247,15 @@ int check_novel(trans_t t, gene_t *g, int dis, int l)
             iden_n = 0;
             for (k = 0; k < t.exon_n-1; ++k) {
                 for (j = 0; j < g->trans[i].exon_n-1; ++j) {
-                    if (abs(g->trans[i].exon[j].end - t.exon[k].end) <= dis 
-                     && abs(g->trans[i].exon[j+1].start - t.exon[k+1].start) <= dis) {
-                        iden_n++;
-                        break;
+                    if (abs(g->trans[i].exon[j].end - t.exon[k].end) <= dis) iden_n++;
+                    if (abs(g->trans[i].exon[j+1].start - t.exon[k+1].start) <= dis) iden_n++;
+                    if (g->trans[i].exon[j+1].start > t.exon[k+1].start) break;
                     }
                 }
             }
             // check
             if (iden_n > 0 && i < anno_t_n) iden1=1;
-            if (t.exon_n == g->trans[i].exon_n && iden_n == t.exon_n-1) {
+            if (t.exon_n == g->trans[i].exon_n && iden_n == (t.exon_n-1)*2) {
                 if (i >= anno_t_n) { // merge
                     g->trans[i].cov++;
                     if (g->trans[i].exon[0].start > t.start)
@@ -363,6 +361,8 @@ int update_gtf(int argc, char *argv[])
         } else { // overlap and novel: add & merge & print
             group_check_novel(*t, gg, dis, uncla, l);
             if ((sam_ret = sam_read1(in, h, b)) >= 0) {
+                if (strcmp(bam_get_qname(b), "m130609_034414_42175_c100522932550000001823080209281382_s1_p0/138320/ccs.path1")==0)
+                    printf("ok\n");
                 gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
                 if (full_gfp) print_trans(*t, h, src, full_gfp);
             }
