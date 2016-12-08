@@ -91,7 +91,7 @@ const struct option bam2gtf_long_opt [] = {
 int bam2gtf(int argc, char *argv[])
 {
     int c, exon_min=INTER_EXON_MIN_LEN;
-    char src[1024]="NONE";
+    char src[100]="NONE";
 	while ((c = getopt_long(argc, argv, "s:e:", bam2gtf_long_opt, NULL)) >= 0)
     {
         switch(c)

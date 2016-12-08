@@ -91,7 +91,7 @@ int bam_filter(int argc, char *argv[])
 
     if ((out = sam_open_format("-", "wb", NULL)) == NULL) err_fatal_simple("Cannot open \"-\"\n");
     if (sam_hdr_write(out, h) != 0) err_fatal_simple("Error in writing SAM header\n"); //sam header
-    char lqname[1024]="\0"; int id=1, best_id=1;
+    char lqname[100]="\0"; int id=1, best_id=1;
     while (sam_read1(in, h, b) >= 0) {
         if (gtf_filter(b, &score, cov_rat, map_qual)) continue;
 

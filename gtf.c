@@ -103,6 +103,7 @@ void add_read_trans(read_trans_t *r, trans_t t)
     if (r->trans_n == r->trans_m) r = read_trans_realloc(r);
     int i;
     r->t[r->trans_n].exon_n = 0;
+    r->t[r->trans_n].cov = 1;
     for (i = 0; i < t.exon_n; ++i)
         add_exon(r->t+r->trans_n, t.exon[i].tid, t.exon[i].start, t.exon[i].end, t.exon[i].is_rev);
     strcpy(r->t[r->trans_n].tname, t.tname);
@@ -281,6 +282,7 @@ int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_tran
     while (sam_ret >= 0) {
         gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
         add_read_trans(T, *t); set_trans(T->t+T->trans_n-1, bam_get_qname(b));
+        sam_ret = sam_read1(in, h, b) ;
     }
     trans_free(t);
     return T->trans_n;
@@ -322,7 +324,7 @@ int print_gene(gene_t g, FILE *out)
 void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out)
 {
     if (g.trans_n <= g.anno_tran_n) return;
-    int i, j; char gene_name[1024]; int score_min=450, score_step=50;
+    int i, j; char gene_name[100]; int score_min=450, score_step=50;
     for (i = g.anno_tran_n; i < g.trans_n; ++i) {
         if (g.trans[i].novel_gene_flag) strcpy(gene_name, "UNCLASSIFIED");
         else strcpy(gene_name, g.gname);

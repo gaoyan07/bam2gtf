@@ -46,8 +46,8 @@ typedef struct {
     exon_t *exon; int exon_n, exon_m;
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
-    char tname[1024];
-    char gname[1024];
+    char tname[100];
+    char gname[100];
     int novel_gene_flag, cov;
 } trans_t;
 
@@ -59,7 +59,7 @@ typedef struct {
     trans_t *trans; int trans_n, anno_tran_n, trans_m;
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
-    char gname[1024];
+    char gname[100];
 } gene_t;
 
 typedef struct {

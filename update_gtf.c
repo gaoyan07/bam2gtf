@@ -169,8 +169,10 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int di
         } else if (anno_T.t[j].tid > bam_T.t[i].tid || (anno_T.t[j].tid == bam_T.t[i].tid && anno_T.t[j].start > bam_T.t[i].end)) {
             if (novel == 1) {
                 add_read_trans(novel_T, bam_T.t[i]);
+                set_trans(novel_T->t+novel_T->trans_n-1, NULL);
             } else if (uncla && all_novel == 1) {
                 add_read_trans(novel_T, bam_T.t[i]);
+                set_trans(novel_T->t+novel_T->trans_n-1, NULL);
             }
             i++;
             novel = 0;
@@ -185,6 +187,8 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int di
             } else if (ret == 2) { // all identical
                 novel = 0;
                 i++;
+            } else {
+                j++; continue;
             }
         }
         j = last_j;
@@ -204,7 +208,7 @@ const struct option update_long_opt [] = {
 
 int update_gtf(int argc, char *argv[])
 {
-    int c; int exon_min = INTER_EXON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[1024]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
+    int c; int exon_min = INTER_EXON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[100]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
 	while ((c = getopt_long(argc, argv, "e:d:l:us:f:", update_long_opt, NULL)) >= 0) {
         switch(c)
         {

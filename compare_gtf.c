@@ -49,7 +49,7 @@ int name2id(char ref[])
     else return atoi(ref+3);
 }
 
-int read_anno_trans(read_trans_t *T, FILE *fp)
+int read_anno_trans1(read_trans_t *T, FILE *fp)
 {
     char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand;
     trans_t *t = trans_init(1);
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     FILE *fp1 = fopen(argv[1], "r"), *fp2 = fopen(argv[2], "r");
     read_trans_t *T1, *T2;
     T1 = read_trans_init(), T2 = read_trans_init();
-    read_anno_trans(T1, fp1); read_anno_trans(T2, fp2);
+    read_anno_trans1(T1, fp1); read_anno_trans1(T2, fp2);
 
     comp_gtf_core(*T1, *T2);
 
