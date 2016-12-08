@@ -88,6 +88,7 @@ void add_read_trans(read_trans_t *r, trans_t t)
     for (i = 0; i < t.exon_n; ++i)
         add_exon(r->t+r->trans_n, t.exon[i].tid, t.exon[i].start, t.exon[i].end, t.exon[i].is_rev);
     strcpy(r->t[r->trans_n].tname, t.tname);
+    strcpy(r->t[r->trans_n].gname, t.gname);
     r->trans_n++;
 }
 
@@ -224,6 +225,47 @@ void gene_group_free(gene_group_t *gg)
         free(gg->g[i].trans);
     }
     free(gg->g); free(gg);
+}
+// read
+int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
+{
+    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[100];
+    trans_t *t = trans_init(1);
+    while (fgets(line, 1024, fp) != NULL) {
+        sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
+        uint8_t is_rev = (strand == '-' ? 1 : 0);
+        if (strcmp(type, "transcript") == 0) {
+            if (t->exon_n != 0) {
+                add_read_trans(T, *t);
+                set_trans(T->t+T->trans_n-1, NULL);
+            }
+            t->exon_n = 0;
+            strcpy(t->gname, gname);
+        } else if (strcmp(type, "gene") == 0) {
+            char tag[10]="gene_id";
+            gtf_add_info(add_info, tag, gname);
+        }else if (strcmp(type, "exon") == 0) { // exon
+            add_exon(t, bam_name2id(h, ref), start, end, is_rev);
+        }
+    }
+    if (t->exon_n != 0) {
+        add_read_trans(T, *t);
+        set_trans(T->t+T->trans_n-1, NULL);
+    }
+    trans_free(t);
+    return T->trans_n;
+} 
+
+int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_trans_t *T)
+{
+    trans_t *t = trans_init(1);
+    int sam_ret = sam_read1(in, h, b) ;
+    while (sam_ret >= 0) {
+        gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
+        add_read_trans(T, *t); set_trans(T->t+T->trans_n-1, bam_get_qname(b));
+    }
+    trans_free(t);
+    return T->trans_n;
 }
 
 //print

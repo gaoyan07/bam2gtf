@@ -35,22 +35,20 @@ int check_iden(trans_t t1, trans_t t2)
 // number of trans in T1 is less than T2
 int comp_gtf_core(read_trans_t T1, read_trans_t T2)
 {
-    int i=0, j=0, last_j = 0;
-    int iden=0;
+    int i=0, j=0, last_j = 0, iden=0;
+
     while (i < T1.trans_n && j < T2.trans_n) {
-        //if(T1.t[i].tid==1 && T1.t[i].start==895993 && 901092 == T1.t[i].end)
-            //printf("OK\n");
-        if (T1.t[i].start > T2.t[j].end) {
+        if (T1.t[i].tid > T2.t[j].tid || (T1.t[i].tid == T2.t[j].tid && T1.t[i].start > T2.t[j].end)) {
             j++;
             last_j = j;
-        } else if (T2.t[j].start > T1.t[i].end) {
+        } else if (T2.t[j].tid > T1.t[i].tid || (T2.t[j].tid == T1.t[i].tid && T2.t[j].start > T1.t[i].end)) {
             err_printf("%d\t%d\t%d\n", T1.t[i].tid, T1.t[i].start, T1.t[i].end);
             i++;
         } else {
             if (check_iden(T1.t[i], T2.t[j])) {
                 iden++;
                 i++;
-                last_j = j+1;
+                //last_j = j+1;
             } else {
                 j++;
                 continue;
@@ -70,7 +68,7 @@ int name2id(char ref[])
     else return atoi(ref+3);
 }
 
-int read_trans(read_trans_t *T, FILE *fp)
+int read_anno_trans(read_trans_t *T, FILE *fp)
 {
     char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand;
     trans_t *t = trans_init(1);
@@ -83,7 +81,7 @@ int read_trans(read_trans_t *T, FILE *fp)
                 set_trans(T->t+T->trans_n-1, NULL);
             }
             t->exon_n = 0;
-        } else { // exon
+        } else if (strcmp(type, "exon") == 0) { // exon
             add_exon(t, name2id(ref), start, end, is_rev);
         }
     }
@@ -101,7 +99,7 @@ int main(int argc, char *argv[])
     FILE *fp1 = fopen(argv[1], "r"), *fp2 = fopen(argv[2], "r");
     read_trans_t *T1, *T2;
     T1 = read_trans_init(), T2 = read_trans_init();
-    read_trans(T1, fp1); read_trans(T2, fp2);
+    read_anno_trans(T1, fp1); read_anno_trans(T2, fp2);
 
     comp_gtf_core(*T1, *T2);
 

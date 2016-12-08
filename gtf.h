@@ -47,6 +47,7 @@ typedef struct {
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
     char tname[1024];
+    char gname[1024];
     int novel_gene_flag, cov;
 } trans_t;
 
@@ -92,6 +93,9 @@ gene_group_t *gene_group_realloc(gene_group_t *gg);
 void add_gene(gene_group_t *gg, gene_t g, int novel_gene_flag);
 void set_gene_group(gene_group_t *gg);
 void gene_group_free(gene_group_t *gg);
+
+int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T);
+int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_trans_t *T);
 
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);

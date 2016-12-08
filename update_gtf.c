@@ -209,6 +209,31 @@ int check_full(trans_t t, trans_t anno_t, int level)
 //    1: novel, and share identical splice site (gene_id)
 //    2: totally identical, can NOT be added to any anno
 //    3: other cases that cannot be added to this anno(not full-length to any anno-trans)
+int check_novel1(trans_t bam_t, trans_t anno_t, int dis, int l)
+{
+    if (bam_t.is_rev != anno_t.is_rev || bam_t.exon_n < 2 || check_full(bam_t, anno_t, l) == 0) return 3;
+
+    int left=0,right=0;
+    int i, j, iden_n=0, iden_intron_n=0;
+    if (bam_t.is_rev) { // '-' strand
+    } else { // '+' strand
+        for (i = 0; i < bam_t.exon_n-1; ++i) {
+            for (j = 0; j < anno_t.exon_n-1; ++j) {
+                if (abs(bam_t.exon[i].end - anno_t.exon[j].end) <= dis) left=1;
+                if (abs(anno_t.exon[j+1].start - bam_t.exon[i+1].start) <= dis) right= 1;
+                if (left+right == 2) {iden_n += 2; iden_intron_n+=1;}
+                else if (left+right == 1) iden_n += 1;
+                left=right=0;
+
+                if (anno_t.exon[j+1].start > bam_t.exon[i+1].start) break;
+            }
+        }
+    }
+    if (iden_intron_n == bam_t.exon_n-1) return 2;
+    if (iden_n > 0) return 1;
+    else return 0;
+}
+
 int check_novel(trans_t t, gene_t *g, int dis, int l)
 {
     if (g->is_rev != t.is_rev || t.exon_n < 2) return 3; // different strand: can NOT be added to the anno
@@ -225,7 +250,6 @@ int check_novel(trans_t t, gene_t *g, int dis, int l)
                     if (abs(g->trans[i].exon[j].start - t.exon[k].start) <= dis) iden_n++;
                     if (abs(g->trans[i].exon[j+1].end - t.exon[k+1].end) <= dis) iden_n++;
                     if (g->trans[i].exon[j+1].end < t.exon[k+1].end) break;
-                    }
                 }
             }
             // check
@@ -250,7 +274,6 @@ int check_novel(trans_t t, gene_t *g, int dis, int l)
                     if (abs(g->trans[i].exon[j].end - t.exon[k].end) <= dis) iden_n++;
                     if (abs(g->trans[i].exon[j+1].start - t.exon[k+1].start) <= dis) iden_n++;
                     if (g->trans[i].exon[j+1].start > t.exon[k+1].start) break;
-                    }
                 }
             }
             // check
@@ -291,6 +314,66 @@ void group_check_novel(trans_t t, gene_group_t *gg, int dis, int uncla, int l)
     }
 }
 
+int merge_trans1(trans_t t1, trans_t *t2, int dis, int l)
+{
+    if (check_novel1(t1, *t2, dis, l) == 2) {
+        if (t2->is_rev) { // '-'
+        } else { // '+'
+            t2->cov++;
+            if (t1.exon[0].start < t2->exon[0].start) t2->exon[0].start = t1.exon[0].start;
+            if (t1.exon[t1.exon_n-1].end > t2->exon[t2->exon_n-1].start) t2->exon[t2->exon_n-1].start = t1.exon[t1.exon_n-1].start;
+        }
+        return 1;
+    } else return 0;
+}
+
+int merge_trans(trans_t t, read_trans_t *T)
+{
+    int i; 
+    for (i = T->trans_n-1; i >= 0; --i) {
+        if (merge_trans1(t, T->t+i)) return 1;
+        if (t.tid > T->t[i].tid || t.start > T->t[i].end) return 0;
+    }
+    return 0;
+}
+
+int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int dis, int l, read_trans_t *novel_T)
+{
+    int i=0, j=0, last_j=0, ret;
+    int all_novel=0, novel=0;
+    while (i < bam_T.trans_n && j < anno_T.trans_n) {
+        if (merge_trans(bam_T.t[i], novel_T)) { i++; continue; }
+        if (bam_T.t[i].tid > anno_T.t[j].tid || (bam_T.t[i].tid == anno_T.t[j].tid && bam_T.t[i].start > anno_T.t[j].end)) {
+            j++;
+            last_j = j;
+        } else if (anno_T.t[j].tid > bam_T.t[i].tid || (anno_T.t[j].tid == bam_T.t[i].tid && anno_T.t[j].start > bam_T.t[i].end)) {
+            if (novel) {
+                add_read_trans(novel_T, bam_T.t[i]);
+                novel = 0;
+            }
+            if (all_novel) {
+                //print_all_novel_trans(i);
+                all_novel = 0;
+            }
+            i++;
+        } else {
+            ret = check_novel1(bam_T.t[i], anno_T.t[j], dis, l);
+            if (ret == 0) { // all novel
+                all_novel = 1;
+                j++; continue;
+            } else if (ret == 1) { // novel
+                novel = 1; all_novel = 0;
+                j++; continue;
+            } else if (ret == 2) { // all identical
+                novel = 0; all_novel = 0;
+                i++;
+            }
+        }
+        j = last_j;
+    }
+    return 0;
+}
+
 const struct option update_long_opt [] = {
     { "min-exon", 1, NULL, 'e' },
     { "distance", 1, NULL, 'd' },
@@ -325,65 +408,22 @@ int update_gtf(int argc, char *argv[])
     }
     if (argc - optind != 2) return update_gtf_usage();
 
-    samFile *in; bam_hdr_t *h; bam1_t *b; trans_t *t; 
+    samFile *in; bam_hdr_t *h; bam1_t *b; read_trans_t *anno_T, *bam_T, *novel_T;
     if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
-    b = bam_init1(); t = trans_init(1);
+    b = bam_init1(); 
+    anno_T = read_trans_init(); bam_T = read_trans_init();
+    novel_T = read_trans_init();
 
-    FILE *gfp = fopen(argv[optind+1], "r"); char *gtf_line = (char*)_err_malloc(1024);
-    if ((gtf_line = fgets_gene(gfp, gtf_line, 1024)) == NULL) err_fatal(__func__, "Wrong format of GTF file: \"%s\"\n", argv[optind+1]);
-    char **group_line; int group_line_m; int *group_line_n, group_line_n_m; // anno lines
-    group_line_m = group_line_n_m = 1; group_line_n = (int*)_err_calloc(1, sizeof(int));
-    group_line = (char**)_err_malloc(sizeof(char*)); *group_line = (char*)_err_malloc(1024 * sizeof(char));
-
-    // init for trans/exons from gene in GTF
-    gene_group_t *gg = gene_group_init();
-    read_gene_group(gtf_line, gfp, h, gg, &group_line, &group_line_m, &group_line_n, &group_line_n_m);
-    // init for trans from sam record
-    int sam_ret = sam_read1(in, h, b); 
-    if (sam_ret >= 0) {
-        gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
-        if (full_gfp) print_trans(*t, h, src, full_gfp);
-    }
-
+    FILE *gfp = fopen(argv[optind+1], "r");
+    // read all gene
+    read_anno_trans(gfp, h, anno_T);
+    // read all transcript
+    read_bam_trans(in, h, b, exon_min, bam_T);
     // merge loop
-    while (sam_ret >= 0 && gg->gene_n != 0) {
-        // sam_end < gene_s: sam++
-        if (t->tid < gg->tid || (t->tid == gg->tid && t->end < gg->start)) {
-            if ((sam_ret = sam_read1(in, h, b)) >= 0) {
-                gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
-                if (full_gfp) print_trans(*t, h, src, full_gfp);
-            }
-        } // gene_e < sam_s: gene++
-        else if (t->tid > gg->tid || (t->tid == gg->tid && t->start > gg->end)) {
-            print_gene_group(*gg, h, src, new_gfp, group_line, group_line_n);
-            read_gene_group(gtf_line, gfp, h, gg, &group_line, &group_line_m, &group_line_n, &group_line_n_m);
-        } else { // overlap and novel: add & merge & print
-            group_check_novel(*t, gg, dis, uncla, l);
-            if ((sam_ret = sam_read1(in, h, b)) >= 0) {
-                if (strcmp(bam_get_qname(b), "m130609_034414_42175_c100522932550000001823080209281382_s1_p0/138320/ccs.path1")==0)
-                    printf("ok\n");
-                gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
-                if (full_gfp) print_trans(*t, h, src, full_gfp);
-            }
-        }
-    }
-    print_gene_group(*gg, h, src, new_gfp, group_line, group_line_n);
+    check_novel_trans(*bam_T, *anno_T, dis, l, novel_T);
 
-    // just print all the remaining anno-line
-    fputs(gtf_line, new_gfp);
-    while (fgets(gtf_line, 1024, gfp) != NULL)
-        fputs(gtf_line, new_gfp);
-    while (full_gfp && sam_ret >= 0) {
-        if ((sam_ret = sam_read1(in, h, b)) >= 0) {
-            gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
-            print_trans(*t, h, src, full_gfp);
-        }
-    }
-
-    int i;
-    for (i = 0; i < group_line_m; ++i) free(group_line[i]); free(group_line); free(group_line_n);
-    gene_group_free(gg); trans_free(t); free(gtf_line);
+    read_trans_free(anno_T); read_trans_free(bam_T); read_trans_free(novel_T);
     bam_destroy1(b); bam_hdr_destroy(h); sam_close(in); fclose(gfp); if(full_gfp) fclose(full_gfp);
     return 0;
 }

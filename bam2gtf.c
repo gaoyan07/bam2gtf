@@ -40,13 +40,15 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar, int exon_min)
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
         switch (bam_cigar_op(c[i])) {
-            case BAM_CREF_SKIP:  // N/D(0 1)
-            case BAM_CDEL :
-                if (l >= exon_min) {
-                    if (t->exon_n == 0 || (end-start+1) >= INTER_EXON_MIN_LEN)
+            case BAM_CREF_SKIP:  // N(0 1)
+                if (l >= INTRON_MIN_LEN) {
+                    if (t->exon_n == 0 || (end-start+1) >= exon_min)
                         add_exon(t, tid, start, end, is_rev);
                     start = end + l + 1;
                 }
+                end += l;
+                break;
+            case BAM_CDEL : // D(0 1)
                 end += l;
                 break;
             case BAM_CMATCH: // 1 1
