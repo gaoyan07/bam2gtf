@@ -5,7 +5,7 @@
 #include "utils.h"
 #include "htslib/htslib/sam.h"
 
-
+extern int gen_trans(bam1_t *b, trans_t *t, int exon_min);
 // exon
 exon_t *exon_init(int n) {
     exon_t *e = (exon_t*)_err_malloc(n * sizeof(exon_t));
@@ -50,6 +50,24 @@ int sort_exon(trans_t *t)
         }
     }
     return res;
+}
+
+int check_iden(trans_t t1, trans_t t2, int dis)
+{
+    if (t1.is_rev != t2.is_rev || t1.exon_n != t2.exon_n) return 0;
+    int i;
+    if (t1.is_rev) { // '-' strand
+        for (i = 0; i < t1.exon_n-1; ++i) {
+            if (abs(t1.exon[i].start - t2.exon[i].start) > dis) return 0;
+            if (abs(t1.exon[i+1].end - t2.exon[i+1].end) > dis) return 0;
+        }
+    } else { // '+' strand
+        for (i = 0; i < t1.exon_n-1; ++i) {
+            if (abs(t1.exon[i].end - t2.exon[i].end) > dis) return 0;
+            if (abs(t1.exon[i+1].start - t2.exon[i+1].start) > dis) return 0;
+        }
+    }
+    return 1;
 }
 
 int set_trans(trans_t *t, char *tname)

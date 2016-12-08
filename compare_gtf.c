@@ -13,29 +13,10 @@ int usage(void)
 	return 1;
 }
 
-int check_iden(trans_t t1, trans_t t2)
-{
-    int dis = 5;
-    if (t1.is_rev != t2.is_rev || t1.exon_n != t2.exon_n) return 0;
-    int i;
-    if (t1.is_rev) { // '-' strand
-        for (i = 0; i < t1.exon_n-1; ++i) {
-            if (abs(t1.exon[i].start - t2.exon[i].start) > dis) return 0;
-            if (abs(t1.exon[i+1].end - t2.exon[i+1].end) > dis) return 0;
-        }
-    } else { // '+' strand
-        for (i = 0; i < t1.exon_n-1; ++i) {
-            if (abs(t1.exon[i].end - t2.exon[i].end) > dis) return 0;
-            if (abs(t1.exon[i+1].start - t2.exon[i+1].start) > dis) return 0;
-        }
-    }
-    return 1;
-}
-
 // number of trans in T1 is less than T2
 int comp_gtf_core(read_trans_t T1, read_trans_t T2)
 {
-    int i=0, j=0, last_j = 0, iden=0;
+    int i=0, j=0, last_j = 0, iden=0, dis=5;
 
     while (i < T1.trans_n && j < T2.trans_n) {
         if (T1.t[i].tid > T2.t[j].tid || (T1.t[i].tid == T2.t[j].tid && T1.t[i].start > T2.t[j].end)) {
@@ -45,7 +26,7 @@ int comp_gtf_core(read_trans_t T1, read_trans_t T2)
             err_printf("%d\t%d\t%d\n", T1.t[i].tid, T1.t[i].start, T1.t[i].end);
             i++;
         } else {
-            if (check_iden(T1.t[i], T2.t[j])) {
+            if (check_iden(T1.t[i], T2.t[j], dis)) {
                 iden++;
                 i++;
                 //last_j = j+1;
