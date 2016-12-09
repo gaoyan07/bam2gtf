@@ -27,7 +27,7 @@ int update_gtf_usage(void)
     err_printf("Notice:  the BAM and GTF files should be sorted in advance.\n\n");
     err_printf("Options:\n\n");
     err_printf("         -e --min-exon    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
-    err_printf("         -d --distance    [INT]    consider same if distance between two splice site is less than d. [%d]\n", SPLICE_DISTANCE);
+    err_printf("         -d --distance    [INT]    consider same if distance between two splice site is not bigger than d. [%d]\n", SPLICE_DISTANCE);
     err_printf("         -l --full-length [INT]    level of strict criterion for considering full-length transcript. \n");
     err_printf("                                   (1->5, most strict->most relaxed) [%d]\n", 5);
     err_printf("         -u --unclassified         output UNCLASSIFIED novel transcript. [false]\n");
@@ -101,15 +101,16 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
     if (bam_t->is_rev != anno_t.is_rev || bam_t->exon_n < 2 || check_full(*bam_t, anno_t, l) == 0) return 3;
 
     int left=0,right=0, last_j=-1;
-    int i, j, iden_n=0, not_iden_iden=0;
+    int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0;
     if (bam_t->is_rev) { // '-' strand
         for (i = 0; i < bam_t->exon_n-1; ++i) {
             for (j = 0; j < anno_t.exon_n-1; ++j) {
                 if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left=1;
                 if (abs(bam_t->exon[i+1].end - anno_t.exon[j+1].end) <= dis) right=1;
                 if (left+right==2) {
-                    if (last_j == -1 || j != last_j+1) not_iden_iden = 1;
+                    if (last_j != -1 && j != last_j+1) not_iden_iden = 1;
                     last_j = j;
+                    iden_intron_n += 1;
                 }
                 iden_n += (left+right);
                 left=right=0;
@@ -123,8 +124,9 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
                 if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) left=1;
                 if (abs(anno_t.exon[j+1].start - bam_t->exon[i+1].start) <= dis) right=1;
                 if (left+right==2) {
-                    if (last_j == -1 || j != last_j+1) not_iden_iden = 1;
+                    if (last_j != -1 && j != last_j+1) not_iden_iden = 1;
                     last_j = j;
+                    iden_intron_n += 1;
                 }
                 iden_n += (left+right);
                 left=right=0;
@@ -133,11 +135,14 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
             }
         }
     }
-    if (iden_n == (bam_t->exon_n-1)*2 && not_iden_iden == 0) return 2;
+    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) return 2;
     if (iden_n > 0) {
         strcpy(bam_t->gname, anno_t.gname);
         return 1;
-    } else return 0;
+    } else {
+        strcpy(bam_t->gname, "UNCLASSIFIED");
+        return 0;
+    }
 }
 
 int merge_trans1(trans_t t1, trans_t *t2, int dis)
@@ -172,8 +177,8 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int di
     int x;
     int all_novel=0, novel=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
-        //if (strcmp(bam_T.t[i].tname, "m130608_131110_42175_c100522942550000001823080209281375_s1_p0/28479/ccs.path1")==0)
-        //    x=i;
+        //if (strcmp(bam_T.t[i].tname, "m130608_032412_42175_c100522942550000001823080209281371_s1_p0/119192/ccs.path1")==0)
+            //x=i;
         if (merge_trans(bam_T.t[i], novel_T, dis)) { i++; continue; }
         if (bam_T.t[i].tid > anno_T.t[j].tid || (bam_T.t[i].tid == anno_T.t[j].tid && bam_T.t[i].start > anno_T.t[j].end)) {
             j++;
@@ -222,11 +227,10 @@ int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
                 set_trans(T->t+T->trans_n-1, NULL);
             }
             t->exon_n = 0;
-            strcpy(t->gname, gname);
-        } else if (strcmp(type, "gene") == 0) {
             char tag[10]="gene_id";
             gtf_add_info(add_info, tag, gname);
-        }else if (strcmp(type, "exon") == 0) { // exon
+            strcpy(t->gname, gname);
+        } else if (strcmp(type, "exon") == 0) { // exon
             add_exon(t, bam_name2id(h, ref), start, end, is_rev);
         }
     }

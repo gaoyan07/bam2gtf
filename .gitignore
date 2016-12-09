@@ -24,6 +24,8 @@
 # Executables
 gtools
 gdb_gtools
+comp-gtf
+gdb_comp-gtf
 *.exe
 *.out
 *.app

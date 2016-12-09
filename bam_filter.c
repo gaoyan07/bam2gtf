@@ -93,6 +93,8 @@ int bam_filter(int argc, char *argv[])
     if (sam_hdr_write(out, h) != 0) err_fatal_simple("Error in writing SAM header\n"); //sam header
     char lqname[100]="\0"; int id=1, best_id=1;
     while (sam_read1(in, h, b) >= 0) {
+        //if (strcmp(bam_get_qname(b), "m130614_022816_42175_c100535482550000001823081711101344_s1_p0/41525/ccs") == 0)
+            //c=0;
         if (gtf_filter(b, &score, cov_rat, map_qual)) continue;
 
         if (strcmp(bam_get_qname(b), lqname) == 0) {

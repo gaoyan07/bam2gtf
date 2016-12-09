@@ -103,7 +103,7 @@ void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 
 #define INTRON_MIN_LEN 25
 #define INTER_EXON_MIN_LEN 6
-#define SPLICE_DISTANCE 5
+#define SPLICE_DISTANCE 0
 
 int check_iden(trans_t t1, trans_t t2, int dis);
 

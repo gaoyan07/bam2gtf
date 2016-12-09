@@ -16,14 +16,14 @@ int usage(void)
 // number of trans in T1 is less than T2
 int comp_gtf_core(read_trans_t T1, read_trans_t T2)
 {
-    int i=0, j=0, last_j = 0, iden=0, dis=5;
+    int i=0, j=0, last_j = 0, iden=0, dis=10;
 
     while (i < T1.trans_n && j < T2.trans_n) {
         if (T1.t[i].tid > T2.t[j].tid || (T1.t[i].tid == T2.t[j].tid && T1.t[i].start > T2.t[j].end)) {
             j++;
             last_j = j;
         } else if (T2.t[j].tid > T1.t[i].tid || (T2.t[j].tid == T1.t[i].tid && T2.t[j].start > T1.t[i].end)) {
-            err_printf("%d\t%d\t%d\n", T1.t[i].tid, T1.t[i].start, T1.t[i].end);
+            err_printf("%s\t%d\t%d\t%d\n", T1.t[i].tname, T1.t[i].tid, T1.t[i].start, T1.t[i].end);
             i++;
         } else {
             if (check_iden(T1.t[i], T2.t[j], dis)) {
@@ -51,29 +51,32 @@ int name2id(char ref[])
 
 int read_anno_trans1(read_trans_t *T, FILE *fp)
 {
-    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand;
+    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[200], tname[100];
     trans_t *t = trans_init(1);
     while (fgets(line, 1024, fp) != NULL) {
-        sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c", ref, type, &start, &end, &strand);
+        sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
         uint8_t is_rev = (strand == '-' ? 1 : 0);
         if (strcmp(type, "transcript") == 0) {
             if (t->exon_n != 0) {
                 add_read_trans(T, *t);
-                set_trans(T->t+T->trans_n-1, NULL);
+                set_trans(T->t+T->trans_n-1, tname);
             }
             t->exon_n = 0;
+            char tag[20]="transcript_id";
+            gtf_add_info(add_info, tag, tname);
         } else if (strcmp(type, "exon") == 0) { // exon
             add_exon(t, name2id(ref), start, end, is_rev);
         }
     }
     if (t->exon_n != 0) {
         add_read_trans(T, *t);
-        set_trans(T->t+T->trans_n-1, NULL);
+        set_trans(T->t+T->trans_n-1, tname);
     }
     trans_free(t);
     return T->trans_n;
 }
 
+#ifdef COMP_MAIN
 int main(int argc, char *argv[])
 {
     if (argc != 3) return usage();
@@ -88,3 +91,4 @@ int main(int argc, char *argv[])
     fclose(fp1), fclose(fp2);
     return 0;
 }
+#endif
