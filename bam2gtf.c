@@ -81,6 +81,19 @@ int gen_trans(bam1_t *b, trans_t *t, int exon_min)
     return 1;
 }
 
+int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_trans_t *T)
+{
+    trans_t *t = trans_init(1);
+    int sam_ret = sam_read1(in, h, b) ;
+    while (sam_ret >= 0) {
+        gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
+        add_read_trans(T, *t); set_trans(T->t+T->trans_n-1, bam_get_qname(b));
+        sam_ret = sam_read1(in, h, b) ;
+    }
+    trans_free(t);
+    return T->trans_n;
+}
+
 const struct option bam2gtf_long_opt [] = {
     { "exon-min", 1, NULL, 'e' },
     { "source", 1, NULL, 's' },

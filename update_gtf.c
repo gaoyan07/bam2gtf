@@ -18,6 +18,7 @@
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
 
 extern const char PROG[20];
+extern int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_trans_t *T);
 
 int update_gtf_usage(void)
 {
@@ -95,40 +96,48 @@ int check_full(trans_t t, trans_t anno_t, int level)
 //    1: novel, and share identical splice site (gene_id)
 //    2: totally identical, can NOT be added to any anno
 //    3: other cases that cannot be added to this anno(not full-length to any anno-trans)
-int check_novel1(trans_t bam_t, trans_t anno_t, int dis, int l)
+int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
 {
-    if (bam_t.is_rev != anno_t.is_rev || bam_t.exon_n < 2 || check_full(bam_t, anno_t, l) == 0) return 3;
+    if (bam_t->is_rev != anno_t.is_rev || bam_t->exon_n < 2 || check_full(*bam_t, anno_t, l) == 0) return 3;
 
-    int left=0,right=0;
-    int i, j, iden_n=0, iden_intron_n=0;
-    if (bam_t.is_rev) { // '-' strand
-        for (i = 0; i < bam_t.exon_n-1; ++i) {
+    int left=0,right=0, last_j=-1;
+    int i, j, iden_n=0, not_iden_iden=0;
+    if (bam_t->is_rev) { // '-' strand
+        for (i = 0; i < bam_t->exon_n-1; ++i) {
             for (j = 0; j < anno_t.exon_n-1; ++j) {
-                if (abs(bam_t.exon[i].start - anno_t.exon[j].start) <= dis) left=1;
-                if (abs(bam_t.exon[i+1].end - anno_t.exon[j+1].end) <= dis) right=1;
-                iden_intron_n += (left+right)/2;
+                if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left=1;
+                if (abs(bam_t->exon[i+1].end - anno_t.exon[j+1].end) <= dis) right=1;
+                if (left+right==2) {
+                    if (last_j == -1 || j != last_j+1) not_iden_iden = 1;
+                    last_j = j;
+                }
                 iden_n += (left+right);
                 left=right=0;
 
-                if (anno_t.exon[j+1].end < bam_t.exon[i+1].end) break;
+                if (anno_t.exon[j+1].end < bam_t->exon[i+1].end) break;
             }
         }
     } else { // '+' strand
-        for (i = 0; i < bam_t.exon_n-1; ++i) {
+        for (i = 0; i < bam_t->exon_n-1; ++i) {
             for (j = 0; j < anno_t.exon_n-1; ++j) {
-                if (abs(bam_t.exon[i].end - anno_t.exon[j].end) <= dis) left=1;
-                if (abs(anno_t.exon[j+1].start - bam_t.exon[i+1].start) <= dis) right=1;
-                iden_intron_n += (left+right)/2;
+                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) left=1;
+                if (abs(anno_t.exon[j+1].start - bam_t->exon[i+1].start) <= dis) right=1;
+                if (left+right==2) {
+                    if (last_j == -1 || j != last_j+1) not_iden_iden = 1;
+                    last_j = j;
+                }
                 iden_n += (left+right);
                 left=right=0;
 
-                if (anno_t.exon[j+1].start > bam_t.exon[i+1].start) break;
+                if (anno_t.exon[j+1].start > bam_t->exon[i+1].start) break;
             }
         }
     }
-    if (iden_intron_n == bam_t.exon_n-1) return 2;
-    if (iden_n > 0) return 1;
-    else return 0;
+    if (iden_n == (bam_t->exon_n-1)*2 && not_iden_iden == 0) return 2;
+    if (iden_n > 0) {
+        strcpy(bam_t->gname, anno_t.gname);
+        return 1;
+    } else return 0;
 }
 
 int merge_trans1(trans_t t1, trans_t *t2, int dis)
@@ -160,8 +169,11 @@ int merge_trans(trans_t t, read_trans_t *T, int dis)
 int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int dis, int l, read_trans_t *novel_T)
 {
     int i=0, j=0, last_j=0, ret;
+    int x;
     int all_novel=0, novel=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
+        //if (strcmp(bam_T.t[i].tname, "m130608_131110_42175_c100522942550000001823080209281375_s1_p0/28479/ccs.path1")==0)
+        //    x=i;
         if (merge_trans(bam_T.t[i], novel_T, dis)) { i++; continue; }
         if (bam_T.t[i].tid > anno_T.t[j].tid || (bam_T.t[i].tid == anno_T.t[j].tid && bam_T.t[i].start > anno_T.t[j].end)) {
             j++;
@@ -177,7 +189,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int di
             i++;
             novel = 0;
         } else {
-            ret = check_novel1(bam_T.t[i], anno_T.t[j], dis, l);
+            ret = check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
             if (ret == 0) { // all novel
                 all_novel = 1;
                 j++; continue;
@@ -194,6 +206,36 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int di
         j = last_j;
     }
     return 0;
+}
+
+// read
+int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
+{
+    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[100];
+    trans_t *t = trans_init(1);
+    while (fgets(line, 1024, fp) != NULL) {
+        sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
+        uint8_t is_rev = (strand == '-' ? 1 : 0);
+        if (strcmp(type, "transcript") == 0) {
+            if (t->exon_n != 0) {
+                add_read_trans(T, *t);
+                set_trans(T->t+T->trans_n-1, NULL);
+            }
+            t->exon_n = 0;
+            strcpy(t->gname, gname);
+        } else if (strcmp(type, "gene") == 0) {
+            char tag[10]="gene_id";
+            gtf_add_info(add_info, tag, gname);
+        }else if (strcmp(type, "exon") == 0) { // exon
+            add_exon(t, bam_name2id(h, ref), start, end, is_rev);
+        }
+    }
+    if (t->exon_n != 0) {
+        add_read_trans(T, *t);
+        set_trans(T->t+T->trans_n-1, NULL);
+    }
+    trans_free(t);
+    return T->trans_n;
 }
 
 const struct option update_long_opt [] = {
