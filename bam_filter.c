@@ -72,6 +72,7 @@ const struct option filter_long_opt [] = {
 int bam_filter(int argc, char *argv[])
 {
     int c; float cov_rat=COV_RATIO, map_qual = MAP_QUAL, sec_rat=SEC_RATIO;
+    int cnt=0;
     while ((c = getopt_long(argc, argv, "v:q:s:", filter_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'v': cov_rat = atof(optarg); break;
@@ -110,6 +111,7 @@ int bam_filter(int argc, char *argv[])
             if (strcmp(lqname, "\0") != 0 && s_score < sec_rat * b_score) {
                 add_pathid(best_b, best_id);
                 if (sam_write1(out, h, best_b) < 0) err_fatal_simple("Error in writing SAM record\n");
+                cnt++;
             }
             bam_copy1(best_b, b);
             b_score = score; s_score = 0;
@@ -118,6 +120,7 @@ int bam_filter(int argc, char *argv[])
         }
     }
 
+    err_printf("Filtered alignments: %d\n", cnt);
     bam_destroy1(b); bam_destroy1(best_b); bam_hdr_destroy(h); sam_close(in); sam_close(out);
     return 0;
 }
