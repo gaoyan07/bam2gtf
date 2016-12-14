@@ -51,20 +51,21 @@ int name2id(char ref[])
 
 int read_anno_trans1(read_trans_t *T, FILE *fp)
 {
-    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[200], tname[100];
+    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[500], tname[100];
     trans_t *t = trans_init(1);
     while (fgets(line, 1024, fp) != NULL) {
-        sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
-        uint8_t is_rev = (strand == '-' ? 1 : 0);
+        sscanf(line, "%*s\t%*s\t%s", type);
         if (strcmp(type, "transcript") == 0) {
             if (t->exon_n != 0) {
                 add_read_trans(T, *t);
                 set_trans(T->t+T->trans_n-1, tname);
             }
             t->exon_n = 0;
+        } else if (strcmp(type, "exon") == 0) { // exon
+            sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
+            uint8_t is_rev = (strand == '-' ? 1 : 0);
             char tag[20]="transcript_id";
             gtf_add_info(add_info, tag, tname);
-        } else if (strcmp(type, "exon") == 0) { // exon
             add_exon(t, name2id(ref), start, end, is_rev);
         }
     }

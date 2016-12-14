@@ -4,6 +4,7 @@ DFLAGS  =	-g -Wall
 HTSLIB_DIR = ./htslib
 HTSLIB  =   $(HTSLIB_DIR)/libhts.a
 LIB     =	$(HTSLIB) -lm -lz -lpthread
+COMP_LIB=	-lz
 INCLUDE = -I ./htslib
 
 
@@ -12,13 +13,16 @@ SRC_DIR =   .
 
 HTS_ALL =   hts_all
 SOURCE  =	$(wildcard ${SRC_DIR}/*.c) 
+COMP_SOURCE = compare_gtf.c utils.c gtf.c
 OBJS    =	$(SOURCE:.c=.o)
 
 BIN     =	$(BIN_DIR)/gtools
 
 GDB_DEBUG   =   $(BIN_DIR)/gdb_gtools
 NOR_DEBUG   =   $(BIN_DIR)/debug_gtools
-DMARCRO =	-D __DEBUG__
+DMARCRO 	=	-D __DEBUG__
+COMP_GTF	= 	$(BIN_DIR)/comp-gtf
+COMP_D		=	-D COMP_MAIN
 
 .c.o:
 		$(CC) -c $(CFLAGS) $(INCLUDE) $< -o $@
@@ -27,6 +31,7 @@ DMARCRO =	-D __DEBUG__
 all:       $(HTS_ALL) $(BIN) 
 gdb_gtools: $(SOURCE) $(GDB_DEBUG) 
 debug_gtools: $(SOURCE) $(NOR_DEBUG)
+comp-gtf:	$(COMP_GTF)
 
 
 $(HTS_ALL):
@@ -38,6 +43,8 @@ $(GDB_DEBUG):
 		$(CC) $(DFLAGS) $(SOURCE) $(DMARCRO) -o $@ $(LIB)
 $(NOR_DEBUG):
 		$(CC) $(CFLAGS) $(SOURCE) $(DMARCRO) -o $@ $(LIB)
+$(COMP_GTF):
+		$(CC) $(CFLAGS) $(COMP_SOURCE) $(COMP_D) -o $@ $(COMP_LIB)
 
 clean:
 		rm -f $(SRC_DIR)/*.o $(BIN)

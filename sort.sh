@@ -48,3 +48,4 @@ NR!=FNR {
     print array[$12], NR, $0
 }
 }' .tmp $1 | sort -n -k1 -n -k2 -n -k3 -n -k5 | awk 'BEGIN{FS="\t"; OFS="\t"} {print $6,$7,$8,$9,$10,$11,$12,$13,$14}' > $2
+rm .tmp

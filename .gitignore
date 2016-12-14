@@ -39,6 +39,7 @@ gdb_comp-gtf
 
 #data
 data/*
+test_data/*
 
 #tags
 tags
