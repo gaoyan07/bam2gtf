@@ -222,7 +222,7 @@ int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
         sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
         uint8_t is_rev = (strand == '-' ? 1 : 0);
         if (strcmp(type, "transcript") == 0) {
-            if (t->exon_n != 0) {
+            if (t->exon_n > 1) {
                 add_read_trans(T, *t);
                 set_trans(T->t+T->trans_n-1, NULL);
             }
