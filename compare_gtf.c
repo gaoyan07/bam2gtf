@@ -18,6 +18,8 @@ int comp_gtf_core(read_trans_t T1, read_trans_t T2)
 {
     int i=0, j=0, last_j = 0, iden=0, dis=10;
 
+    for(i = 0; i < T2.trans_n; ++i)
+        printf("all: %s\t%d\n", T2.t[j].tname, T2.t[j].cov);
     while (i < T1.trans_n && j < T2.trans_n) {
         if (T1.t[i].tid > T2.t[j].tid || (T1.t[i].tid == T2.t[j].tid && T1.t[i].start > T2.t[j].end)) {
             j++;
@@ -29,6 +31,7 @@ int comp_gtf_core(read_trans_t T1, read_trans_t T2)
             if (check_iden(T1.t[i], T2.t[j], dis)) {
                 iden++;
                 i++;
+                printf("both: %s\t%d\n", T2.t[j].tname, T2.t[j].cov);
                 //last_j = j+1;
             } else {
                 j++;
@@ -51,7 +54,7 @@ int name2id(char ref[])
 
 int read_anno_trans1(read_trans_t *T, FILE *fp)
 {
-    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[500], tname[100];
+    char line[1024], ref[100]="\0", type[20]="\0"; int start, end, cov=1; char strand, add_info[500], tname[100], qual[10];
     trans_t *t = trans_init(1);
     while (fgets(line, 1024, fp) != NULL) {
         sscanf(line, "%*s\t%*s\t%s", type);
@@ -59,10 +62,12 @@ int read_anno_trans1(read_trans_t *T, FILE *fp)
             if (t->exon_n != 0) {
                 add_read_trans(T, *t);
                 set_trans(T->t+T->trans_n-1, tname);
+                T->t[T->trans_n-1].cov = cov;
             }
             t->exon_n = 0;
         } else if (strcmp(type, "exon") == 0) { // exon
-            sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
+            sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, qual, &strand, add_info);
+            if (qual[0] != '-') cov = (atoi(qual)-450)/50;
             uint8_t is_rev = (strand == '-' ? 1 : 0);
             char tag[20]="transcript_id";
             gtf_add_info(add_info, tag, tname);
@@ -72,6 +77,7 @@ int read_anno_trans1(read_trans_t *T, FILE *fp)
     if (t->exon_n != 0) {
         add_read_trans(T, *t);
         set_trans(T->t+T->trans_n-1, tname);
+        T->t[T->trans_n-1].cov = cov;
     }
     trans_free(t);
     return T->trans_n;

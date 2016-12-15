@@ -48,7 +48,7 @@ int check_full(trans_t t, trans_t anno_t, int level)
     int i = t.exon_n-1, j = anno_t.exon_n-1;
     if (level == 1) { // identical first and last splice-site
         if (t.is_rev) {
-            if (t.exon[i].end != anno_t.exon[i].end) return 0;
+            if (t.exon[i].end != anno_t.exon[j].end) return 0;
             if (t.exon[0].start != anno_t.exon[0].start) return 0;
         } else {
             if (t.exon[0].end != anno_t.exon[0].end) return 0;
