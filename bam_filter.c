@@ -4,6 +4,7 @@
 #include <string.h>
 #include "utils.h"
 #include "htslib/htslib/sam.h"
+#include "gtf.h"
 
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
 #define COV_RATIO 0.67
@@ -11,14 +12,16 @@
 #define SEC_RATIO 0.98
 
 extern const char PROG[20];
+extern int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T);
 int filter_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s filter [option] <in.bam/sam> | samtools sort > out.sort.bam\n\n", PROG);
+    err_printf("Usage:   %s filter [option] <in.bam/sam> <rRNA.gtf> | samtools sort > out.sort.bam\n\n", PROG);
     err_printf("Options:\n");
     err_printf("         -v --coverage   [FLOAT]    minimum fraction of aligned bases. [%.2f]\n", COV_RATIO);
     err_printf("         -q --map-qual   [FLOAT]    minimum fraction of identically aligned bases. [%.2f]\n", MAP_QUAL);
     err_printf("         -s --sec-rat    [FLOAT]    maximum ratio of second best and best score to retain the best\n");
+    err_printf("         -i --intron     [INT]      minimum number of intron indicated by the alignment. [%d]\n", MIN_INTRON_NUM);
     err_printf("                                    alignment, or no alignments will be retained. [%.2f]\n", SEC_RATIO);
 
     err_printf("\n");
@@ -42,10 +45,29 @@ void add_pathid(bam1_t *b, int id)
     b->core.l_qname += l;
 }
 
-int gtf_filter(bam1_t *b, int *score, float cov_rate, float map_qual)
+int rRNA_overlap(bam1_t *b, read_trans_t *r)
+{
+    int32_t pos = b->core.pos, tid = b->core.tid;
+    int32_t rlen = bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
+    int i;
+    for (i = 0; i < r->trans_n; ++i) {
+        if (tid == r->t[i].tid && !(pos > r->t[i].end || r->t[i].start > pos+rlen-1)) return 1;
+        if (tid < r->t[i].tid) return 0;
+    }
+    return 0;
+}
+
+int gtf_filter(bam1_t *b, int *score, int intron_n, float cov_rate, float map_qual, read_trans_t *r)
 {
     if (bam_unmap(b)) return 1;
     uint32_t *c = bam_get_cigar(b), n_c = b->core.n_cigar;
+    // intron number
+    uint32_t i;
+    for (i = 0; i < n_c; ++i) {
+        if (bam_cigar_op(c[i]) == BAM_CREF_SKIP) intron_n--;
+        if (intron_n <= 0) break;
+    }
+    if (intron_n > 0) return 1;
     // cover len/rate
     int cigar_qlen = b->core.l_qseq;
     int op0 = bam_cigar_op(c[0]), op1 = bam_cigar_op(c[n_c-1]);
@@ -57,6 +79,7 @@ int gtf_filter(bam1_t *b, int *score, float cov_rate, float map_qual)
     int ed; 
     ed = bam_aux2i(p);
     if (cigar_qlen - ed < map_qual * cigar_qlen) return 1;
+    if (rRNA_overlap(b, r)) return 1;
     *score = cigar_qlen - ed;
     return 0;
 }
@@ -71,18 +94,19 @@ const struct option filter_long_opt [] = {
 
 int bam_filter(int argc, char *argv[])
 {
-    int c; float cov_rat=COV_RATIO, map_qual = MAP_QUAL, sec_rat=SEC_RATIO;
+    int c; float cov_rat=COV_RATIO, map_qual = MAP_QUAL, sec_rat=SEC_RATIO; int intron_n = MIN_INTRON_NUM;
     int cnt=0;
-    while ((c = getopt_long(argc, argv, "v:q:s:", filter_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "v:q:s:i:", filter_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'v': cov_rat = atof(optarg); break;
             case 'q': map_qual = atof(optarg); break;
             case 's': sec_rat = atof(optarg); break;
+            case 'i': intron_n = atoi(optarg); break;
             default : return filter_usage();
         }
     }
 
-    if (argc - optind != 1) return filter_usage();
+    if (argc - optind != 2) return filter_usage();
 
     samFile *in, *out; bam_hdr_t *h; bam1_t *b;
     bam1_t *best_b; int b_score=0, s_score=0, score;
@@ -90,13 +114,18 @@ int bam_filter(int argc, char *argv[])
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1();  best_b = bam_init1();
 
+    // read rRNA gtf
+    FILE *fp = fopen(argv[optind+1], "r"); read_trans_t *r = read_trans_init();
+    read_anno_trans(fp, h, r);
+    fclose(fp); 
+
     if ((out = sam_open_format("-", "wb", NULL)) == NULL) err_fatal_simple("Cannot open \"-\"\n");
     if (sam_hdr_write(out, h) != 0) err_fatal_simple("Error in writing SAM header\n"); //sam header
     char lqname[100]="\0"; int id=1, best_id=1;
     while (sam_read1(in, h, b) >= 0) {
         //if (strcmp(bam_get_qname(b), "m130614_022816_42175_c100535482550000001823081711101344_s1_p0/41525/ccs") == 0)
             //c=0;
-        if (gtf_filter(b, &score, cov_rat, map_qual)) continue;
+        if (gtf_filter(b, &score, intron_n, cov_rat, map_qual, r)) continue;
 
         if (strcmp(bam_get_qname(b), lqname) == 0) {
             id++;
@@ -122,5 +151,6 @@ int bam_filter(int argc, char *argv[])
 
     err_printf("Filtered alignments: %d\n", cnt);
     bam_destroy1(b); bam_destroy1(best_b); bam_hdr_destroy(h); sam_close(in); sam_close(out);
+    read_trans_free(r);    
     return 0;
 }

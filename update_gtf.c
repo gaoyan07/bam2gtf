@@ -174,9 +174,9 @@ int merge_trans(trans_t t, read_trans_t *T, int dis)
 int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int dis, int l, read_trans_t *novel_T)
 {
     int i=0, j=0, last_j=0, ret;
-    int x;
     int all_novel=0, novel=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
+        //int x;
         //if (strcmp(bam_T.t[i].tname, "m130608_032412_42175_c100522942550000001823080209281371_s1_p0/119192/ccs.path1")==0)
             //x=i;
         if (merge_trans(bam_T.t[i], novel_T, dis)) { i++; continue; }
