@@ -1,16 +1,17 @@
 #!/bin/bash
 #usage
-if [ $# -ne 4 ]; then
+if [ $# -ne 5 ]; then
     echo "Usage:"
-    echo "       eval.sh SAM GTF SNYDER DATA_DIR"
+    echo "       eval.sh SAM GTF rRNA SNYDER DATA_DIR"
     exit
 fi
 
 #input
 SAM=$1
 GTF=$2
-SNYDER=$3
-DATA=$4
+rRNA=$3
+SNYDER=$4
+DATA=$5
 
 #parameters
 mapL=(0.5 0.6 0.67 0.8 0.9)
@@ -36,8 +37,8 @@ do
             L=$DATA/v${mapL[$i]}_q${mapQ[$j]}_s${bestR[$k]}
 
             #1. filter
-            echo "./gtools filter -v${mapL[$i]} -q${mapQ[$j]} -s${bestR[$k]} $SAM 2> $BAM.log| samtools sort > $BAM"
-            ./gtools filter -v${mapL[$i]} -q${mapQ[$j]} -s${bestR[$k]} $SAM 2> $BAM.log | samtools sort > $BAM
+            echo "./gtools filter -v${mapL[$i]} -q${mapQ[$j]} -s${bestR[$k]} $SAM $rRNA 2> $BAM.log| samtools sort > $BAM"
+            ./gtools filter -v${mapL[$i]} -q${mapQ[$j]} -s${bestR[$k]} $SAM $rRNA 2> $BAM.log | samtools sort > $BAM
 
             #2 full-length novel
             for (( f=$fullS; f<=$fullN; ++f ))
