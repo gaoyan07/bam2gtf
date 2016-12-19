@@ -16,10 +16,11 @@ int usage(void)
 // number of trans in T1 is less than T2
 int comp_gtf_core(read_trans_t T1, read_trans_t T2)
 {
-    int i=0, j=0, last_j = 0, iden=0, dis=10;
+    int i, j, last_j = 0, iden=0, dis=10;
 
     for(i = 0; i < T2.trans_n; ++i)
-        printf("all: %s\t%d\n", T2.t[j].tname, T2.t[j].cov);
+        printf("all: %s\t%d\n", T2.t[i].tname, T2.t[i].cov);
+    i = 0, j = 0;
     while (i < T1.trans_n && j < T2.trans_n) {
         if (T1.t[i].tid > T2.t[j].tid || (T1.t[i].tid == T2.t[j].tid && T1.t[i].start > T2.t[j].end)) {
             j++;
