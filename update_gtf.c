@@ -19,6 +19,7 @@
 
 extern const char PROG[20];
 extern int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_trans_t *T);
+extern int read_intron_group(intron_group_t *I, FILE *fp);
 
 int update_gtf_usage(void)
 {
@@ -26,6 +27,7 @@ int update_gtf_usage(void)
     err_printf("Usage:   %s update-gtf [option] <in.bam> <old.gtf> > new.gtf\n\n", PROG);
     err_printf("Notice:  the BAM and GTF files should be sorted in advance.\n\n");
     err_printf("Options:\n\n");
+    err_printf("         -i --intron      [STR]    intron information file output by STAR(*.out.tab). [NONE]\n");
     err_printf("         -e --min-exon    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
     err_printf("         -d --distance    [INT]    consider same if distance between two splice site is not bigger than d. [%d]\n", SPLICE_DISTANCE);
     err_printf("         -l --full-length [INT]    level of strict criterion for considering full-length transcript. \n");
@@ -145,6 +147,74 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
     }
 }
 
+int check_iden_intron1(trans_t *bam_t, int *intron_map, intron_group_t I, int *intron_i)
+{
+    int i;
+    for (i = 0; i < bam_t->exon_n-1; ++i) {
+        if (
+    }
+    return 1;
+}
+
+int check_novel1_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *intron_i, int dis, int l)
+{
+    if (bam_t->is_rev != anno_t.is_rev || bam_t->exon_n < 2 || check_full(*bam_t, anno_t, l) == 0) return 3;
+
+    int left=0,right=0, last_j=-1;
+    int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0;
+    int *intron_map = (int*)_err_calloc((bam_t->exon_n-1), sizeof(int));
+    if (bam_t->is_rev) { // '-' strand
+        for (i = 0; i < bam_t->exon_n-1; ++i) {
+            for (j = 0; j < anno_t.exon_n-1; ++j) {
+                if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left=1;
+                if (abs(bam_t->exon[i+1].end - anno_t.exon[j+1].end) <= dis) right=1;
+                if (left+right==2) {
+                    if (last_j != -1 && j != last_j+1) not_iden_iden = 1;
+                    last_j = j;
+                    iden_intron_n += 1;
+                    intron_map[i] = 1;
+                }
+                iden_n += (left+right);
+                left=right=0;
+
+                if (anno_t.exon[j+1].end < bam_t->exon[i+1].end) break;
+            }
+        }
+    } else { // '+' strand
+        for (i = 0; i < bam_t->exon_n-1; ++i) {
+            for (j = 0; j < anno_t.exon_n-1; ++j) {
+                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) left=1;
+                if (abs(anno_t.exon[j+1].start - bam_t->exon[i+1].start) <= dis) right=1;
+                if (left+right==2) {
+                    if (last_j != -1 && j != last_j+1) not_iden_iden = 1;
+                    last_j = j;
+                    iden_intron_n += 1;
+                    intron_map[i] = 1;
+                }
+                iden_n += (left+right);
+                left=right=0;
+
+                if (anno_t.exon[j+1].start > bam_t->exon[i+1].start) break;
+            }
+        }
+    }
+
+    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) ret=2;
+    else {
+        if (iden_n > 0) {
+            if (check_iden_intron1(bam_t, intron_map, I, intron_i)) {
+                strcpy(bam_t->gname, anno_t.gname);
+                ret=1
+            } else ret=3;
+        } else {
+            strcpy(bam_t->gname, "UNCLASSIFIED");
+            ret=0;
+        }
+    }
+    free(intron_map);
+    return ret;
+}
+
 int merge_trans1(trans_t t1, trans_t *t2, int dis)
 {
     int i = t1.exon_n-1, j = t2->exon_n-1;
@@ -171,9 +241,9 @@ int merge_trans(trans_t t, read_trans_t *T, int dis)
     return 0;
 }
 
-int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int dis, int l, read_trans_t *novel_T)
+int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I, int uncla, int dis, int l, read_trans_t *novel_T)
 {
-    int i=0, j=0, last_j=0, ret;
+    int i=0, j=0, last_j=0, k=0, ret;
     int all_novel=0, novel=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
         //int x;
@@ -194,7 +264,8 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, int uncla, int di
             i++;
             novel = 0;
         } else {
-            ret = check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
+            if (I.intron_n > 0) ret = check_novel1_intron(bam_T.t+i, anno_T.t[j], I, &k, dis, l);
+            else ret = check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
             if (ret == 0) { // all novel
                 all_novel = 1;
                 j++; continue;
@@ -243,6 +314,7 @@ int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
 }
 
 const struct option update_long_opt [] = {
+    { "intron", 1, NULL, 'i' },
     { "min-exon", 1, NULL, 'e' },
     { "distance", 1, NULL, 'd' },
     { "unclassified", 0, NULL, 'u' },
@@ -254,10 +326,15 @@ const struct option update_long_opt [] = {
 
 int update_gtf(int argc, char *argv[])
 {
-    int c; int exon_min = INTER_EXON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[100]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL;
-	while ((c = getopt_long(argc, argv, "e:d:l:us:f:", update_long_opt, NULL)) >= 0) {
+    int c; int exon_min = INTER_EXON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[100]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL, *intron_fp=NULL;
+	while ((c = getopt_long(argc, argv, "i:e:d:l:us:f:", update_long_opt, NULL)) >= 0) {
         switch(c)
         {
+            case 'i': if ((intron_fp = fopen(optarg, "r")) == NULL) {
+                          err_fatal(__func__, "Can not open intron file \"%s\"\n", optarg);
+                          return update_gtf_usage();
+                      } 
+                      break;
             case 'e': exon_min = atoi(optarg); break;
             case 'd': dis = atoi(optarg); break;
             case 'l': l = atoi(optarg); break;
@@ -281,19 +358,23 @@ int update_gtf(int argc, char *argv[])
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1(); 
     anno_T = read_trans_init(); bam_T = read_trans_init(); novel_T = read_trans_init();
+    intron_group_t *I = intron_group_init();
 
     FILE *gfp = fopen(argv[optind+1], "r");
     // read all gene
     read_anno_trans(gfp, h, anno_T);
     // read all transcript
     read_bam_trans(in, h, b, exon_min, bam_T);
+    // read intron file
+    read_intron_group(I, intron_fp);
+    
     // merge loop
-    check_novel_trans(*bam_T, *anno_T, uncla, dis, l, novel_T);
+    check_novel_trans(*bam_T, *anno_T, *I, uncla, dis, l, novel_T);
 
     // print
     print_read_trans(*novel_T, h, src, new_gfp);
 
-    read_trans_free(anno_T); read_trans_free(bam_T); read_trans_free(novel_T);
-    bam_destroy1(b); bam_hdr_destroy(h); sam_close(in); fclose(gfp); if(full_gfp) fclose(full_gfp);
+    read_trans_free(anno_T); read_trans_free(bam_T); read_trans_free(novel_T); intron_group_free(I);
+    bam_destroy1(b); bam_hdr_destroy(h); sam_close(in); fclose(gfp); if(full_gfp) fclose(full_gfp); if (intron_fp) fclose(intron_fp);
     return 0;
 }
