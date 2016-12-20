@@ -130,6 +130,45 @@ void read_trans_free(read_trans_t *r)
     free(r->t); free(r);
 }
 
+// intron_group
+
+intron_t *intron_init(int n)
+{
+    intron_t *i = (intron_t *)_err_malloc(n * sizeof(intron_t));
+    return i;
+}
+
+
+intron_group_t *intron_group_init(void)
+{
+    intron_group_t *i = (intron_group_t*)_err_malloc(sizeof(intron_group_t));
+    i->intron = intron_init(2);
+    i->intron_n = 0, i->intron_m = 2;
+    return i;
+}
+
+intron_group_t *intron_group_realloc(intron_group_t *i){
+    i->intron_m <<= 1;
+    i->intron = (intron_t*)_err_realloc(i->intron, i->intron_m * sizeof(intron_t));
+    return i;
+}
+
+void add_intron(intron_group_t *i, intron_t i1)
+{
+    if (i->intron_n == i->intron_m) {
+        i = intron_group_realloc(i);
+    }
+    i->intron[i->intron_n].tid = i1.tid;
+    i->intron[i->intron_n].is_rev = i1.is_rev;
+    i->intron[i->intron_n].start = i1.start;
+    i->intron[i->intron_n].end = i1.end;
+    i->intron[i->intron_n].is_anno = i1.is_anno;
+    i->intron[i->intron_n].is_canon = i1.is_canon;
+    i->intron_n++;
+}
+
+void intron_group_free(intron_group_t *i) { free(i->intron); free(i); }
+
 //gene
 gene_t *gene_init(void) {
     gene_t *g = (gene_t*)_err_malloc(sizeof(gene_t));

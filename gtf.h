@@ -39,7 +39,7 @@
 
 typedef struct {
     int32_t tid; uint8_t is_rev;
-    int32_t start, end; //1-base, ref
+    int32_t start, end; //1-based, ref
 } exon_t;
 
 typedef struct {
@@ -50,6 +50,16 @@ typedef struct {
     char gname[100];
     int novel_gene_flag, cov;
 } trans_t;
+
+typedef struct {
+    int32_t tid; uint8_t is_rev;
+    int32_t start, end; //1-based, ref
+    uint8_t is_anno, is_canon;
+} intron_t;
+
+typedef struct {
+    intron_t *intron; int intron_n, intron_m;
+} intron_group_t;
 
 typedef struct {
     trans_t *t; int trans_n, trans_m;
@@ -81,6 +91,11 @@ void add_read_trans(read_trans_t *r, trans_t t);
 read_trans_t *read_trans_realloc(read_trans_t *r);
 void read_trans_free(read_trans_t *r);
 //int set_read_trans(read_trans_t *r);
+
+intron_t *intron_init(int n);
+intron_group_t *intron_group_init(void);
+void add_intron(intron_group_t *i, intron_t i1);
+void intron_group_free(intron_group_t *i);
 
 gene_t *gene_init(void);
 void add_trans(gene_t *g, trans_t t, int novel_gene_flag);
