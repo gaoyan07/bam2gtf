@@ -20,6 +20,7 @@
 extern const char PROG[20];
 extern int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_trans_t *T);
 extern int read_intron_group(intron_group_t *I, FILE *fp);
+extern int read_anno_trans1(read_trans_t *T, FILE *fp);
 
 int update_gtf_usage(void)
 {
@@ -147,21 +148,50 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
     }
 }
 
-int check_iden_intron1(trans_t *bam_t, int *intron_map, intron_group_t I, int *intron_i)
+int check_intron1(int tid, int start, int end, uint8_t is_rev, intron_group_t I, int i_start, int dis)
 {
-    int i;
-    for (i = 0; i < bam_t->exon_n-1; ++i) {
-        if (
+    int i = i_start;
+    while (i < I.intron_n) {
+        if (I.intron[i].tid > tid || I.intron[i].start > start) return 0;
+        if (I.intron[i].is_rev != is_rev) { i++; continue; }
+
+        if (abs(I.intron[i].start-start)<=dis && abs(I.intron[i].end-end)<=dis) return 1;
+        else i++;
     }
-    return 1;
+    return 0;
 }
 
-int check_novel1_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *intron_i, int dis, int l)
+int check_intron(trans_t bam_t, int *intron_map, intron_group_t I, int *intron_i, int dis)
+{
+    int i = *intron_i, j;
+    while (i < I.intron_n) {
+        if (I.intron[i].tid < bam_t.tid || (I.intron[i].tid == bam_t.tid && I.intron[i].end <= bam_t.start)) {
+            i++; *intron_i = i;
+        } else if (I.intron[i].tid > bam_t.tid) return 0;
+        else {
+            if (bam_t.is_rev) { // '-' strand
+                for (j = 0; j < bam_t.exon_n-1; ++j) {
+                    if (intron_map[j] == 0 && check_intron1(bam_t.tid, bam_t.exon[j+1].end+1, bam_t.exon[j].start-1, bam_t.is_rev, I, i, dis) == 0)
+                        return 0;
+                }
+            } else { // '+' strand
+                for (j = 0; j < bam_t.exon_n-1; ++j) {
+                    if (intron_map[j] == 0 && check_intron1(bam_t.tid, bam_t.exon[j].end+1, bam_t.exon[j+1].start-1, bam_t.is_rev, I, i, dis) == 0)
+                        return 0;
+                }
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int check_novel_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *intron_i, int dis, int l)
 {
     if (bam_t->is_rev != anno_t.is_rev || bam_t->exon_n < 2 || check_full(*bam_t, anno_t, l) == 0) return 3;
 
     int left=0,right=0, last_j=-1;
-    int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0;
+    int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0, ret;
     int *intron_map = (int*)_err_calloc((bam_t->exon_n-1), sizeof(int));
     if (bam_t->is_rev) { // '-' strand
         for (i = 0; i < bam_t->exon_n-1; ++i) {
@@ -202,9 +232,9 @@ int check_novel1_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *i
     if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) ret=2;
     else {
         if (iden_n > 0) {
-            if (check_iden_intron1(bam_t, intron_map, I, intron_i)) {
+            if (check_intron(*bam_t, intron_map, I, intron_i, dis)) {
                 strcpy(bam_t->gname, anno_t.gname);
-                ret=1
+                ret=1;
             } else ret=3;
         } else {
             strcpy(bam_t->gname, "UNCLASSIFIED");
@@ -247,13 +277,17 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
     int all_novel=0, novel=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
         //int x;
-        //if (strcmp(bam_T.t[i].tname, "m130608_032412_42175_c100522942550000001823080209281371_s1_p0/119192/ccs.path1")==0)
+        //if (strcmp(bam_T.t[i].tname, "m130609_061039_42175_c100522932550000001823080209281383_s1_p0/135725/ccs.path1")==0)
             //x=i;
-        if (merge_trans(bam_T.t[i], novel_T, dis)) { i++; continue; }
+        if (merge_trans(bam_T.t[i], novel_T, dis)) { 
+            err_printf("merge: %s\n", bam_T.t[i].tname);
+            i++; continue; 
+        }
         if (bam_T.t[i].tid > anno_T.t[j].tid || (bam_T.t[i].tid == anno_T.t[j].tid && bam_T.t[i].start > anno_T.t[j].end)) {
             j++;
             last_j = j;
         } else if (anno_T.t[j].tid > bam_T.t[i].tid || (anno_T.t[j].tid == bam_T.t[i].tid && anno_T.t[j].start > bam_T.t[i].end)) {
+            if (novel != 1) err_printf("unrecover: %s\n", bam_T.t[i].tname);
             if (novel == 1) {
                 add_read_trans(novel_T, bam_T.t[i]);
                 set_trans(novel_T->t+novel_T->trans_n-1, NULL);
@@ -264,7 +298,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
             i++;
             novel = 0;
         } else {
-            if (I.intron_n > 0) ret = check_novel1_intron(bam_T.t+i, anno_T.t[j], I, &k, dis, l);
+            if (I.intron_n > 0) ret = check_novel_intron(bam_T.t+i, anno_T.t[j], I, &k, dis, l);
             else ret = check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
             if (ret == 0) { // all novel
                 all_novel = 1;
@@ -274,6 +308,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
                 j++; continue;
             } else if (ret == 2) { // all identical
                 novel = 0;
+                err_printf("all-iden: %s\n", bam_T.t[i].tname);
                 i++;
             } else {
                 j++; continue;
@@ -351,7 +386,8 @@ int update_gtf(int argc, char *argv[])
                       break;
         }
     }
-    if (argc - optind != 2) return update_gtf_usage();
+    //XXX
+    if (argc - optind != 3) return update_gtf_usage();
 
     samFile *in; bam_hdr_t *h; bam1_t *b; read_trans_t *anno_T, *bam_T, *novel_T;
     if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
@@ -364,7 +400,10 @@ int update_gtf(int argc, char *argv[])
     // read all gene
     read_anno_trans(gfp, h, anno_T);
     // read all transcript
-    read_bam_trans(in, h, b, exon_min, bam_T);
+    // XXX
+    //read_bam_trans(in, h, b, exon_min, bam_T);
+    FILE *fp = fopen(argv[optind+2], "r");
+    read_anno_trans1(bam_T, fp);
     // read intron file
     read_intron_group(I, intron_fp);
     

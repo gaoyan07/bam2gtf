@@ -7,7 +7,7 @@
 int usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   comp_gtf 1.gtf 2.gtf short.intron.out\n\n");
+    err_printf("Usage:   comp_gtf 1.gtf 2.gtf\n\n");
 	err_printf("         1.gtf is smaller than 2.gtf\n");
 	err_printf("\n");
 	return 1;
@@ -62,13 +62,11 @@ int comp_gtf_intron(read_trans_t T, intron_group_t I)
         if (I.intron[j].tid < T.t[i].tid || (I.intron[j].tid == T.t[i].tid && I.intron[j].end <= T.t[i].start)) {
             j++;
         } else if (I.intron[j].tid > T.t[i].tid || (I.intron[j].tid == T.t[i].tid && I.intron[j].start >= T.t[i].end)) {
-            // un-recovered
             printf("un-recovered: %s\n", T.t[i].tname);
             i++;
         } else {
             if (check_iden_intron(T.t[i], I, j, dis)) {
                 iden++;
-                // recovered
                 //printf("recover: %s\n", T.t[i].tname);
             } else // un-recovered
                 printf("un-recovered: %s\n", T.t[i].tname);
@@ -113,10 +111,10 @@ int comp_gtf_core(read_trans_t T1, read_trans_t T2)
 
 int name2id(char ref[])
 {
-    if (ref[3] == 'X') return 23;
-    else if (ref[3] == 'Y') return 24;
-    else if (ref[3] == 'M') return 25;
-    else return atoi(ref+3);
+    if (ref[3] == 'X') return 22;
+    else if (ref[3] == 'Y') return 23;
+    else if (ref[3] == 'M') return 24;
+    else return atoi(ref+3)-1;
 }
 
 int read_anno_trans1(read_trans_t *T, FILE *fp)
@@ -167,18 +165,16 @@ int read_intron_group(intron_group_t *I, FILE *fp)
 #ifdef COMP_MAIN
 int main(int argc, char *argv[])
 {
-    if (argc != 4) return usage();
-    FILE *fp1 = fopen(argv[1], "r"), *fp2 = fopen(argv[2], "r"), *fp3 = fopen(argv[3], "r");
-    read_trans_t *T1, *T2; intron_group_t *I;
-    T1 = read_trans_init(), T2 = read_trans_init(); I = intron_group_init();
-    read_anno_trans1(T1, fp1); /*read_anno_trans1(T2, fp2);*/ read_intron_group(I, fp3);
+    if (argc != 3) return usage();
+    FILE *fp1 = fopen(argv[1], "r"), *fp2 = fopen(argv[2], "r");
+    read_trans_t *T1, *T2;
+    T1 = read_trans_init(), T2 = read_trans_init();
+    read_anno_trans1(T1, fp1); read_anno_trans1(T2, fp2);
 
-    //comp_gtf_core(*T1, *T2);
-    comp_gtf_intron(*T1, *I);
-    //comp_core(*T1, *T2, *I);
+    comp_gtf_core(*T1, *T2);
 
-    read_trans_free(T1), read_trans_free(T2), intron_group_free(I);
-    fclose(fp1), fclose(fp2), fclose(fp3);
+    read_trans_free(T1), read_trans_free(T2);
+    fclose(fp1), fclose(fp2);
     return 0;
 }
 #endif

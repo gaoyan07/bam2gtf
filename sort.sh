@@ -47,5 +47,5 @@ NR!=FNR {
     if ($12 != id) {print array[$12], NR-1, $1, 0, "transcript", "", "", "", "", "", ""; id=$12}
     print array[$12], NR, $0
 }
-}' .tmp $1 | sort -n -k1 -n -k2 -n -k3 -n -k5 | awk 'BEGIN{FS="\t"; OFS="\t"} {print $6,$7,$8,$9,$10,$11,$12,$13,$14}' > $2
+}' .tmp $1 | sort -n -k1 -n -k2 -n -k3 -k4 -n -k5 | awk 'BEGIN{FS="\t"; OFS="\t"} {print $6,$7,$8,$9,$10,$11,$12,$13,$14}' > $2
 rm .tmp
