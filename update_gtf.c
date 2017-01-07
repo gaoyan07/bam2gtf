@@ -273,6 +273,8 @@ int merge_trans(trans_t t, read_trans_t *T, int dis)
 
 int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I, int uncla, int dis, int l, read_trans_t *novel_T)
 {
+    // XXX
+    int ret1=0, ret2=0, ret3=0, ret0=0;
     int i=0, j=0, last_j=0, k=0, ret;
     int all_novel=0, novel=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
@@ -301,21 +303,26 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
             if (I.intron_n > 0) ret = check_novel_intron(bam_T.t+i, anno_T.t[j], I, &k, dis, l);
             else ret = check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
             if (ret == 0) { // all novel
+                ret0++;
                 all_novel = 1;
                 j++; continue;
             } else if (ret == 1) { // novel
+                ret1++;
                 novel = 1;
                 j++; continue;
             } else if (ret == 2) { // all identical
+                ret2++;
                 novel = 0;
                 err_printf("all-iden: %s\n", bam_T.t[i].tname);
                 i++;
             } else {
+                ret3++;
                 j++; continue;
             }
         }
         j = last_j;
     }
+    err_printf("ret0 %d\tret1 %d\tret2 %d\tret3 %d\n", ret0, ret1, ret2, ret3);
     return 0;
 }
 
@@ -386,8 +393,7 @@ int update_gtf(int argc, char *argv[])
                       break;
         }
     }
-    //XXX
-    if (argc - optind != 3) return update_gtf_usage();
+    if (argc - optind != 2) return update_gtf_usage();
 
     samFile *in; bam_hdr_t *h; bam1_t *b; read_trans_t *anno_T, *bam_T, *novel_T;
     if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
@@ -400,10 +406,7 @@ int update_gtf(int argc, char *argv[])
     // read all gene
     read_anno_trans(gfp, h, anno_T);
     // read all transcript
-    // XXX
-    //read_bam_trans(in, h, b, exon_min, bam_T);
-    FILE *fp = fopen(argv[optind+2], "r");
-    read_anno_trans1(bam_T, fp);
+    read_bam_trans(in, h, b, exon_min, bam_T);
     // read intron file
     read_intron_group(I, intron_fp);
     

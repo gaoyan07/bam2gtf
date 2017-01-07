@@ -150,6 +150,7 @@ int read_anno_trans1(read_trans_t *T, FILE *fp)
 
 int read_intron_group(intron_group_t *I, FILE *fp)
 {
+    if (fp == NULL) return 0;
     char line[1024], ref[100]; int start, end, nstrand, canon, anno, uniq_map, multi_map, overlang;
     intron_t *i = intron_init(1);
     while (fgets(line, 1024, fp) != NULL) {
