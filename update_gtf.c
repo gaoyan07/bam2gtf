@@ -287,9 +287,9 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
     int i=0, j=0, last_j=0, k=0, ret;
     int all_novel=0, novel=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
-        int x;
-        if (strcmp(bam_T.t[i].tname, "m130614_000849_42175_c100535482550000001823081711101343_s1_p0/87730/ccs.path1")==0)
-            x=i;
+        //int x;
+        //if (strcmp(bam_T.t[i].tname, "m130614_000849_42175_c100535482550000001823081711101343_s1_p0/87730/ccs.path1")==0)
+            //x=i;
         if (merge_trans(bam_T.t[i], novel_T, dis)) { 
             err_printf("merge: %s\n", bam_T.t[i].tname);
             i++; continue; 

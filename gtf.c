@@ -310,6 +310,7 @@ int print_read_trans(read_trans_t r, bam_hdr_t *h, char *src, FILE *out)
         for (j = 0; j < r.t[i].exon_n; ++j)
             fprintf(out, "%s\t%s\t%s\t%d\t%d\t%d\t%c\t.\tgene_id \"%s\"; transcript_id \"%s\";\n", h->target_name[r.t[i].exon[j].tid], src, "exon", r.t[i].exon[j].start, r.t[i].exon[j].end, score_min+score_step*r.t[i].cov, "+-"[r.t[i].exon[j].is_rev], r.t[i].gname, r.t[i].tname);
     }
+    err_printf("Total novel transcript: %d\n", r.trans_n);
     return 0;
 }
 
