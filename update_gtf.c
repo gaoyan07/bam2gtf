@@ -75,11 +75,11 @@ int check_full(trans_t t, trans_t anno_t, int level)
         }
         if (a1+a2 >= 1 && a3+a4 >= 1) return 1;
         else return 0;
-    } else if (level == 4) { // most 5' exon meets #3, most 3' exon has a polyA+ tail of 15bp or longer
+    } else if (level == 4) { // most 5' exon meets #3, most 3' exon has a polyA+ tail of 15bp or longer XXX
         if (t.is_rev) {
-            i = 0; j = 0;
-        } else {
             i = t.exon_n-1; j = anno_t.exon_n-1;
+        } else {
+            i = 0; j = 0;
         }
         if (exon_overlap(t.exon[i], anno_t.exon[j])) return 1;
 
@@ -143,7 +143,6 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
         strcpy(bam_t->gname, anno_t.gname);
         return 1;
     } else {
-        strcpy(bam_t->gname, "UNCLASSIFIED");
         return 0;
     }
 }
@@ -237,7 +236,6 @@ int check_novel_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *in
                 ret=1;
             } else ret=3;
         } else {
-            strcpy(bam_t->gname, "UNCLASSIFIED");
             ret=0;
         }
     }
@@ -251,11 +249,23 @@ int merge_trans1(trans_t t1, trans_t *t2, int dis)
     if (check_iden(t1, *t2, dis)) {
         t2->cov++;
         if (t2->is_rev) { // '-'
-            if (t1.exon[0].end > t2->exon[0].end) t2->exon[0].end = t1.exon[0].end;
-            if (t1.exon[i].start < t2->exon[j].start) t2->exon[j].end = t1.exon[i].end;
+            if (t1.exon[0].end > t2->exon[0].end) {
+                t2->exon[0].end = t1.exon[0].end;
+                t2->end = t1.exon[0].end;
+            }
+            if (t1.exon[i].start < t2->exon[j].start) {
+                t2->exon[j].start = t1.exon[i].start;
+                t2->start = t1.exon[i].start;
+            }
         } else { // '+'
-            if (t1.exon[0].start < t2->exon[0].start) t2->exon[0].start = t1.exon[0].start;
-            if (t1.exon[i].end > t2->exon[j].end) t2->exon[j].end = t1.exon[i].end;
+            if (t1.exon[0].start < t2->exon[0].start)  {
+                t2->exon[0].start = t1.exon[0].start;
+                t2->start = t1.exon[0].start;
+            }
+            if (t1.exon[i].end > t2->exon[j].end) {
+                t2->exon[j].end = t1.exon[i].end;
+                t2->end = t1.exon[i].end;
+            }
         }
         return 1;
     } else return 0;
@@ -271,16 +281,15 @@ int merge_trans(trans_t t, read_trans_t *T, int dis)
     return 0;
 }
 
-int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I, int uncla, int dis, int l, read_trans_t *novel_T)
+int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I, 
+                      int uncla, int dis, int l, read_trans_t *novel_T)
 {
-    // XXX
-    int ret1=0, ret2=0, ret3=0, ret0=0;
     int i=0, j=0, last_j=0, k=0, ret;
     int all_novel=0, novel=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
-        //int x;
-        //if (strcmp(bam_T.t[i].tname, "m130609_061039_42175_c100522932550000001823080209281383_s1_p0/135725/ccs.path1")==0)
-            //x=i;
+        int x;
+        if (strcmp(bam_T.t[i].tname, "m130614_000849_42175_c100535482550000001823081711101343_s1_p0/87730/ccs.path1")==0)
+            x=i;
         if (merge_trans(bam_T.t[i], novel_T, dis)) { 
             err_printf("merge: %s\n", bam_T.t[i].tname);
             i++; continue; 
@@ -293,7 +302,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
             if (novel == 1) {
                 add_read_trans(novel_T, bam_T.t[i]);
                 set_trans(novel_T->t+novel_T->trans_n-1, NULL);
-            } else if (uncla && all_novel == 1) {
+            } else if (uncla == 1 && all_novel == 1) {
                 add_read_trans(novel_T, bam_T.t[i]);
                 set_trans(novel_T->t+novel_T->trans_n-1, NULL);
             }
@@ -303,26 +312,21 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
             if (I.intron_n > 0) ret = check_novel_intron(bam_T.t+i, anno_T.t[j], I, &k, dis, l);
             else ret = check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
             if (ret == 0) { // all novel
-                ret0++;
                 all_novel = 1;
                 j++; continue;
             } else if (ret == 1) { // novel
-                ret1++;
                 novel = 1;
                 j++; continue;
             } else if (ret == 2) { // all identical
-                ret2++;
                 novel = 0;
                 err_printf("all-iden: %s\n", bam_T.t[i].tname);
                 i++;
             } else {
-                ret3++;
                 j++; continue;
             }
         }
         j = last_j;
     }
-    err_printf("ret0 %d\tret1 %d\tret2 %d\tret3 %d\n", ret0, ret1, ret2, ret3);
     return 0;
 }
 
