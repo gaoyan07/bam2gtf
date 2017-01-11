@@ -46,50 +46,105 @@ int exon_overlap(exon_t e1, exon_t e2)
     return 1;
 }
 
-int check_full(trans_t t, trans_t anno_t, int level)
+void set_full(trans_t *t, int l)
 {
-    int i = t.exon_n-1, j = anno_t.exon_n-1;
+    if (l == 5) t->full = 1;
+    else if (l == 4) {
+        if (t->lfull == 1 || t->lnoth == 1) t->full = 1;
+        else t->full = 0;
+    } else if (l == 3){
+        if ((t->lfull == 1 || t->lnoth == 1) && (t->rfull == 1 || t->rnoth == 1)) t->full = 1;
+        else t->full = 0;
+    } else {
+        if (t->lfull == 1 && t->rfull == 1) t->full = 1;
+        else t->full = 0;
+    }
+}
+
+int check_full(trans_t *t, trans_t anno_t, int level)
+{
+    if (t->lfull && t->rfull) return 0;
+    int i = t->exon_n-1, j = anno_t.exon_n-1;
     if (level == 1) { // identical first and last splice-site
-        if (t.is_rev) {
-            if (t.exon[i].end != anno_t.exon[j].end) return 0;
-            if (t.exon[0].start != anno_t.exon[0].start) return 0;
-        } else {
-            if (t.exon[0].end != anno_t.exon[0].end) return 0;
-            if (t.exon[i].start != anno_t.exon[j].start) return 0;
+        if (t->lfull == 0) {
+            if (t->is_rev) {
+                if (t->exon[i].end == anno_t.exon[j].end) t->lfull = 1;
+            } else {
+                if (t->exon[0].end == anno_t.exon[0].end) t->lfull = 1;
+            }
+        }
+        if (t->rfull == 0) {
+            if (t->is_rev) {
+                if (t->exon[0].start == anno_t.exon[0].start) t->rfull = 1;
+            } else {
+                if (t->exon[i].start == anno_t.exon[j].start) t->rfull = 1;
+            }
         }
     } else if (level == 2) { // overlapping first and last exon
-        if (!exon_overlap(t.exon[0], anno_t.exon[0])) return 0;
-        if (!exon_overlap(t.exon[i], anno_t.exon[j])) return 0;
+        if (t->lfull == 0) {
+            if (t->is_rev) {
+                if (exon_overlap(t->exon[i], anno_t.exon[j])) t->lfull = 1;
+            } else {
+                if (exon_overlap(t->exon[0], anno_t.exon[0])) t->lfull = 1;
+            }
+        }
+        if (t->rfull == 0) {
+            if (t->is_rev) {
+                if (exon_overlap(t->exon[0], anno_t.exon[0])) t->rfull = 1;
+            } else {
+                if (exon_overlap(t->exon[i], anno_t.exon[j])) t->rfull = 1;
+            }
+        }
     } else if (level == 3) { // overlapping first and last exon, or overlapping nothing
-        int ii, a1, a2, a3, a4;
-        a1 = 0, a3 = 0;
-        if (exon_overlap(t.exon[0], anno_t.exon[0])) a1=1;
-        if (exon_overlap(t.exon[i], anno_t.exon[j])) a3=1;
-        if (a1 == 1 && a3 == 1) return 1;
-
-        a2 = 1, a4 = 1;
-        for (ii = 0; ii < anno_t.exon_n; ++ii) {
-            if (exon_overlap(t.exon[0], anno_t.exon[ii])) a2 = 0;
-            if (exon_overlap(t.exon[i], anno_t.exon[ii])) a4 = 0;
-            if (a2 == 0 && a4 == 0) return 0;
-        }
-        if (a1+a2 >= 1 && a3+a4 >= 1) return 1;
-        else return 0;
-    } else if (level == 4) { // most 5' exon meets #3, most 3' exon has a polyA+ tail of 15bp or longer XXX
-        if (t.is_rev) {
-            i = t.exon_n-1; j = anno_t.exon_n-1;
-        } else {
-            i = 0; j = 0;
-        }
-        if (exon_overlap(t.exon[i], anno_t.exon[j])) return 1;
-
         int ii;
-        for (ii = 0; ii < anno_t.exon_n; ++ii) {
-            if (exon_overlap(t.exon[i], anno_t.exon[ii])) return 0;
+        if (t->lfull == 0) {
+            if (t->is_rev) {
+                i = t->exon_n-1; j = anno_t.exon_n-1;
+            } else {
+                i = 0; j = 0;
+            }
+            int ii;
+            if (exon_overlap(t->exon[i], anno_t.exon[j])) t->lfull = 1;
+            else {
+                for (ii = 0; ii < anno_t.exon_n; ++ii) {
+                    if (exon_overlap(t->exon[i], anno_t.exon[ii])) { t->lnoth = 0; break; }
+                }
+            }
         }
-        return 1;
+        if (t->rfull == 0) {
+            if (t->is_rev) {
+                if (exon_overlap(t->exon[0], anno_t.exon[0])) t->rfull = 1;
+                else { // overlap nothing
+                    for (ii = 1; ii < anno_t.exon_n; ++ii) {
+                        if (exon_overlap(t->exon[0], anno_t.exon[ii])) { t->rnoth=0; break; }
+                    }
+                }
+            } else {
+                if (exon_overlap(t->exon[i], anno_t.exon[j])) t->rfull = 1;
+                else { // overlap nothing
+                    for (ii = 0; ii < anno_t.exon_n-1; ++ii) {
+                        if (exon_overlap(t->exon[i], anno_t.exon[ii])) { t->rnoth=0; break; }
+                    }
+                }
+            }
+        }
+    } else if (level == 4) { // most 5' exon meets #3, most 3' exon has a polyA+ tail of 15bp or longer XXX
+        if (t->lfull == 0) {
+            if (t->is_rev) {
+                i = t->exon_n-1; j = anno_t.exon_n-1;
+            } else {
+                i = 0; j = 0;
+            }
+            int ii;
+            if (exon_overlap(t->exon[i], anno_t.exon[j])) t->lfull = 1;
+            else {
+                for (ii = 0; ii < anno_t.exon_n; ++ii) {
+                    if (exon_overlap(t->exon[i], anno_t.exon[ii])) { t->lnoth = 0; break; }
+                }
+            }
+        }
     }
-    return 1;
+    return 0;
 }
 
 // check if t is novel and has identical splice site
@@ -101,8 +156,11 @@ int check_full(trans_t t, trans_t anno_t, int level)
 //    3: other cases that cannot be added to this anno(not full-length to any anno-trans)
 int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
 {
-    if (bam_t->is_rev != anno_t.is_rev || bam_t->exon_n < 2 || check_full(*bam_t, anno_t, l) == 0) return 3;
+    if (bam_t->is_rev != anno_t.is_rev || bam_t->exon_n < 2) return 3;
+    // check full-length
+    check_full(bam_t, anno_t, l);
 
+    // check novel
     int left=0,right=0, last_j=-1;
     int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0;
     if (bam_t->is_rev) { // '-' strand
@@ -138,13 +196,14 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
             }
         }
     }
-    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) return 2;
-    if (iden_n > 0) {
+    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) bam_t->novel = 2;
+    else if (iden_n > 0) {
         strcpy(bam_t->gname, anno_t.gname);
-        return 1;
+        bam_t->novel = 1;
     } else {
-        return 0;
+        bam_t->novel = 0;
     }
+    return 0;
 }
 
 int check_intron1(int tid, int start, int end, uint8_t is_rev, intron_group_t I, int i_start, int dis)
@@ -187,10 +246,12 @@ int check_intron(trans_t bam_t, int *intron_map, intron_group_t I, int *intron_i
 
 int check_novel_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *intron_i, int dis, int l)
 {
-    if (bam_t->is_rev != anno_t.is_rev || bam_t->exon_n < 2 || check_full(*bam_t, anno_t, l) == 0) return 3;
+    if (bam_t->is_rev != anno_t.is_rev || bam_t->exon_n < 2) return 3;
+    // check full-length
+    check_full(bam_t, anno_t, l);
 
     int left=0,right=0, last_j=-1;
-    int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0, ret;
+    int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0;
     int *intron_map = (int*)_err_calloc((bam_t->exon_n-1), sizeof(int));
     if (bam_t->is_rev) { // '-' strand
         for (i = 0; i < bam_t->exon_n-1; ++i) {
@@ -228,19 +289,19 @@ int check_novel_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *in
         }
     }
 
-    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) ret=2;
+    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) bam_t->novel=2;
     else {
         if (iden_n > 0) {
             if (check_intron(*bam_t, intron_map, I, intron_i, dis)) {
                 strcpy(bam_t->gname, anno_t.gname);
-                ret=1;
-            } else ret=3;
+                bam_t->novel=1;
+            } else bam_t->novel=3;
         } else {
-            ret=0;
+            bam_t->novel=0;
         }
     }
     free(intron_map);
-    return ret;
+    return 0;
 }
 
 int merge_trans1(trans_t t1, trans_t *t2, int dis)
@@ -284,48 +345,44 @@ int merge_trans(trans_t t, read_trans_t *T, int dis)
 int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I, 
                       int uncla, int dis, int l, read_trans_t *novel_T)
 {
-    int i=0, j=0, last_j=0, k=0, ret;
-    int all_novel=0, novel=0;
+    int i=0, j=0, last_j=0, k=0, NOT_MERG=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
         //int x;
         //if (strcmp(bam_T.t[i].tname, "m130614_000849_42175_c100535482550000001823081711101343_s1_p0/87730/ccs.path1")==0)
             //x=i;
-        if (merge_trans(bam_T.t[i], novel_T, dis)) { 
+        if (NOT_MERG == 0 && merge_trans(bam_T.t[i], novel_T, dis)) { 
             err_printf("merge: %s\n", bam_T.t[i].tname);
-            i++; continue; 
+            NOT_MERG = 0; i++; continue; 
         }
         if (bam_T.t[i].tid > anno_T.t[j].tid || (bam_T.t[i].tid == anno_T.t[j].tid && bam_T.t[i].start > anno_T.t[j].end)) {
+            if (j == last_j) last_j++;
             j++;
-            last_j = j;
+            NOT_MERG=1;
         } else if (anno_T.t[j].tid > bam_T.t[i].tid || (anno_T.t[j].tid == bam_T.t[i].tid && anno_T.t[j].start > bam_T.t[i].end)) {
-            if (novel != 1) err_printf("unrecover: %s\n", bam_T.t[i].tname);
-            if (novel == 1) {
-                add_read_trans(novel_T, bam_T.t[i]);
-                set_trans(novel_T->t+novel_T->trans_n-1, NULL);
-            } else if (uncla == 1 && all_novel == 1) {
-                add_read_trans(novel_T, bam_T.t[i]);
-                set_trans(novel_T->t+novel_T->trans_n-1, NULL);
+            // XXX
+            set_full(bam_T.t+i, l);
+            //if (bam_T.t[i].novel != 1) err_printf("unrecover: %s\n", bam_T.t[i].tname);
+            if (bam_T.t[i].full) {
+                if (bam_T.t[i].novel == 1) {
+                    add_read_trans(novel_T, bam_T.t[i]);
+                    set_trans(novel_T->t+novel_T->trans_n-1, NULL);
+                } else if (uncla == 1 && bam_T.t[i].novel == 0) {
+                    add_read_trans(novel_T, bam_T.t[i]);
+                    set_trans(novel_T->t+novel_T->trans_n-1, NULL);
+                }
             }
-            i++;
-            novel = 0;
+            NOT_MERG = 0; i++; j = last_j;
         } else {
-            if (I.intron_n > 0) ret = check_novel_intron(bam_T.t+i, anno_T.t[j], I, &k, dis, l);
-            else ret = check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
-            if (ret == 0) { // all novel
-                all_novel = 1;
-                j++; continue;
-            } else if (ret == 1) { // novel
-                novel = 1;
-                j++; continue;
-            } else if (ret == 2) { // all identical
-                novel = 0;
+            if (I.intron_n > 0) check_novel_intron(bam_T.t+i, anno_T.t[j], I, &k, dis, l);
+            else check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
+
+            if (bam_T.t[i].novel == 2) {
                 err_printf("all-iden: %s\n", bam_T.t[i].tname);
-                i++;
+                NOT_MERG = 0; i++; j = last_j;
             } else {
-                j++; continue;
+                NOT_MERG = 1; j++;
             }
         }
-        j = last_j;
     }
     return 0;
 }

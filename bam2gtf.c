@@ -89,6 +89,7 @@ int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_tran
         gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
         add_read_trans(T, *t); set_trans(T->t+T->trans_n-1, bam_get_qname(b));
         strcpy(T->t[T->trans_n-1].gname, "UNCLASSIFIED");
+        T->t[T->trans_n-1].lfull = 0, T->t[T->trans_n-1].lnoth = 1, T->t[T->trans_n-1].rfull = 0, T->t[T->trans_n-1].rnoth = 1, T->t[T->trans_n-1].novel = 1;
         sam_ret = sam_read1(in, h, b) ;
     }
     trans_free(t);

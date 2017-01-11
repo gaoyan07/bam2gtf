@@ -49,6 +49,7 @@ typedef struct {
     char tname[100];
     char gname[100];
     int novel_gene_flag, cov;
+    uint8_t full, novel, lfull, lnoth, rfull, rnoth; // novel: 0-all-novel, 1-novel, 2-identical, 3-other
 } trans_t;
 
 typedef struct {
