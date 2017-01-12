@@ -44,12 +44,14 @@ typedef struct {
 
 typedef struct {
     exon_t *exon; int exon_n, exon_m;
+    int *novel_exon_map, *novel_sj_map;
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
     char tname[100];
     char gname[100];
     int novel_gene_flag, cov;
-    uint8_t full, novel, lfull, lnoth, rfull, rnoth; // novel: 0-all-novel, 1-novel, 2-identical, 3-other
+    uint8_t full, lfull, lnoth, rfull, rnoth; 
+    uint8_t novel, all_novel, all_iden;// novel: 0-all-novel, 1-novel, 2-identical, 3-other
 } trans_t;
 
 typedef struct {

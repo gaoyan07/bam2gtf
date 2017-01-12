@@ -196,12 +196,12 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
             }
         }
     }
-    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) bam_t->novel = 2;
+    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) bam_t->all_iden=1;
     else if (iden_n > 0) {
         strcpy(bam_t->gname, anno_t.gname);
-        bam_t->novel = 1;
+        bam_t->novel=1;
     } else {
-        bam_t->novel = 0;
+        bam_t->all_novel=1;
     }
     return 0;
 }
@@ -289,15 +289,15 @@ int check_novel_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *in
         }
     }
 
-    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) bam_t->novel=2;
+    if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) bam_t->all_iden=1;
     else {
         if (iden_n > 0) {
             if (check_intron(*bam_t, intron_map, I, intron_i, dis)) {
                 strcpy(bam_t->gname, anno_t.gname);
                 bam_t->novel=1;
-            } else bam_t->novel=3;
+            }
         } else {
-            bam_t->novel=0;
+            bam_t->all_novel=1;
         }
     }
     free(intron_map);
@@ -347,17 +347,16 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
 {
     int i=0, j=0, last_j=0, k=0, NOT_MERG=0;
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
-        //int x;
-        //if (strcmp(bam_T.t[i].tname, "m130614_000849_42175_c100535482550000001823081711101343_s1_p0/87730/ccs.path1")==0)
-            //x=i;
+        int x;
+        if (strcmp(bam_T.t[i].tname, "m130614_022816_42175_c100535482550000001823081711101344_s1_p0/5056/ccs.path1")==0)
+            x=i;
         if (NOT_MERG == 0 && merge_trans(bam_T.t[i], novel_T, dis)) { 
-            err_printf("merge: %s\n", bam_T.t[i].tname);
+            //err_printf("merge: %s\n", bam_T.t[i].tname);
             NOT_MERG = 0; i++; continue; 
         }
         if (bam_T.t[i].tid > anno_T.t[j].tid || (bam_T.t[i].tid == anno_T.t[j].tid && bam_T.t[i].start > anno_T.t[j].end)) {
             if (j == last_j) last_j++;
-            j++;
-            NOT_MERG=1;
+            j++; NOT_MERG=1;
         } else if (anno_T.t[j].tid > bam_T.t[i].tid || (anno_T.t[j].tid == bam_T.t[i].tid && anno_T.t[j].start > bam_T.t[i].end)) {
             // XXX
             set_full(bam_T.t+i, l);
@@ -366,7 +365,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
                 if (bam_T.t[i].novel == 1) {
                     add_read_trans(novel_T, bam_T.t[i]);
                     set_trans(novel_T->t+novel_T->trans_n-1, NULL);
-                } else if (uncla == 1 && bam_T.t[i].novel == 0) {
+                } else if (uncla == 1 && bam_T.t[i].all_novel == 1) {
                     add_read_trans(novel_T, bam_T.t[i]);
                     set_trans(novel_T->t+novel_T->trans_n-1, NULL);
                 }
@@ -376,8 +375,8 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
             if (I.intron_n > 0) check_novel_intron(bam_T.t+i, anno_T.t[j], I, &k, dis, l);
             else check_novel1(bam_T.t+i, anno_T.t[j], dis, l);
 
-            if (bam_T.t[i].novel == 2) {
-                err_printf("all-iden: %s\n", bam_T.t[i].tname);
+            if (bam_T.t[i].all_iden == 1) {
+                //err_printf("all-iden: %s\n", bam_T.t[i].tname);
                 NOT_MERG = 0; i++; j = last_j;
             } else {
                 NOT_MERG = 1; j++;
@@ -401,11 +400,16 @@ int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
                 set_trans(T->t+T->trans_n-1, NULL);
             }
             t->exon_n = 0;
-            char tag[10]="gene_id";
-            gtf_add_info(add_info, tag, gname);
-            strcpy(t->gname, gname);
+            //char tag[20]="gene_id";
+            //gtf_add_info(add_info, tag, gname); strcpy(t->gname, gname);
+            //strcpy(tag, "transcript_id");
+            //gtf_add_info(add_info, tag, gname); strcpy(t->tname, gname);
         } else if (strcmp(type, "exon") == 0) { // exon
             add_exon(t, bam_name2id(h, ref), start, end, is_rev);
+            char tag[20]="gene_id";
+            gtf_add_info(add_info, tag, gname); strcpy(t->gname, gname);
+            strcpy(tag, "transcript_id");
+            gtf_add_info(add_info, tag, gname); strcpy(t->tname, gname);
         }
     }
     if (t->exon_n != 0) {
@@ -454,6 +458,7 @@ int update_gtf(int argc, char *argv[])
                       break;
         }
     }
+    // XXX
     if (argc - optind != 2) return update_gtf_usage();
 
     samFile *in; bam_hdr_t *h; bam1_t *b; read_trans_t *anno_T, *bam_T, *novel_T;
@@ -467,7 +472,13 @@ int update_gtf(int argc, char *argv[])
     // read all gene
     read_anno_trans(gfp, h, anno_T);
     // read all transcript
+    
+    // XXX uncomment
     read_bam_trans(in, h, b, exon_min, bam_T);
+    //FILE *fp = fopen(argv[optind+2], "r");
+    //read_anno_trans(fp, h, bam_T);
+    // XXX
+     
     // read intron file
     read_intron_group(I, intron_fp);
     

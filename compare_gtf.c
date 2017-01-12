@@ -7,7 +7,7 @@
 int usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   comp_gtf 1.gtf 2.gtf\n\n");
+    err_printf("Usage:   comp_gtf 1.gtf 2.gtf dis\n\n");
 	err_printf("         1.gtf is smaller than 2.gtf\n");
 	err_printf("\n");
 	return 1;
@@ -78,9 +78,9 @@ int comp_gtf_intron(read_trans_t T, intron_group_t I)
 }
 
 // number of trans in T1 is less than T2
-int comp_gtf_core(read_trans_t T1, read_trans_t T2)
+int comp_gtf_core(read_trans_t T1, read_trans_t T2, int dis)
 {
-    int i, j, last_j = 0, iden=0, dis=0;
+    int i, j, last_j = 0, iden=0;
 
     for(i = 0; i < T2.trans_n; ++i)
         printf("all: %s\t%d\n", T2.t[i].tname, T2.t[i].cov);
@@ -166,13 +166,15 @@ int read_intron_group(intron_group_t *I, FILE *fp)
 #ifdef COMP_MAIN
 int main(int argc, char *argv[])
 {
-    if (argc != 3) return usage();
+    if (argc != 4) return usage();
     FILE *fp1 = fopen(argv[1], "r"), *fp2 = fopen(argv[2], "r");
+    int dis = atoi(argv[3]);
     read_trans_t *T1, *T2;
     T1 = read_trans_init(), T2 = read_trans_init();
     read_anno_trans1(T1, fp1); read_anno_trans1(T2, fp2);
 
-    comp_gtf_core(*T1, *T2);
+    err_printf("%d\n", dis);
+    comp_gtf_core(*T1, *T2, dis);
 
     read_trans_free(T1), read_trans_free(T2);
     fclose(fp1), fclose(fp2);
