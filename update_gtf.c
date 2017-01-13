@@ -25,9 +25,11 @@ extern int read_anno_trans1(read_trans_t *T, FILE *fp);
 int update_gtf_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s update-gtf [option] <in.bam> <old.gtf> > new.gtf\n\n", PROG);
+    err_printf("Usage:   %s update-gtf [option] <in.bam/in.gtf> <old.gtf> > new.gtf\n\n", PROG);
     err_printf("Notice:  the BAM and GTF files should be sorted in advance.\n\n");
     err_printf("Options:\n\n");
+    err_printf("         -m --input-mode  [STR]    format of input file <in.bam/in.gtf>, BAM file(b) or GTF file(g). [b]\n");
+    err_printf("         -b --bam         [STR]    for GTF input <in.gtf>, BAM file is needed to obtain BAM header information. [NULL]\n");
     err_printf("         -i --intron      [STR]    intron information file output by STAR(*.out.tab). [NONE]\n");
     err_printf("         -e --min-exon    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
     err_printf("         -d --distance    [INT]    consider same if distance between two splice site is not bigger than d. [%d]\n", SPLICE_DISTANCE);
@@ -59,6 +61,50 @@ void set_full(trans_t *t, int l)
         if (t->lfull == 1 && t->rfull == 1) t->full = 1;
         else t->full = 0;
     }
+}
+
+void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int s_novel[3], int trans_novel[10])
+{
+    int i, r, l;
+    // exon & splice junction level
+    //      novel exon          ||  novel splice junction
+    // comp | left | right | lr || comp | left | right | lr 
+    // transcript level
+    //     trans with novel exon     || trans with novel splice junction
+    // no | comp | left | right | lr || no | comp | left | right | lr
+    int trans_map[10]={1,0,0,0,0,1,0,0,0,0};
+    int s_l_num=0, s_r_num=0;
+    for (i = 0; i < bam_t.exon_n; ++i) {
+        r = l = 0;
+        if (check_b_iden(bam_t.novel_exon_map[i])) goto SJ;
+        trans_map[0]=0;
+        if (check_l_iden(bam_t.novel_exon_map[i])) l=1;
+        if (check_r_iden(bam_t.novel_exon_map[i])) r=1;
+        switch (l+r) {
+            case 0: e_novel[0]++; trans_map[1]=1; break;
+            case 1: if (l) { e_novel[1]++;  trans_map[2]=1; } else { e_novel[2]++; trans_map[3]=1; } break;
+            case 2: e_novel[3]++; trans_map[4]=1; break;
+            default: break;
+        }
+SJ:
+        if (i != bam_t.exon_n-1) {
+            r = l = 0;
+            if (check_b_iden(bam_t.novel_sj_map[i])) continue; 
+            trans_map[5]=0;
+            if (check_l_iden(bam_t.novel_sj_map[i])) l=1; else s_l_num++;
+            if (check_r_iden(bam_t.novel_sj_map[i])) r=1; else s_r_num++;
+            switch (l+r) {
+                case 0: j_novel[0]++; trans_map[6]=1; break;
+                case 1: if (l) { j_novel[1]++; trans_map[7]=1; } else { j_novel[2]++; trans_map[8]=1; } break;
+                case 2: j_novel[3]++; trans_map[9]=1; break;
+                default: break;
+            }
+        }
+    }
+    for (i = 0; i < 10; ++i) trans_novel[i] += trans_map[i];
+    if (s_l_num+s_r_num >= 2) s_novel[2]++;
+    else if (s_l_num==1) s_novel[0]++;
+    else if (s_r_num==1) s_novel[1]++;
 }
 
 int check_full(trans_t *t, trans_t anno_t, int level)
@@ -147,6 +193,73 @@ int check_full(trans_t *t, trans_t anno_t, int level)
     return 0;
 }
 
+void check_exon_junction(trans_t *bam_t, trans_t anno_t, int dis, int *iden_n, int *iden_intron_n, int *not_iden_iden, int *intron_map)
+{
+    int i,j, left=0,right=0, last_j=-1;
+    *iden_n=0, *iden_intron_n = 0, *not_iden_iden=0;
+    if (bam_t->is_rev) { // '-' strand
+        for (i = 0; i < bam_t->exon_n; ++i) {
+            for (j = 0; j < anno_t.exon_n; ++j) {
+                // for exon
+                if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left = 1;
+                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) right = 1;
+                if (left) set_l_iden(bam_t->novel_exon_map[i]);
+                if (right) set_r_iden(bam_t->novel_exon_map[i]);
+                if (left && right) set_b_iden(bam_t->novel_exon_map[i]);
+                left = right = 0;
+                // for junction
+                if (i != bam_t->exon_n-1 && j != anno_t.exon_n-1) {
+                    if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left=1;
+                    if (abs(bam_t->exon[i+1].end - anno_t.exon[j+1].end) <= dis) right=1;
+                    if (left) set_l_iden(bam_t->novel_sj_map[i]);
+                    if (right) set_r_iden(bam_t->novel_sj_map[i]);
+                    if (left && right) {
+                        set_b_iden(bam_t->novel_sj_map[i]);
+
+                        if (last_j != -1 && j != last_j+1) *not_iden_iden = 1;
+                        last_j = j; *iden_intron_n += 1;
+                        if (intron_map) intron_map[i] = 1;
+                    }
+                    *iden_n += (left+right);
+
+                    left = right = 0;
+                    if (anno_t.exon[j+1].end < bam_t->exon[i+1].end) break;
+                }
+            }
+        }
+    } else { // '+' strand
+        for (i = 0; i < bam_t->exon_n; ++i) {
+            for (j = 0; j < anno_t.exon_n; ++j) {
+                // for exon
+                if (abs(bam_t->exon[i].start-anno_t.exon[j].start) <= dis) left = 1;
+                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) right = 1;
+                if (left) set_l_iden(bam_t->novel_exon_map[i]);
+                if (right) set_r_iden(bam_t->novel_exon_map[i]);
+                if (left && right) set_b_iden(bam_t->novel_exon_map[i]);
+                left = right = 0;
+                // for junction
+                if (i != bam_t->exon_n-1 && j != anno_t.exon_n-1) {
+                    if (abs(bam_t->exon[i].end-anno_t.exon[j].end) <= dis) left = 1;
+                    if (abs(bam_t->exon[i+1].start-anno_t.exon[j+1].start) <= dis) right= 1;
+                    if (left) set_l_iden(bam_t->novel_sj_map[i]);
+                    if (right) set_r_iden(bam_t->novel_sj_map[i]);
+                    if (left && right) {
+                        set_b_iden(bam_t->novel_sj_map[i]);
+
+                        if (last_j != -1 && j != last_j+1) *not_iden_iden = 1;
+                        last_j = j; *iden_intron_n += 1;
+                        if (intron_map) intron_map[i] = 1;
+                    }
+                    *iden_n += (left+right);
+
+                    left = right = 0;
+                    if (anno_t.exon[j+1].start > bam_t->exon[i+1].start) break;
+                }
+            }
+        }
+    }
+}
+
 // check if t is novel and has identical splice site
 // if t has all identical splice sites with other novel t, merge two ends
 // @return value
@@ -161,41 +274,10 @@ int check_novel1(trans_t *bam_t, trans_t anno_t, int dis, int l)
     check_full(bam_t, anno_t, l);
 
     // check novel
-    int left=0,right=0, last_j=-1;
-    int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0;
-    if (bam_t->is_rev) { // '-' strand
-        for (i = 0; i < bam_t->exon_n-1; ++i) {
-            for (j = 0; j < anno_t.exon_n-1; ++j) {
-                if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left=1;
-                if (abs(bam_t->exon[i+1].end - anno_t.exon[j+1].end) <= dis) right=1;
-                if (left+right==2) {
-                    if (last_j != -1 && j != last_j+1) not_iden_iden = 1;
-                    last_j = j;
-                    iden_intron_n += 1;
-                }
-                iden_n += (left+right);
-                left=right=0;
-
-                if (anno_t.exon[j+1].end < bam_t->exon[i+1].end) break;
-            }
-        }
-    } else { // '+' strand
-        for (i = 0; i < bam_t->exon_n-1; ++i) {
-            for (j = 0; j < anno_t.exon_n-1; ++j) {
-                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) left=1;
-                if (abs(anno_t.exon[j+1].start - bam_t->exon[i+1].start) <= dis) right=1;
-                if (left+right==2) {
-                    if (last_j != -1 && j != last_j+1) not_iden_iden = 1;
-                    last_j = j;
-                    iden_intron_n += 1;
-                }
-                iden_n += (left+right);
-                left=right=0;
-
-                if (anno_t.exon[j+1].start > bam_t->exon[i+1].start) break;
-            }
-        }
-    }
+    int iden_n=0, iden_intron_n=0, not_iden_iden=0;
+    check_exon_junction(bam_t, anno_t, dis, &iden_n, &iden_intron_n, &not_iden_iden, NULL);
+   
+    // analyse check result
     if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) bam_t->all_iden=1;
     else if (iden_n > 0) {
         strcpy(bam_t->gname, anno_t.gname);
@@ -250,45 +332,12 @@ int check_novel_intron(trans_t *bam_t, trans_t anno_t, intron_group_t I, int *in
     // check full-length
     check_full(bam_t, anno_t, l);
 
-    int left=0,right=0, last_j=-1;
-    int i, j, iden_n=0, iden_intron_n = 0, not_iden_iden=0;
+    // check novel
+    int iden_n=0, iden_intron_n = 0, not_iden_iden=0;
     int *intron_map = (int*)_err_calloc((bam_t->exon_n-1), sizeof(int));
-    if (bam_t->is_rev) { // '-' strand
-        for (i = 0; i < bam_t->exon_n-1; ++i) {
-            for (j = 0; j < anno_t.exon_n-1; ++j) {
-                if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left=1;
-                if (abs(bam_t->exon[i+1].end - anno_t.exon[j+1].end) <= dis) right=1;
-                if (left+right==2) {
-                    if (last_j != -1 && j != last_j+1) not_iden_iden = 1;
-                    last_j = j;
-                    iden_intron_n += 1;
-                    intron_map[i] = 1;
-                }
-                iden_n += (left+right);
-                left=right=0;
+    check_exon_junction(bam_t, anno_t, dis, &iden_n, &iden_intron_n, &not_iden_iden, intron_map);
 
-                if (anno_t.exon[j+1].end < bam_t->exon[i+1].end) break;
-            }
-        }
-    } else { // '+' strand
-        for (i = 0; i < bam_t->exon_n-1; ++i) {
-            for (j = 0; j < anno_t.exon_n-1; ++j) {
-                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) left=1;
-                if (abs(anno_t.exon[j+1].start - bam_t->exon[i+1].start) <= dis) right=1;
-                if (left+right==2) {
-                    if (last_j != -1 && j != last_j+1) not_iden_iden = 1;
-                    last_j = j;
-                    iden_intron_n += 1;
-                    intron_map[i] = 1;
-                }
-                iden_n += (left+right);
-                left=right=0;
-
-                if (anno_t.exon[j+1].start > bam_t->exon[i+1].start) break;
-            }
-        }
-    }
-
+    // analyse check result
     if (iden_intron_n == bam_t->exon_n-1 && not_iden_iden == 0) bam_t->all_iden=1;
     else {
         if (iden_n > 0) {
@@ -346,6 +395,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
                       int uncla, int dis, int l, read_trans_t *novel_T)
 {
     int i=0, j=0, last_j=0, k=0, NOT_MERG=0;
+    int e_novel[4]={0,0,0,0}, j_novel[4]={0,0,0,0}, s_novel[3]={0,0,0}, trans_novel[10]={0,0,0,0,0,0,0,0,0,0};
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
         int x;
         if (strcmp(bam_T.t[i].tname, "m130614_022816_42175_c100535482550000001823081711101344_s1_p0/5056/ccs.path1")==0)
@@ -365,6 +415,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
                 if (bam_T.t[i].novel == 1) {
                     add_read_trans(novel_T, bam_T.t[i]);
                     set_trans(novel_T->t+novel_T->trans_n-1, NULL);
+                    cal_novel_exon_junction(bam_T.t[i], e_novel, j_novel, s_novel, trans_novel);
                 } else if (uncla == 1 && bam_T.t[i].all_novel == 1) {
                     add_read_trans(novel_T, bam_T.t[i]);
                     set_trans(novel_T->t+novel_T->trans_n-1, NULL);
@@ -383,6 +434,17 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
             }
         }
     }
+    err_printf("exon & splice-junction & splice site level\n");
+    err_printf("  novel exon\n");
+    err_printf("\tcompl novel: %d\n\tleft novel: %d\n\tright novel: %d\n\tlr novel: %d\n", e_novel[0], e_novel[1], e_novel[2], e_novel[3]);
+    err_printf("  novel splice-junction\n");
+    err_printf("\tcompl novel: %d\n\tleft novel: %d\n\tright novel: %d\n\tlr novel: %d\n", j_novel[0], j_novel[1], j_novel[2], j_novel[3]);
+    err_printf("  transcript with novel exon\n");
+    err_printf("\tno novel: %d\n\tcompl novel: %d\n\tleft novel: %d\n\tright novel: %d\n\tlr novel: %d\n", trans_novel[0], trans_novel[1], trans_novel[2], trans_novel[3], trans_novel[4]);
+    err_printf("  transcript with novel splice-junction\n");
+    err_printf("\tno novel: %d\n\tcompl novel: %d\n\tleft novel: %d\n\tright novel: %d\n\tlr novel: %d\n", trans_novel[5], trans_novel[6], trans_novel[7], trans_novel[8], trans_novel[9]);
+    err_printf("  transcript with novel splice-site\n");
+    err_printf("\tno novel: %d\n\tone left novel: %d\n\tone right novel: %d\n\ttwo or more novel: %d\n", trans_novel[5]+trans_novel[9], s_novel[0], s_novel[1], s_novel[2]);
     return 0;
 }
 
@@ -398,6 +460,12 @@ int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
             if (t->exon_n > 1) {
                 add_read_trans(T, *t);
                 set_trans(T->t+T->trans_n-1, NULL);
+                // for bam_trans
+                T->t[T->trans_n-1].novel_exon_map = (uint8_t*)calloc(t->exon_n, sizeof(uint8_t));
+                T->t[T->trans_n-1].novel_sj_map = (uint8_t*)calloc(t->exon_n-1, sizeof(uint8_t));
+                T->t[T->trans_n-1].lfull = 0, T->t[T->trans_n-1].lnoth = 1, T->t[T->trans_n-1].rfull = 0, T->t[T->trans_n-1].rnoth = 1;
+                T->t[T->trans_n-1].novel=0, T->t[T->trans_n-1].all_novel=0, T->t[T->trans_n-1].all_iden=0;
+
             }
             t->exon_n = 0;
             //char tag[20]="gene_id";
@@ -415,12 +483,19 @@ int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
     if (t->exon_n != 0) {
         add_read_trans(T, *t);
         set_trans(T->t+T->trans_n-1, NULL);
+        // for bam_trans
+        T->t[T->trans_n-1].novel_exon_map = (uint8_t*)calloc(t->exon_n, sizeof(uint8_t));
+        T->t[T->trans_n-1].novel_sj_map = (uint8_t*)calloc(t->exon_n-1, sizeof(uint8_t));
+        T->t[T->trans_n-1].lfull = 0, T->t[T->trans_n-1].lnoth = 1, T->t[T->trans_n-1].rfull = 0, T->t[T->trans_n-1].rnoth = 1;
+        T->t[T->trans_n-1].novel=0, T->t[T->trans_n-1].all_novel=0, T->t[T->trans_n-1].all_iden=0;
     }
     trans_free(t);
     return T->trans_n;
 }
 
 const struct option update_long_opt [] = {
+    { "input-mode", 1, NULL, 'm' },
+    { "bam", 1, NULL, 'b' },
     { "intron", 1, NULL, 'i' },
     { "min-exon", 1, NULL, 'e' },
     { "distance", 1, NULL, 'd' },
@@ -433,10 +508,12 @@ const struct option update_long_opt [] = {
 
 int update_gtf(int argc, char *argv[])
 {
-    int c; int exon_min = INTER_EXON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[100]="NONE"; FILE *new_gfp=stdout, *full_gfp=NULL, *intron_fp=NULL;
-	while ((c = getopt_long(argc, argv, "i:e:d:l:us:f:", update_long_opt, NULL)) >= 0) {
+    int c; int mode=0, exon_min = INTER_EXON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[100]="NONE", bamfn[100]; FILE *new_gfp=stdout, *full_gfp=NULL, *intron_fp=NULL;
+	while ((c = getopt_long(argc, argv, "m:b:i:e:d:l:us:f:", update_long_opt, NULL)) >= 0) {
         switch(c)
         {
+            case 'm': if (optarg[0] == 'b') mode=0; else if (optarg[0] == 'g') mode=1; else return update_gtf_usage();
+            case 'b': strcpy(bamfn, optarg); break;
             case 'i': if ((intron_fp = fopen(optarg, "r")) == NULL) {
                           err_fatal(__func__, "Can not open intron file \"%s\"\n", optarg);
                           return update_gtf_usage();
@@ -461,34 +538,40 @@ int update_gtf(int argc, char *argv[])
     // XXX
     if (argc - optind != 2) return update_gtf_usage();
 
-    samFile *in; bam_hdr_t *h; bam1_t *b; read_trans_t *anno_T, *bam_T, *novel_T;
-    if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
-    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
-    b = bam_init1(); 
-    anno_T = read_trans_init(); bam_T = read_trans_init(); novel_T = read_trans_init();
-    intron_group_t *I = intron_group_init();
+    read_trans_t *anno_T, *bam_T, *novel_T;
+    anno_T = read_trans_init(); bam_T = read_trans_init(); novel_T = read_trans_init(); 
+    intron_group_t *I; I = intron_group_init();
+
+    // read all input-transcript
+    samFile *in; bam_hdr_t *h; 
+    if (mode == 0) { // bam input
+        bam1_t *b;     
+        if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
+        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
+        b = bam_init1(); 
+        read_bam_trans(in, h, b, exon_min, bam_T);
+        bam_destroy1(b);
+    } else { // gtf input
+        if ((in = sam_open(bamfn, "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", bamfn);
+        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", bamfn);
+        FILE *fp = fopen(argv[optind], "r");
+        read_anno_trans(fp, h, bam_T);
+    }
 
     FILE *gfp = fopen(argv[optind+1], "r");
-    // read all gene
+    // read all anno-transcript
     read_anno_trans(gfp, h, anno_T);
-    // read all transcript
-    
-    // XXX uncomment
-    read_bam_trans(in, h, b, exon_min, bam_T);
-    //FILE *fp = fopen(argv[optind+2], "r");
-    //read_anno_trans(fp, h, bam_T);
-    // XXX
-     
     // read intron file
     read_intron_group(I, intron_fp);
     
     // merge loop
     check_novel_trans(*bam_T, *anno_T, *I, uncla, dis, l, novel_T);
 
-    // print
+    // print novel transcript
     print_read_trans(*novel_T, h, src, new_gfp);
 
-    read_trans_free(anno_T); read_trans_free(bam_T); read_trans_free(novel_T); intron_group_free(I);
-    bam_destroy1(b); bam_hdr_destroy(h); sam_close(in); fclose(gfp); if(full_gfp) fclose(full_gfp); if (intron_fp) fclose(intron_fp);
+    novel_read_trans_free(bam_T); novel_read_trans_free(anno_T); 
+    read_trans_free(novel_T); intron_group_free(I);
+    bam_hdr_destroy(h); sam_close(in); fclose(gfp); if(full_gfp) fclose(full_gfp); if (intron_fp) fclose(intron_fp);
     return 0;
 }

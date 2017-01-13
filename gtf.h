@@ -42,16 +42,24 @@ typedef struct {
     int32_t start, end; //1-based, ref
 } exon_t;
 
+#define set_l_iden(map) (map |= 0x4)
+#define set_r_iden(map) (map |= 0x2)
+#define set_b_iden(map) (map |= 0x1)
+
+#define check_l_iden(map) (map & 0x4)
+#define check_r_iden(map) (map & 0x2)
+#define check_b_iden(map) (map & 0x1)
+
 typedef struct {
     exon_t *exon; int exon_n, exon_m;
-    int *novel_exon_map, *novel_sj_map;
+    uint8_t *novel_exon_map, *novel_sj_map; // 3-bit map: l-iden | r-iden | both-iden
     int32_t tid; uint32_t is_rev;
     int32_t start, end;
     char tname[100];
     char gname[100];
     int novel_gene_flag, cov;
     uint8_t full, lfull, lnoth, rfull, rnoth; 
-    uint8_t novel, all_novel, all_iden;// novel: 0-all-novel, 1-novel, 2-identical, 3-other
+    uint8_t novel, all_novel, all_iden;
 } trans_t;
 
 typedef struct {
@@ -92,6 +100,7 @@ void trans_free(trans_t *t);
 read_trans_t *read_trans_init(void);
 void add_read_trans(read_trans_t *r, trans_t t);
 read_trans_t *read_trans_realloc(read_trans_t *r);
+void novel_read_trans_free(read_trans_t *r);
 void read_trans_free(read_trans_t *r);
 //int set_read_trans(read_trans_t *r);
 

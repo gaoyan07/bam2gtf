@@ -88,6 +88,9 @@ int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_tran
     while (sam_ret >= 0) {
         gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
         add_read_trans(T, *t); set_trans(T->t+T->trans_n-1, bam_get_qname(b));
+        // for bam_trans
+        T->t[T->trans_n-1].novel_exon_map = (uint8_t*)calloc(t->exon_n, sizeof(uint8_t));
+        T->t[T->trans_n-1].novel_sj_map = (uint8_t*)calloc(t->exon_n-1, sizeof(uint8_t));
         strcpy(T->t[T->trans_n-1].gname, "UNCLASSIFIED");
         T->t[T->trans_n-1].lfull = 0, T->t[T->trans_n-1].lnoth = 1, T->t[T->trans_n-1].rfull = 0, T->t[T->trans_n-1].rnoth = 1;
         T->t[T->trans_n-1].novel=0, T->t[T->trans_n-1].all_novel=0, T->t[T->trans_n-1].all_iden=0;

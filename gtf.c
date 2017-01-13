@@ -123,6 +123,17 @@ read_trans_t *read_trans_realloc(read_trans_t *r)
     return r;
 }
 
+void novel_read_trans_free(read_trans_t *r)
+{
+    int i;
+    for (i = 0; i < r->trans_m; ++i) { 
+        free(r->t[i].exon); 
+        free(r->t[i].novel_exon_map);
+        free(r->t[i].novel_sj_map);
+    }
+    free(r->t); free(r);
+}
+
 void read_trans_free(read_trans_t *r)
 {
     int i;
