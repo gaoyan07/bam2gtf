@@ -63,7 +63,7 @@ void set_full(trans_t *t, int l)
     }
 }
 
-void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int s_novel[3], int trans_novel[10])
+void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int s_novel[4], int trans_novel[10])
 {
     int i, r, l;
     // exon & splice junction level
@@ -105,6 +105,7 @@ SJ:
     if (s_l_num+s_r_num >= 2) s_novel[2]++;
     else if (s_l_num==1) s_novel[0]++;
     else if (s_r_num==1) s_novel[1]++;
+    else if (s_l_num == 0 && s_r_num == 0) s_novel[3]++;
 }
 
 int check_full(trans_t *t, trans_t anno_t, int level)
@@ -201,8 +202,8 @@ void check_exon_junction(trans_t *bam_t, trans_t anno_t, int dis, int *iden_n, i
         for (i = 0; i < bam_t->exon_n; ++i) {
             for (j = 0; j < anno_t.exon_n; ++j) {
                 // for exon
-                if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left = 1;
-                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) right = 1;
+                if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis || i==bam_t->exon_n-1) left = 1;
+                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis || i==0) right = 1;
                 if (left) set_l_iden(bam_t->novel_exon_map[i]);
                 if (right) set_r_iden(bam_t->novel_exon_map[i]);
                 if (left && right) set_b_iden(bam_t->novel_exon_map[i]);
@@ -231,8 +232,8 @@ void check_exon_junction(trans_t *bam_t, trans_t anno_t, int dis, int *iden_n, i
         for (i = 0; i < bam_t->exon_n; ++i) {
             for (j = 0; j < anno_t.exon_n; ++j) {
                 // for exon
-                if (abs(bam_t->exon[i].start-anno_t.exon[j].start) <= dis) left = 1;
-                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis) right = 1;
+                if (abs(bam_t->exon[i].start-anno_t.exon[j].start) <= dis || i==0) left = 1;
+                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis || i==bam_t->exon_n-1) right = 1;
                 if (left) set_l_iden(bam_t->novel_exon_map[i]);
                 if (right) set_r_iden(bam_t->novel_exon_map[i]);
                 if (left && right) set_b_iden(bam_t->novel_exon_map[i]);
@@ -395,7 +396,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
                       int uncla, int dis, int l, read_trans_t *novel_T)
 {
     int i=0, j=0, last_j=0, k=0, NOT_MERG=0;
-    int e_novel[4]={0,0,0,0}, j_novel[4]={0,0,0,0}, s_novel[3]={0,0,0}, trans_novel[10]={0,0,0,0,0,0,0,0,0,0};
+    int e_novel[4]={0,0,0,0}, j_novel[4]={0,0,0,0}, s_novel[4]={0,0,0,0}, trans_novel[10]={0,0,0,0,0,0,0,0,0,0};
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
         int x;
         if (strcmp(bam_T.t[i].tname, "m130614_022816_42175_c100535482550000001823081711101344_s1_p0/5056/ccs.path1")==0)
@@ -439,12 +440,13 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
     err_printf("\tcompl novel: %d\n\tleft novel: %d\n\tright novel: %d\n\tlr novel: %d\n", e_novel[0], e_novel[1], e_novel[2], e_novel[3]);
     err_printf("  novel splice-junction\n");
     err_printf("\tcompl novel: %d\n\tleft novel: %d\n\tright novel: %d\n\tlr novel: %d\n", j_novel[0], j_novel[1], j_novel[2], j_novel[3]);
+    err_printf("transcript level\n");
     err_printf("  transcript with novel exon\n");
     err_printf("\tno novel: %d\n\tcompl novel: %d\n\tleft novel: %d\n\tright novel: %d\n\tlr novel: %d\n", trans_novel[0], trans_novel[1], trans_novel[2], trans_novel[3], trans_novel[4]);
     err_printf("  transcript with novel splice-junction\n");
     err_printf("\tno novel: %d\n\tcompl novel: %d\n\tleft novel: %d\n\tright novel: %d\n\tlr novel: %d\n", trans_novel[5], trans_novel[6], trans_novel[7], trans_novel[8], trans_novel[9]);
     err_printf("  transcript with novel splice-site\n");
-    err_printf("\tno novel: %d\n\tone left novel: %d\n\tone right novel: %d\n\ttwo or more novel: %d\n", trans_novel[5]+trans_novel[9], s_novel[0], s_novel[1], s_novel[2]);
+    err_printf("\tno novel: %d\n\tone left novel: %d\n\tone right novel: %d\n\ttwo or more novel: %d\n", s_novel[3], s_novel[0], s_novel[1], s_novel[2]);
     return 0;
 }
 

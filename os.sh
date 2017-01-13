@@ -12,6 +12,8 @@ snyder=~/data/bam2gtf/snyder.sort.gtf
 dis=0
 for ((i=1; i<=5; ++i))
 do
-    #./gtools update-gtf -i $intron $bam $old_gtf -d $dis -l $i > $dir/l$i.gtf 2> $dir/l$i.err
+    echo "./gtools update-gtf -i $intron $bam $old_gtf -d $dis -l $i > $dir/l$i.gtf 2> $dir/l$i.err"
+    ./gtools update-gtf -i $intron $bam $old_gtf -d $dis -l $i > $dir/l$i.gtf 2> $dir/l$i.err
+    echo "./comp-gtf $snyder $dir/l$i.gtf $dis > $dir/comp$i.out 2> $dir/comp$i.un"
     ./comp-gtf $snyder $dir/l$i.gtf $dis > $dir/comp$i.out 2> $dir/comp$i.un
 done
