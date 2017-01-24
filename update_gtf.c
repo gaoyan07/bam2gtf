@@ -160,18 +160,14 @@ int check_full(trans_t *t, trans_t anno_t, int level)
         }
         if (t->rfull == 0) {
             if (t->is_rev) {
-                if (exon_overlap(t->exon[0], anno_t.exon[0])) t->rfull = 1;
-                else { // overlap nothing
-                    for (ii = 1; ii < anno_t.exon_n; ++ii) {
-                        if (exon_overlap(t->exon[0], anno_t.exon[ii])) { t->rnoth=0; break; }
-                    }
-                }
+                i = 0, j = 0;
             } else {
-                if (exon_overlap(t->exon[i], anno_t.exon[j])) t->rfull = 1;
-                else { // overlap nothing
-                    for (ii = 0; ii < anno_t.exon_n-1; ++ii) {
-                        if (exon_overlap(t->exon[i], anno_t.exon[ii])) { t->rnoth=0; break; }
-                    }
+                i = t->exon_n-1, j = anno_t.exon_n-1;
+            }
+            if (exon_overlap(t->exon[i], anno_t.exon[j])) t->rfull = 1;
+            else { // overlap nothing
+                for (ii = 0; ii < anno_t.exon_n; ++ii) {
+                    if (exon_overlap(t->exon[i], anno_t.exon[ii])) { t->rnoth=0; break; }
                 }
             }
         }

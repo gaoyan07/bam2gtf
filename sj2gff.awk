@@ -7,7 +7,7 @@ BEGIN{
 {
     if ($4 == 1) strand="+"
     else strand="-"
-    id="SJ \""NR"\""
+    id="SJ."NR""
 
     print $1, name, "exon", $2-5, $2-1, ".", strand, ".", id
     print $1, name, "exon", $3+1, $3+5, ".", strand, ".", id

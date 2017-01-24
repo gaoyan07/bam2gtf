@@ -8,5 +8,4 @@ while line:
     if (line.split("\t")[2] == 'transcript'):
         print re.split("\t|\"", line)[11][:-6]
     line=fp.readline()
-
 fp.close()

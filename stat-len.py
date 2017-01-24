@@ -37,17 +37,29 @@ for i in range(NUM):
         line=fp.readline()
     fp.close()
 
+#for i in range(NUM-2, -1, -1):
+#    for j in range(len(outname[i])):
+#        if (not (outname[i][j] in outname[i+1])):
+#            print i, outname[i][j]
+
 # diff cater
 for i in range(NUM-1, 0, -1):
     for j in range(len(outname[i])):
         if (not (outname[i][j] in outname[i-1])):
-            outlen[i].append(leng[name.index(outname[i][j])])
+            if outname[i][j] in name:
+                outlen[i].append(leng[name.index(outname[i][j])])
+            else :
+                print outname[i][j]
+                
 for i in range(len(outname[0])):
+    if outname[0][i] in name:
         outlen[0].append(leng[name.index(outname[0][i])])
+    else :
+        print outname[0][i]
 
 # output
 for i in range(NUM):
-    fp=open('l'+str(i+1)+'.len', "w")
+    fp=open(sys.argv[3+i]+'.len', "w")
     for j in range(len(outlen[i])):
         fp.write(str(outlen[i][j])+'\n')
     fp.close()

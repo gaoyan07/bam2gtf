@@ -57,17 +57,17 @@ int rRNA_overlap(bam1_t *b, read_trans_t *r)
     return 0;
 }
 
-int gtf_filter(bam1_t *b, int *score, int intron_n, float cov_rate, float map_qual, read_trans_t *r)
+int gtf_filter(bam1_t *b, int *score, int *intron_n, float cov_rate, float map_qual, read_trans_t *r)
 {
     if (bam_unmap(b)) return 1;
     uint32_t *c = bam_get_cigar(b), n_c = b->core.n_cigar;
     // intron number
-    uint32_t i;
+    uint32_t i, del_len=0;
+    *intron_n=0;
     for (i = 0; i < n_c; ++i) {
-        if (bam_cigar_op(c[i]) == BAM_CREF_SKIP) intron_n--;
-        if (intron_n <= 0) break;
+        if (bam_cigar_op(c[i]) == BAM_CREF_SKIP) (*intron_n)++;
+        else if (bam_cigar_op(c[i]) == BAM_CDEL) del_len+= bam_cigar_oplen(c[i]);
     }
-    if (intron_n > 0) return 1;
     // cover len/rate
     int cigar_qlen = b->core.l_qseq;
     int op0 = bam_cigar_op(c[0]), op1 = bam_cigar_op(c[n_c-1]);
@@ -78,9 +78,9 @@ int gtf_filter(bam1_t *b, int *score, int intron_n, float cov_rate, float map_qu
     uint8_t *p = bam_aux_get(b, "NM"); // Edit Distance
     int ed; 
     ed = bam_aux2i(p);
-    if (cigar_qlen - ed < map_qual * cigar_qlen) return 1;
+    if ((cigar_qlen - ed + del_len) < map_qual * cigar_qlen) return 1;
     if (rRNA_overlap(b, r)) return 1;
-    *score = cigar_qlen - ed;
+    *score = (cigar_qlen - ed + del_len);
     return 0;
 }
 
@@ -94,14 +94,14 @@ const struct option filter_long_opt [] = {
 
 int bam_filter(int argc, char *argv[])
 {
-    int c; float cov_rat=COV_RATIO, map_qual = MAP_QUAL, sec_rat=SEC_RATIO; int intron_n = MIN_INTRON_NUM;
+    int c; float cov_rat=COV_RATIO, map_qual = MAP_QUAL, sec_rat=SEC_RATIO; int min_intron_n = MIN_INTRON_NUM;
     int cnt=0;
     while ((c = getopt_long(argc, argv, "v:q:s:i:", filter_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'v': cov_rat = atof(optarg); break;
             case 'q': map_qual = atof(optarg); break;
             case 's': sec_rat = atof(optarg); break;
-            case 'i': intron_n = atoi(optarg); break;
+            case 'i': min_intron_n = atoi(optarg); break;
             default : return filter_usage();
         }
     }
@@ -109,7 +109,7 @@ int bam_filter(int argc, char *argv[])
     if (argc - optind != 2) return filter_usage();
 
     samFile *in, *out; bam_hdr_t *h; bam1_t *b;
-    bam1_t *best_b; int b_score=0, s_score=0, score;
+    bam1_t *best_b; int b_score=0, s_score=0, score, b_intron_n, intron_n;
     if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1();  best_b = bam_init1();
@@ -125,7 +125,7 @@ int bam_filter(int argc, char *argv[])
     while (sam_read1(in, h, b) >= 0) {
         //if (strcmp(bam_get_qname(b), "m130614_022816_42175_c100535482550000001823081711101344_s1_p0/41525/ccs") == 0)
             //c=0;
-        if (gtf_filter(b, &score, intron_n, cov_rat, map_qual, r)) continue;
+        if (gtf_filter(b, &score, &intron_n, cov_rat, map_qual, r)) continue;
 
         if (strcmp(bam_get_qname(b), lqname) == 0) {
             id++;
@@ -134,21 +134,26 @@ int bam_filter(int argc, char *argv[])
                 best_id = id;
                 s_score = b_score;
                 b_score = score;
+                b_intron_n = intron_n;
             } else if (score > s_score)
                 s_score = score;
         } else { 
-            if (strcmp(lqname, "\0") != 0 && s_score < sec_rat * b_score) {
+            if (strcmp(lqname, "\0") != 0 && s_score < sec_rat * b_score && b_intron_n >= min_intron_n) {
                 add_pathid(best_b, best_id);
                 if (sam_write1(out, h, best_b) < 0) err_fatal_simple("Error in writing SAM record\n");
                 cnt++;
             }
             bam_copy1(best_b, b);
-            b_score = score; s_score = 0;
+            b_score = score; s_score = 0; b_intron_n=intron_n;
             best_id = id = 1;
             strcpy(lqname, bam_get_qname(b)); 
         }
     }
-
+    if (strcmp(lqname, "\0") != 0 && s_score < sec_rat * b_score && b_intron_n >= min_intron_n) {
+        add_pathid(best_b, best_id);
+        if (sam_write1(out, h, best_b) < 0) err_fatal_simple("Error in writing SAM record\n");
+        cnt++;
+    }
     err_printf("Filtered alignments: %d\n", cnt);
     bam_destroy1(b); bam_destroy1(best_b); bam_hdr_destroy(h); sam_close(in); sam_close(out);
     read_trans_free(r);    
