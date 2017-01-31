@@ -77,7 +77,8 @@ void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int 
     for (i = 0; i < bam_t.exon_n; ++i) {
         r = l = 0;
         if (check_b_iden(bam_t.novel_exon_map[i])) {
-            err_printf("anno-el\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
+            if (i!=0 && i != bam_t.exon_n-1)
+                err_printf("anno-el\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
             goto SJ;
         }
         trans_map[0]=0;
@@ -89,7 +90,8 @@ void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int 
             case 2: e_novel[3]++; trans_map[4]=1; err_printf("lr-novel"); break;
             default: break;
         }
-        err_printf("-el\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
+        if (i!=0 && i!= bam_t.exon_n-1) err_printf("-el\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
+        else err_printf("\n");
 SJ:
         if (i != bam_t.exon_n-1) {
             r = l = 0;
