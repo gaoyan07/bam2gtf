@@ -173,8 +173,10 @@ void add_intron(intron_group_t *i, intron_t i1)
     i->intron[i->intron_n].is_rev = i1.is_rev;
     i->intron[i->intron_n].start = i1.start;
     i->intron[i->intron_n].end = i1.end;
-    i->intron[i->intron_n].is_anno = i1.is_anno;
     i->intron[i->intron_n].is_canon = i1.is_canon;
+    i->intron[i->intron_n].is_anno = i1.is_anno;
+    i->intron[i->intron_n].uniq_c = i1.uniq_c;
+    i->intron[i->intron_n].multi_c = i1.multi_c;
     i->intron_n++;
 }
 

@@ -81,11 +81,12 @@ void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int 
         if (check_l_iden(bam_t.novel_exon_map[i])) l=1;
         if (check_r_iden(bam_t.novel_exon_map[i])) r=1;
         switch (l+r) {
-            case 0: e_novel[0]++; trans_map[1]=1; break;
-            case 1: if (l) { e_novel[1]++;  trans_map[2]=1; } else { e_novel[2]++; trans_map[3]=1; } break;
-            case 2: e_novel[3]++; trans_map[4]=1; break;
+            case 0: e_novel[0]++; trans_map[1]=1; err_printf("comp-novel"); break;
+            case 1: if (l) { e_novel[1]++;  trans_map[2]=1; err_printf("left-novel");} else { e_novel[2]++; trans_map[3]=1; err_printf("right-novel");} break;
+            case 2: e_novel[3]++; trans_map[4]=1; err_printf("lr-novel"); break;
             default: break;
         }
+        err_printf("-el\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
 SJ:
         if (i != bam_t.exon_n-1) {
             r = l = 0;

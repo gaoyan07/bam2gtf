@@ -157,6 +157,7 @@ int read_intron_group(intron_group_t *I, FILE *fp)
         sscanf(line, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d", ref, &start, &end, &nstrand, &canon, &anno, &uniq_map, &multi_map, &overlang);
         i->tid = name2id(ref); i->start = start, i->end = end;
         i->is_rev = (nstrand == 1 ? 0 : (nstrand == 2 ? 1 : -1)); i->is_canon = canon;
+        i->uniq_c = uniq_map; i->multi_c = multi_map;
         add_intron(I, *i);
     }
     free(i);

@@ -65,7 +65,8 @@ typedef struct {
 typedef struct {
     int32_t tid; uint8_t is_rev;
     int32_t start, end; //1-based, ref
-    uint8_t is_anno, is_canon;
+    uint8_t is_canon, is_anno;
+    int32_t uniq_c, multi_c;
 } intron_t;
 
 typedef struct {
