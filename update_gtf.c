@@ -105,6 +105,12 @@ SJ:
             }
         }
     }
+    char msg[10][20] = { "no-novel-exon", "comp-novel-exon", "left-novel-exon", "right-novel-exon", "lr-novel-exon",
+        "no-novel-SJ", "no-novel-SJ", "no-novel-SJ", "no-novel-SJ", "no-novel-SJ" };
+    err_printf("%s\t", bam_t.tname);
+    for (i = 0; i < 10; ++i) {
+        if (trans_map[i] == 1) err_printf("%s\t", msg[i]);
+    } err_printf("\n");
     for (i = 0; i < 10; ++i) trans_novel[i] += trans_map[i];
     if (s_l_num+s_r_num >= 2) s_novel[2]++;
     else if (s_l_num==1) s_novel[0]++;
