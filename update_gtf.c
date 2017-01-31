@@ -76,7 +76,10 @@ void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int 
     int s_l_num=0, s_r_num=0;
     for (i = 0; i < bam_t.exon_n; ++i) {
         r = l = 0;
-        if (check_b_iden(bam_t.novel_exon_map[i])) goto SJ;
+        if (check_b_iden(bam_t.novel_exon_map[i])) {
+            err_printf("anno-el\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
+            goto SJ;
+        }
         trans_map[0]=0;
         if (check_l_iden(bam_t.novel_exon_map[i])) l=1;
         if (check_r_iden(bam_t.novel_exon_map[i])) r=1;
