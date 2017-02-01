@@ -86,7 +86,7 @@ void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int 
         if (check_r_iden(bam_t.novel_exon_map[i])) r=1;
         switch (l+r) {
             case 0: e_novel[0]++; trans_map[1]=1; err_printf("comp-novel"); break;
-            case 1: if (l) { e_novel[1]++;  trans_map[2]=1; err_printf("left-novel");} else { e_novel[2]++; trans_map[3]=1; err_printf("right-novel");} break;
+            case 1: if (r) { e_novel[1]++;  trans_map[2]=1; err_printf("left-novel");} else { e_novel[2]++; trans_map[3]=1; err_printf("right-novel");} break;
             case 2: e_novel[3]++; trans_map[4]=1; err_printf("lr-novel"); break;
             default: break;
         }
@@ -101,14 +101,14 @@ SJ:
             if (check_r_iden(bam_t.novel_sj_map[i])) r=1; else s_r_num++;
             switch (l+r) {
                 case 0: j_novel[0]++; trans_map[6]=1; break;
-                case 1: if (l) { j_novel[1]++; trans_map[7]=1; } else { j_novel[2]++; trans_map[8]=1; } break;
+                case 1: if (r) { j_novel[1]++; trans_map[7]=1; } else { j_novel[2]++; trans_map[8]=1; } break;
                 case 2: j_novel[3]++; trans_map[9]=1; break;
                 default: break;
             }
         }
     }
     char msg[10][20] = { "no-novel-exon", "comp-novel-exon", "left-novel-exon", "right-novel-exon", "lr-novel-exon",
-        "no-novel-SJ", "no-novel-SJ", "no-novel-SJ", "no-novel-SJ", "no-novel-SJ" };
+        "no-novel-SJ", "comp-novel-SJ", "left-novel-SJ", "right-novel-SJ", "lr-novel-SJ" };
     err_printf("%s\t", bam_t.tname);
     for (i = 0; i < 10; ++i) {
         if (trans_map[i] == 1) err_printf("%s\t", msg[i]);
@@ -407,7 +407,7 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
     int e_novel[4]={0,0,0,0}, j_novel[4]={0,0,0,0}, s_novel[4]={0,0,0,0}, trans_novel[10]={0,0,0,0,0,0,0,0,0,0};
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
         int x;
-        if (strcmp(bam_T.t[i].tname, "m130614_022816_42175_c100535482550000001823081711101344_s1_p0/5056/ccs.path1")==0)
+        if (strcmp(bam_T.t[i].tname, "m130605_182355_42175_c100519402550000001823080809281340_s1_p0/109886/ccs.path1")==0)
             x=i;
         if (NOT_MERG == 0 && merge_trans(bam_T.t[i], novel_T, dis)) { 
             //err_printf("merge: %s\n", bam_T.t[i].tname);
