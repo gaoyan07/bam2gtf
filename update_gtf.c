@@ -97,7 +97,11 @@ void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int 
 SJ:
         if (i != bam_t.exon_n-1) {
             r = l = 0;
-            if (check_b_iden(bam_t.novel_sj_map[i])) continue; 
+            if (check_b_iden(bam_t.novel_sj_map[i])) {
+                if (bam_t.is_rev) err_printf("anno-sj\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i+1].end+1, bam_t.exon[i].start-1, bam_t.exon[i].start-bam_t.exon[i+1].end-1);
+                else err_printf("anno-sj\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].end+1, bam_t.exon[i+1].start-1, bam_t.exon[i+1].start-bam_t.exon[i].end-1);
+                continue; 
+            }
             trans_map[5]=0;
             if (check_l_iden(bam_t.novel_sj_map[i])) l=1; else s_l_num++;
             if (check_r_iden(bam_t.novel_sj_map[i])) r=1; else s_r_num++;
