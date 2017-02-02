@@ -1,1 +1,1 @@
-# bam2gtf
+# iso-seq
