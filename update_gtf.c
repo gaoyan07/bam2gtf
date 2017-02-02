@@ -77,8 +77,9 @@ void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int 
     for (i = 0; i < bam_t.exon_n; ++i) {
         r = l = 0;
         if (check_b_iden(bam_t.novel_exon_map[i])) {
-            if (i!=0 && i != bam_t.exon_n-1)
-                err_printf("anno-el\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
+            if (i!=0 && i != bam_t.exon_n-1) err_printf("anno-el");
+            else err_printf("anno-ht-el");
+            err_printf("\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
             goto SJ;
         }
         trans_map[0]=0;
@@ -90,8 +91,9 @@ void cal_novel_exon_junction(trans_t bam_t, int e_novel[4], int j_novel[4], int 
             case 2: e_novel[3]++; trans_map[4]=1; err_printf("lr-novel"); break;
             default: break;
         }
-        if (i!=0 && i!= bam_t.exon_n-1) err_printf("-el\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
-        else err_printf("\n");
+        if (i!=0 && i!= bam_t.exon_n-1) err_printf("-el");
+        else err_printf("-ht-el");
+        err_printf("\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].start, bam_t.exon[i].end, bam_t.exon[i].end-bam_t.exon[i].start+1);
 SJ:
         if (i != bam_t.exon_n-1) {
             r = l = 0;
@@ -100,11 +102,13 @@ SJ:
             if (check_l_iden(bam_t.novel_sj_map[i])) l=1; else s_l_num++;
             if (check_r_iden(bam_t.novel_sj_map[i])) r=1; else s_r_num++;
             switch (l+r) {
-                case 0: j_novel[0]++; trans_map[6]=1; break;
-                case 1: if (r) { j_novel[1]++; trans_map[7]=1; } else { j_novel[2]++; trans_map[8]=1; } break;
-                case 2: j_novel[3]++; trans_map[9]=1; break;
+                case 0: j_novel[0]++; trans_map[6]=1; err_printf("comp-novel-sj"); break;
+                case 1: if (r) { j_novel[1]++; trans_map[7]=1; err_printf("left-novel-sj"); } else { j_novel[2]++; trans_map[8]=1; err_printf("right-novel-sj"); } break;
+                case 2: j_novel[3]++; trans_map[9]=1; err_printf("lr-novel-sj"); break;
                 default: break;
             }
+            if (bam_t.is_rev) err_printf("\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i+1].end+1, bam_t.exon[i].start-1, bam_t.exon[i].start-bam_t.exon[i+1].end-1);
+            else err_printf("\t%d\t%d\t%d\t%d\t%d\n", bam_t.exon[i].tid, bam_t.exon[i].is_rev, bam_t.exon[i].end+1, bam_t.exon[i+1].start-1, bam_t.exon[i+1].start-bam_t.exon[i].end-1);
         }
     }
     char msg[10][20] = { "no-novel-exon", "comp-novel-exon", "left-novel-exon", "right-novel-exon", "lr-novel-exon",
