@@ -122,7 +122,7 @@ int bam2gtf(int argc, char *argv[])
                      break;
         }
     }
-    if (argc -optind != 1) return bam2gtf_usage();
+    if (argc - optind != 1) return bam2gtf_usage();
 
     samFile *in; bam_hdr_t *h; bam1_t *b;
 

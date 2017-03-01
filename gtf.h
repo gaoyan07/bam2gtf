@@ -36,10 +36,13 @@
  *                      2 (manually annotated loci),
  *                      3 (automatically annotated loci)
  */
+#define MAX_END 2147483647
 
 typedef struct {
     int32_t tid; uint8_t is_rev;
     int32_t start, end; //1-based, ref
+                        //0: start of init exon
+                        //MAX: end of term exon
 } exon_t;
 
 #define set_l_iden(map) (map |= 0x4)
@@ -87,6 +90,7 @@ typedef struct {
 typedef struct {
     gene_t *g; int gene_n, gene_m;
     int32_t tid, start, end;
+    char **chr_name; int chr_n, chr_m;
 } gene_group_t;
 
 exon_t *exon_init(int n);
@@ -121,6 +125,7 @@ gene_group_t *gene_group_realloc(gene_group_t *gg);
 void add_gene(gene_group_t *gg, gene_t g, int novel_gene_flag);
 void set_gene_group(gene_group_t *gg);
 void gene_group_free(gene_group_t *gg);
+int read_gene_group(FILE *gtf, gene_group_t *gg);
 
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);

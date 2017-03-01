@@ -81,6 +81,19 @@ int set_trans(trans_t *t, char *tname)
     return 0;
 }
 
+int set_gene(gene_t *g, char *gname)
+{
+    int i;
+    g->tid = g->trans[0].tid; g->is_rev = g->trans[0].is_rev;
+    g->start = g->trans[0].start; g->end = g->trans[0].end;
+    for (i = 1; i < g->trans_n; ++i) {
+        if (g->start > g->trans[i].start) g->start = g->trans[i].start;
+        if (g->end < g->trans[i].end) g->end= g->trans[i].end;
+    }
+    if (gname) strcpy(g->gname, gname);
+    return 0;
+}
+
 trans_t *exon_realloc(trans_t *t) {
     t->exon_m <<= 1;
     t->exon = (exon_t*)_err_realloc(t->exon, t->exon_m * sizeof(exon_t));
@@ -244,8 +257,12 @@ void gtf_add_info(char add_info[], char tag[], char *info)
 gene_group_t *gene_group_init(void)
 {
     gene_group_t *gg = (gene_group_t*)_err_malloc(sizeof(gene_group_t));
-    gg->start = gg->end = gg->gene_n = 0; gg->gene_m = 1;
-    gg->g = gene_init();
+    gg->g = gene_init(); gg->gene_n = 0; gg->gene_m = 1;
+    gg->start = gg->end = 0;     
+    gg->chr_name = (char**)_err_malloc(30 * sizeof(char*));
+    int i;
+    for (i = 0; i < 30; ++i) gg->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
+    gg->chr_n = 0; gg->chr_m = 30;
     return gg;
 }
 
@@ -295,7 +312,65 @@ void gene_group_free(gene_group_t *gg)
             free(gg->g[i].trans[j].exon);
         free(gg->g[i].trans);
     }
-    free(gg->g); free(gg);
+    for (i = 0; i < gg->chr_m; ++i) free(gg->chr_name[i]);
+    free(gg->g); free(gg->chr_name); free(gg);
+}
+
+int get_chr_id(gene_group_t *gg, char *chr)
+{
+    int i;
+    for (i = 0; i < gg->chr_n; ++i) {
+        if (strcmp(gg->chr_name[i], chr) == 0) return i;
+    }
+    if (gg->chr_n == gg->chr_m) {
+        gg->chr_name = (char**)_err_realloc(gg->chr_name, gg->chr_m<<1 * sizeof(char*));
+        for (i = gg->chr_m; i < gg->chr_m<<1; ++i)
+            gg->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
+    }
+    strcpy(gg->chr_name[gg->chr_n], chr);
+    return gg->chr_n++;
+}
+
+// read all anno from GTF file
+int read_gene_group(FILE *gtf, gene_group_t *gg)
+{
+    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[100], tname[100], tag[20];
+    gene_t *cur_g; trans_t *cur_t; exon_t *cur_e;
+    gg->gene_n = 0;
+
+    while (fgets(line, 1024, gtf) != NULL) {
+        if (line[0] == '#') continue;
+        sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
+        int tid = get_chr_id(gg, ref);
+        uint8_t is_rev = (strand == '-' ? 1 : 0);
+        strcpy(tag, "gene_id"); gtf_add_info(add_info, tag, gname);
+        strcpy(tag, "transcript_id"); gtf_add_info(add_info, tag, tname);
+ 
+        if (strcmp(type, "gene") == 0) { // new gene starts old gene ends
+            if (++gg->gene_n == gg->gene_m) gg = gene_group_realloc(gg);
+
+            cur_g = gg->g + gg->gene_n-1;
+            cur_g->tid = tid; cur_g->is_rev = is_rev;
+            cur_g->start = start; cur_g->end = end;
+            strcpy(cur_g->gname, gname);
+            cur_g->trans_n = 0;
+        } else if (strcmp(type, "transcript") == 0) { // new trans starts, old trans ends
+            if (++cur_g->trans_n == cur_g->trans_m) cur_g = trans_realloc(cur_g);
+
+            cur_t = cur_g->trans + cur_g->trans_n-1;
+            cur_t->tid = tid; cur_t->is_rev = is_rev;
+            cur_t->start = start; cur_t->end = end;
+            strcpy(cur_t->tname, tname);
+            cur_t->exon_n = 0;
+        } else if (strcmp(type, "exon") == 0) { // new exon starts, old exon ends
+            // add exon to gg
+            if (++cur_t->exon_n == cur_t->exon_m) cur_t = exon_realloc(cur_t);
+            cur_e = cur_t->exon + cur_t->exon_n-1;
+            cur_e->tid = tid; cur_e->is_rev = is_rev;
+            cur_e->start = start; cur_e->end = end;
+        }
+    }
+    return gg->gene_n;
 }
 
 //print
