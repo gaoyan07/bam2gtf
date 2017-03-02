@@ -259,12 +259,25 @@ gene_group_t *gene_group_init(void)
     gene_group_t *gg = (gene_group_t*)_err_malloc(sizeof(gene_group_t));
     gg->g = gene_init(); gg->gene_n = 0; gg->gene_m = 1;
     gg->start = gg->end = 0;     
-    gg->chr_name = (char**)_err_malloc(30 * sizeof(char*));
-    int i;
-    for (i = 0; i < 30; ++i) gg->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
-    gg->chr_n = 0; gg->chr_m = 30;
     return gg;
 }
+
+chr_name_t *chr_name_init(void)
+{
+    chr_name_t *cname = (chr_name_t*)_err_malloc(sizeof(chr_name_t));
+    cname->chr_name = (char**)_err_malloc(30 * sizeof(char*));
+    int i;
+    for (i = 0; i < 30; ++i) cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
+    cname->chr_n = 0; cname->chr_m = 30;
+    return cname;
+}
+
+void chr_name_free(chr_name_t *cname)
+{
+    int i; for (i = 0; i < cname->chr_m; ++i) free(cname->chr_name[i]);
+    free(cname->chr_name); free(cname);
+}
+
 
 gene_group_t *gene_group_realloc(gene_group_t *gg)
 {
@@ -312,27 +325,42 @@ void gene_group_free(gene_group_t *gg)
             free(gg->g[i].trans[j].exon);
         free(gg->g[i].trans);
     }
-    for (i = 0; i < gg->chr_m; ++i) free(gg->chr_name[i]);
-    free(gg->g); free(gg->chr_name); free(gg);
+    free(gg->g); free(gg);
 }
 
-int get_chr_id(gene_group_t *gg, char *chr)
+int get_chr_id(chr_name_t *cname, char *chr)
 {
     int i;
-    for (i = 0; i < gg->chr_n; ++i) {
-        if (strcmp(gg->chr_name[i], chr) == 0) return i;
+    for (i = 0; i < cname->chr_n; ++i) {
+        if (strcmp(cname->chr_name[i], chr) == 0) return i;
     }
-    if (gg->chr_n == gg->chr_m) {
-        gg->chr_name = (char**)_err_realloc(gg->chr_name, gg->chr_m<<1 * sizeof(char*));
-        for (i = gg->chr_m; i < gg->chr_m<<1; ++i)
-            gg->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
+    if (cname->chr_n == cname->chr_m) {
+        cname->chr_name = (char**)_err_realloc(cname->chr_name, cname->chr_m<<1 * sizeof(char*));
+        for (i = cname->chr_m; i < cname->chr_m<<1; ++i)
+            cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
     }
-    strcpy(gg->chr_name[gg->chr_n], chr);
-    return gg->chr_n++;
+    strcpy(cname->chr_name[cname->chr_n], chr);
+    return cname->chr_n++;
+}
+
+// read splice-junction
+int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m)
+{
+    char line[1024], ref[100]="\0";
+    int sj_n = 0;
+    while (fgets(line, 1024, sj_fp) != NULL) {
+        if (sj_n == sj_m) _realloc(*sj_group, sj_m, sj_t)
+        sj_t *sj = (*sj_group)+sj_n;
+
+        sscanf(line, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d", ref, &(sj->don), &(sj->acc), &(sj->strand), &(sj->motif), &(sj->is_anno), &(sj->uniq_c), &(sj->multi_c), &(sj->max_over));
+        int tid = get_chr_id(cname, ref);
+        (*sj_group)[sj_n++].tid = tid;
+    }
+    return sj_n;
 }
 
 // read all anno from GTF file
-int read_gene_group(FILE *gtf, gene_group_t *gg)
+int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
 {
     char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[100], tname[100], tag[20];
     gene_t *cur_g; trans_t *cur_t; exon_t *cur_e;
@@ -341,7 +369,7 @@ int read_gene_group(FILE *gtf, gene_group_t *gg)
     while (fgets(line, 1024, gtf) != NULL) {
         if (line[0] == '#') continue;
         sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
-        int tid = get_chr_id(gg, ref);
+        int tid = get_chr_id(cname, ref);
         uint8_t is_rev = (strand == '-' ? 1 : 0);
         strcpy(tag, "gene_id"); gtf_add_info(add_info, tag, gname);
         strcpy(tag, "transcript_id"); gtf_add_info(add_info, tag, tname);

@@ -37,6 +37,8 @@
  *                      3 (automatically annotated loci)
  */
 #define MAX_END 2147483647
+#define DON_SITE_F 0
+#define ACC_SITE_F 1
 
 typedef struct {
     int32_t tid; uint8_t is_rev;
@@ -44,6 +46,13 @@ typedef struct {
                         //0: start of init exon
                         //MAX: end of term exon
 } exon_t;
+
+typedef struct {
+    int32_t tid; uint8_t strand; // 0:undefined, 1:+, 2:-
+    int32_t don, acc;
+    uint8_t motif, is_anno;
+    int32_t uniq_c, multi_c, max_over;
+} sj_t;
 
 #define set_l_iden(map) (map |= 0x4)
 #define set_r_iden(map) (map |= 0x2)
@@ -90,11 +99,19 @@ typedef struct {
 typedef struct {
     gene_t *g; int gene_n, gene_m;
     int32_t tid, start, end;
-    char **chr_name; int chr_n, chr_m;
 } gene_group_t;
+
+typedef struct {
+    char **chr_name;
+    int chr_n, chr_m;
+} chr_name_t;
 
 exon_t *exon_init(int n);
 void exon_free(exon_t *e);
+
+chr_name_t *chr_name_init(void);
+void chr_name_free(chr_name_t *cname);
+int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m);
 
 trans_t *trans_init(int n);
 int add_exon(trans_t *t, int32_t tid, int32_t start, int32_t end, uint8_t is_rev);
@@ -125,7 +142,7 @@ gene_group_t *gene_group_realloc(gene_group_t *gg);
 void add_gene(gene_group_t *gg, gene_t g, int novel_gene_flag);
 void set_gene_group(gene_group_t *gg);
 void gene_group_free(gene_group_t *gg);
-int read_gene_group(FILE *gtf, gene_group_t *gg);
+int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg);
 
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);
