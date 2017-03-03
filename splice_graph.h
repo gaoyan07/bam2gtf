@@ -1,6 +1,23 @@
 #ifndef _SPLICE_GRAPH_H
 #define _SPLICE_GRAPH_H
 #include "gtf.h"
+#include "utils.h"
+
+#define _insert(v, p, n, m, type) { \
+    int i, flag=0;                  \
+    for (i = 0; i < n; ++i) {       \
+        if (p[i] == v) {            \
+            flag = 1;               \
+            break;                  \
+        }                           \
+    }                               \
+    if (flag == 0) {                \
+        if (n == m) {               \
+            _realloc(p, m, type)    \
+        }                           \
+        p[n++] = v;                 \
+    }                               \
+}
 
 typedef struct {
     uint32_t node_id; // unique id in corresponding gene-locus
@@ -22,6 +39,8 @@ typedef struct {
     uint32_t don_site_id, acc_site_id;
     uint8_t is_rev;
     double cov;
+    uint8_t motif, is_anno;
+    int32_t uniq_c, multi_c, max_over;
 } SGedge; // edge of splicing-graph, splice junction
 
 typedef struct {
@@ -29,8 +48,10 @@ typedef struct {
     SGnode *node; int node_n, node_m; // sort by e.start and e.end 
     SGsite *site; int site_n, site_m; // sort by site
     SGedge *edge; int edge_n, edge_m; // sort by don_id and acc_id
-    int32_t start, end;
-    // for calculate max-edge
+    int32_t tid; uint8_t is_rev;
+    // boundaries of splice-sites
+    int32_t start, end; 
+    // for calculate max-edge XXX
     uint8_t **path_map; // size: node_n * node_n, but only 1/2 of the bit-map is valid
                         // path_map[i][j] == 1 : path from i to j
                         // 0: none path

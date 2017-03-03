@@ -1,0 +1,48 @@
+1. GTF-SG
+    // update node & site
+    1.  update_node(exon)
+        update_site(exon.start/exon.end)
+    // init 
+    2. alloc for node & site
+        init_node/site({id, malloc(node[next/pre]/site[exon_id]}) 
+    3. update edge
+        (don, acc) ==> (node_don_id, node_acc_id), (site_don_id, site_acc_id)
+        update_edge(site_don_id, site_acc_id)       // EDGE DONE
+        update_node_next(node_don_id, node_acc_id)  // NODE DONE
+        update_site_exon(site_don/acc_id, node_don/acc_id)  // SITE DONE
+
+    
+2. SR-SJ-SG
+    // update site
+    1. sj(don, acc) ==> update_site(don, acc, cov ...) {site, type}
+    // update node
+    2. sj(don, acc) ==> GTF_site_id
+        map[site[GTF_don_id].exon[]] = 1
+        map[site[GTF_acc_id].exon[]] = 1
+        if (Node.map & Node.map == 1) {
+            update_node(Node) {e}
+        }
+    // alloc for node&site
+    3. init_node/site {id, malloc(node[next/pre]/site[exon_id]}
+    4. update edge, node.next/pre, site.exon_id
+        4.0 sj(don, acc) ==> site_id
+        4.1 update_edge(site_id, cov)                   // EDGE DONE
+
+        sj(don, acc) ==> GTF_site_id
+        for (site[GTF_site_id].exon[]) {
+            if (map == 1) {
+                (exon) ==> node_id
+                update_site_exon(site_id, node_id)
+            }
+        }
+        for (site[GTF_site_id].exon[]) {
+            if (map == 1) {
+                (exon) ==> node_id
+                update_site_exon(site_id, exon)     // SITE DONE
+            }
+        }
+        for (don_site_id.exon[]) {
+            for (acc_site_id.exon[]) {
+                update_node_next(don.exon[], acc.exon[])    // NODE DONE
+            }
+        }

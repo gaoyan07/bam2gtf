@@ -9,7 +9,7 @@ extern char PROG[20];
 int sg_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s sg [option] <in.gtf>\n\n", PROG);
+    err_printf("Usage:   %s sg [option] <in.gtf> <in.sj>\n\n", PROG);
     err_printf("Options:\n\n");
     //err_printf("         -e --exon-min    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
     err_printf("\n");
@@ -61,6 +61,8 @@ SG *sg_init(void)
     sg->site = (SGsite*)_err_malloc(2 * sizeof(SGsite));
     sg->edge_n = 0, sg->edge_m = 2;
     sg->edge = (SGedge*)_err_malloc(2 * sizeof(SGedge));
+
+    sg->start = CHR_MAX_END, sg->end = 0;
     // path_map will be alloced when SG is done
     return sg;
 }
@@ -125,6 +127,7 @@ void sg_free_node(SG *sg)
 void sg_free_site(SG *sg)
 {
     int i; for (i = 0; i < sg->site_m; ++i) free(sg->site[i].exon_id);
+    free(sg->site);
 }
 
 void sg_free(SG *sg)
@@ -226,6 +229,9 @@ int sg_update_site(SG *sg, int32_t site, uint8_t type)
     int hit = 0;
     int s_i = sg_bin_sch_site(*sg, site, &hit);
     if (hit == 0) {
+        if (type == DON_SITE_F && site < sg->start) sg->start = site;
+        else if (type == ACC_SITE_F && site > sg->end) sg->end = site;
+
         if (sg->site_n++ >= sg->site_m) _realloc(sg->site, sg->site_m, SGsite)
         // copy site
         if (s_i <= sg->site_n-2)
@@ -273,16 +279,33 @@ int sg_update_edge(SG *sg, uint32_t don_id, uint32_t acc_id, uint32_t don_site_i
         // set edge
         sg->edge[e_i].don_site_id = don_site_id, sg->edge[e_i].acc_site_id = acc_site_id;
         sg->edge[e_i].is_rev = is_rev;
-        // set child
+        // set next/pre
         if (sg->node[don_id].next_n >= sg->node[don_id].next_m) _realloc(sg->node[don_id].next_id, sg->node[don_id].next_m, uint32_t)
         sg->node[don_id].next_id[sg->node[don_id].next_n++] = acc_id;
         if (sg->node[acc_id].pre_n >= sg->node[acc_id].pre_m) _realloc(sg->node[acc_id].pre_id, sg->node[acc_id].pre_m, uint32_t)
         sg->node[acc_id].pre_id[sg->node[acc_id].pre_n++] = don_id;
         // set site
-        if (sg->site[don_site_id].exon_n >= sg->site[don_site_id].exon_m) _realloc(sg->site[don_site_id].exon_id, sg->site[don_site_id].exon_m, uint32_t)
-        sg->site[don_site_id].exon_id[sg->site[don_site_id].exon_n++] = don_id;
-        if (sg->site[acc_site_id].exon_n >= sg->site[acc_site_id].exon_m) _realloc(sg->site[acc_site_id].exon_id, sg->site[acc_site_id].exon_m, uint32_t)
-        sg->site[acc_site_id].exon_id[sg->site[acc_site_id].exon_n++] = don_id;
+        _insert(don_id, sg->site[don_site_id].exon_id, sg->site[don_site_id].exon_n, sg->site[don_site_id].exon_m, uint32_t)
+        _insert(acc_id, sg->site[acc_site_id].exon_id, sg->site[acc_site_id].exon_n, sg->site[acc_site_id].exon_m, uint32_t)
+    }
+    return 0;
+}
+
+int sg_update_edge_pred(SG *sg, sj_t sj, uint32_t don_site_id, uint32_t acc_site_id)
+{
+    int hit = 0;
+    int e_i = sg_bin_sch_edge(*sg, don_site_id, acc_site_id, &hit);
+    if (hit == 0) { // insert new edge
+        if (sg->edge_n++ >= sg->edge_m) _realloc(sg->edge, sg->edge_m, SGedge)
+        // copy edge
+        if (e_i <= sg->edge_n-2)
+            memmove(sg->edge+e_i+1, sg->edge+e_i, (sg->edge_n-e_i-1) * sizeof(SGedge));
+        // set edge
+        sg->edge[e_i].don_site_id = don_site_id, sg->edge[e_i].acc_site_id = acc_site_id;
+        if (sj.strand == 0) sg->edge[e_i].is_rev = 2;
+        else sg->edge[e_i].is_rev = sj.strand - 1; // 0:+, 1:-, 2:undefined
+        sg->edge[e_i].motif = sj.motif, sg->edge[e_i].is_anno = sj.is_anno;
+        sg->edge[e_i].uniq_c = sj.uniq_c, sg->edge[e_i].multi_c = sj.multi_c, sg->edge[e_i].max_over = sj.max_over;
     }
     return 0;
 }
@@ -351,53 +374,34 @@ void cal_post_domn(SG *sg)
     }
 }
 
-void sg_node_add_next(SGnode *node, uint32_t id)
-{
-    int i;
-    for (i = 0; i < node->next_n; ++i) {
-        if (node->next_id[i] == id) return;
-    }
-    if (node->next_n == node->next_m) _realloc(node->next_id, node->next_m, uint32_t)
-    node->next_id[node->next_n++] = id;
-}
-
-void sg_node_add_pre(SGnode *node, uint32_t id)
-{
-    int i;
-    for (i = 0; i < node->pre_n; ++i) {
-        if (node->pre_id[i] == id) return;
-    }
-    if (node->pre_n == node->pre_m) _realloc(node->pre_id, node->pre_m, uint32_t)
-    node->pre_id[node->pre_n++] = id;
-}
-
 // construct splice-graph for each gene
 void construct_SpliceGraph_core(SG *sg, gene_t gene)
 {
     int i, j, hit; uint32_t don_id, acc_id, don_site_id, acc_site_id; exon_t e;
     
+    sg->tid = gene.tid, sg->is_rev = gene.is_rev;
     // generate node
     for (i = 0; i < gene.trans_n; ++i) {
         for (j = 0; j < gene.trans[i].exon_n; ++j) {
             e = gene.trans[i].exon[j];
             if ((j == 0 && gene.is_rev == 0) || (j == gene.trans[i].exon_n-1 && gene.is_rev == 1)) e.start = 0;
-            if ((j == gene.trans[i].exon_n-1 && gene.is_rev == 0) || (j == 0 && gene.is_rev == 1)) e.end = MAX_END;
+            if ((j == gene.trans[i].exon_n-1 && gene.is_rev == 0) || (j == 0 && gene.is_rev == 1)) e.end = CHR_MAX_END;
             sg_update_node(sg, e);
             if (e.start != 0) sg_update_site(sg, e.start-1, ACC_SITE_F);
-            if (e.end != MAX_END) sg_update_site(sg, e.end+1, DON_SITE_F);
+            if (e.end != CHR_MAX_END) sg_update_site(sg, e.end+1, DON_SITE_F);
         }
     }
     // alloc for next_id/pre_id/pre_domn/post_domn
     sg_init_node(sg); sg_init_site(sg);
-    // alloc path_map
+    // alloc path_map XXX
     sg->path_map = (uint8_t**)_err_malloc(sg->node_n * sizeof(uint8_t*));
     for (i = 0; i < sg->node_n; ++i) sg->path_map[i] = (uint8_t*)_err_calloc(sg->node_n, sizeof(uint8_t));
 
     // search node and generate edge 
     for (i = 0; i < gene.trans_n; ++i) {
         e = gene.trans[i].exon[0]; 
-        if (gene.is_rev == 0 || (gene.trans[i].exon_n-1==0 && gene.is_rev==1)) e.start = 0;
-        if ((gene.trans[i].exon_n-1==0 && gene.is_rev == 0) || (gene.is_rev==1)) e.end = MAX_END;
+        if (gene.is_rev == 0 || (gene.trans[i].exon_n-1 == 0 && gene.is_rev == 1)) e.start = 0;
+        if ((gene.trans[i].exon_n-1 == 0 && gene.is_rev == 0) || gene.is_rev == 1) e.end = CHR_MAX_END;
 
         don_id = sg_bin_sch_node(*sg, e, &hit);
         if (hit == 0) err_fatal_simple("Can not hit node.(1)\n");
@@ -405,19 +409,20 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
         if (hit == 0) err_fatal_simple("Can not hit edge.(1)\n");
 
         // set next_id of s
-        sg_node_add_next(&(sg->v), don_id);
+        _insert(don_id, sg->v.next_id, sg->v.next_n, sg->v.next_m, uint32_t)
         
         for (j = 1; j < gene.trans[i].exon_n; ++j) {
             e = gene.trans[i].exon[j]; 
             if ((j == 0 && gene.is_rev == 0) || (j == gene.trans[i].exon_n-1 && gene.is_rev==1)) e.start = 0;
-            if ((j == gene.trans[i].exon_n-1 && gene.is_rev == 0) || (j == 0 && gene.is_rev==1)) e.end = MAX_END;
+            if ((j == gene.trans[i].exon_n-1 && gene.is_rev == 0) || (j == 0 && gene.is_rev==1)) e.end = CHR_MAX_END;
  
             acc_id = sg_bin_sch_node(*sg, e, &hit);
             if (hit == 0) err_fatal_simple("Can not hit node.(2)\n");
             acc_site_id = sg_bin_sch_site(*sg, e.start-1, &hit);
             if (hit == 0) err_fatal_simple("Can not hit site.(2)\n");
+
             sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
-            // path map
+            // path map XXX
             sg->path_map[don_id][acc_id] = 1;
 
             don_id = acc_id;
@@ -425,9 +430,9 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             // XXX if (hit == 0) err_fatal_simple("Can not hit site.(3)\n");
         }
         // set pre_id of e
-        sg_node_add_pre(&(sg->v), don_id);
+        _insert(don_id, sg->v.pre_id, sg->v.pre_n, sg->v.pre_m, uint32_t)
     }
-    // update path_map
+    // update path_map XXX
     int k;
     for (i = 0; i < sg->node_n; ++i) {
         for (j = i+2; j < sg->node_n; ++j) {
@@ -455,12 +460,57 @@ SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
 }
 /****************************************/
 
-/***************************************************************
- * update splice graph with splice-junctions (short-read data) *
- ***************************************************************/
+/****************************************************************
+ * predict splice graph with splice-junctions (short-read data) *
+ * based on reference-splice-graph                              *
+ ****************************************************************/
 int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *sr_sg_g, int no_novel_sj)
 {
-    int i, j, hit; uint32_t don_site_id, acc_site_id, edge_id; int don_sg_i=0, acc_sg_i=0, sg_i;
+    int i, j, k, hit; uint32_t don_site_id, acc_site_id; int don_sg_i=0, acc_sg_i=0, sg_i;
+    uint32_t GTF_don_site_id, GTF_acc_site_id, GTF_edge_id;
+    uint8_t **node_map = (uint8_t**)_err_malloc(sg_g.SG_n * sizeof(uint8_t*));
+    for (i = 0; i < sg_g.SG_n; ++i) node_map[i] = (uint8_t*)_err_calloc(sg_g.SG[i]->node_n, sizeof(uint8_t));
+    for (i = 0; i < sj_n; ++i) {
+        // for sorted sj_group
+        // XXX corres SG_i should be a range[]
+        while (don_sg_i < sg_g.SG_n && (sj_group[i].tid > sg_g.SG[don_sg_i]->tid || sj_group[i].don > sg_g.SG[don_sg_i]->end)) don_sg_i++;
+        while (acc_sg_i < sg_g.SG_n && (sj_group[i].tid > sg_g.SG[acc_sg_i]->tid || sj_group[i].acc > sg_g.SG[acc_sg_i]->end)) acc_sg_i++;
+
+        if (don_sg_i == sg_g.SG_n || acc_sg_i == sg_g.SG_n) break;
+        if (don_sg_i != acc_sg_i || sj_group[i].don < sg_g.SG[don_sg_i]->start || sj_group[i].acc < sg_g.SG[acc_sg_i]->start) continue; // splice-site span gene-loci OR novel splice-site
+
+        SG *sg = sg_g.SG[don_sg_i], *sr_sg = sr_sg_g->SG[don_sg_i];
+        sg_i = don_sg_i;
+        // 0. search site/edge: (GTF_don_site_id, GTF_acc_site_id) => GTF_edge_id
+        GTF_don_site_id = sg_bin_sch_site(*sg, sj_group[i].don, &hit); if (hit == 0) continue;
+        GTF_acc_site_id = sg_bin_sch_site(*sg, sj_group[i].acc, &hit); if (hit == 0) continue;
+        GTF_edge_id = sg_bin_sch_edge(*sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
+        // 1. update site(don_site, acc_site)
+        sg_update_site(sr_sg, sj_group[i].don, DON_SITE_F);
+        sg_update_site(sr_sg, sj_group[i].acc, ACC_SITE_F);
+        // 2. update node
+        //    2.1 (don_site, acc_site) => GTF(don_site_id, acc_site_id)
+        GTF_don_site_id = sg_bin_sch_site(*sg, sj_group[i].don, &hit); if (hit == 0) continue;
+        GTF_acc_site_id = sg_bin_sch_site(*sg, sj_group[i].acc, &hit); if (hit == 0) continue;
+        //    2.2 map[exon] = 1
+        for (j = 0; j < sg->site[GTF_don_site_id].exon_n; ++j) {
+            uint32_t GTF_don_id = sg->site[GTF_don_site_id].exon_id[j];
+            node_map[sg_i][GTF_don_id] |= 1;
+            if (node_map[sg_i][GTF_don_id] == 3) { // update node
+                exon_t e = sg->node[GTF_don_id].e;
+                sg_update_node(sr_sg, e);
+                node_map[sg_i][GTF_don_id] |= 4;
+            }
+        }
+        for (j = 0; j < sg->site[GTF_acc_site_id].exon_n; ++j) 
+            node_map[sg_i][sg->site[GTF_acc_site_id].exon_id[j]] |= 2;
+    }
+    // 3. alloc mem for node&site
+    for (i = 0; i < sg_g.SG_n; ++i) {
+        sg_init_node(sr_sg_g->SG[i]); sg_init_site(sr_sg_g->SG[i]);
+    }
+    // 4. updage_edge(edge[edge_id])
+    don_sg_i = 0, acc_sg_i = 0;
     for (i = 0; i < sj_n; ++i) {
         // for sorted sj_group
         while (don_sg_i < sg_g.SG_n && sj_group[i].don > sg_g.SG[don_sg_i]->end) don_sg_i++;
@@ -469,33 +519,48 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
         if (don_sg_i == sg_g.SG_n || acc_sg_i == sg_g.SG_n) break;
         if (don_sg_i != acc_sg_i || sj_group[i].don < sg_g.SG[don_sg_i]->start || sj_group[i].acc < sg_g.SG[acc_sg_i]->start) continue; // splice-site span gene-loci OR novel splice-site
 
+        SG *sg = sg_g.SG[don_sg_i], *sr_sg = sr_sg_g->SG[don_sg_i];
         sg_i = don_sg_i;
-        // 1. (don_site, acc_site) => (don_site_id, acc_site_id)
-        don_site_id = sg_bin_sch_site(*(sg_g.SG[sg_i]), sj_group[i].don, &hit); if (hit == 0) continue;
-        acc_site_id = sg_bin_sch_site((*sg_g.SG[sg_i]), sj_group[i].acc, &hit); if (hit == 0) continue;
-        // 2. search_edge(don_site_id, acc_site_id) => edge_id
-        edge_id = sg_bin_sch_edge(*(sg_g.SG[sg_i]), don_site_id, acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
-        
-        // 3. update_site(don_site, acc_site)
-        sg_update_site(sr_sg_g->SG[sg_i], sj_group[i].don, DON_SITE_F);
-        sg_update_site(sr_sg_g->SG[sg_i], sj_group[i].acc, ACC_SITE_F);
-        // 4. update_node(edge[edge_id].don_exon[], edge[edge_id].acc_exon[])
-        for (j = 0; j < sg_g.SG[sg_i]->site[don_site_id].exon_n; ++j) {
-            int e_i = sg_g.SG[sg_i]->site[don_site_id].exon_id[j];
-            exon_t e = sg_g.SG[sg_i]->node[e_i].e;
-            sg_update_node(sr_sg_g->SG[sg_i], e);
+        // 4.0. (don_site, acc_site) => (don_site_id, acc_site_id)
+        don_site_id = sg_bin_sch_site(*sr_sg, sj_group[i].don, &hit); if (hit == 0) continue;
+        acc_site_id = sg_bin_sch_site(*sr_sg, sj_group[i].acc, &hit); if (hit == 0) continue;
+        // 4.1. update edge(sj_group[i]) XXX
+        sg_update_edge_pred(sr_sg, sj_group[i], don_site_id, acc_site_id);
+        // 4.2. update node()
+        uint32_t GTF_don_site_id = sg_bin_sch_site(*sg, sj_group[i].don, &hit);
+        for (j = 0; j < sg->site[GTF_don_site_id].exon_n; ++j) {
+            uint32_t GTF_don_id = sg->site[GTF_don_site_id].exon_id[j];
+            if (node_map[sg_i][GTF_don_id] == 7) {
+                exon_t e = sg->node[GTF_don_id].e;
+                uint32_t don_id = sg_bin_sch_node(*sr_sg, e, &hit);
+                _insert(don_id, sr_sg->site[don_site_id].exon_id, sr_sg->site[don_site_id].exon_n, sr_sg->site[don_site_id].exon_m, uint32_t)
+                if (e.start == 0) _insert(don_id, sr_sg->v.next_id, sr_sg->v.next_n, sr_sg->v.next_m, uint32_t)
+            }
         }
-        for (j = 0; j < sg_g.SG[sg_i]->site[acc_site_id].exon_n; ++j) {
-            int e_i = sg_g.SG[sg_i]->site[acc_site_id].exon_id[j];
-            exon_t e = sg_g.SG[sg_i]->node[e_i].e;
-            sg_update_node(sr_sg_g->SG[sg_i], e);
+        uint32_t GTF_acc_site_id = sg_bin_sch_site(*sg, sj_group[i].acc, &hit);
+        for (j = 0; j < sg->site[GTF_acc_site_id].exon_n; ++j) {
+            uint32_t GTF_acc_id = sg->site[GTF_acc_site_id].exon_id[j];
+            if (node_map[sg_i][GTF_acc_id] == 7) {
+                exon_t e = sg->node[GTF_acc_id].e;
+                uint32_t acc_id = sg_bin_sch_node(*sr_sg, e, &hit);
+                _insert(acc_id, sr_sg->site[acc_site_id].exon_id, sr_sg->site[acc_site_id].exon_n, sr_sg->site[acc_site_id].exon_m, uint32_t)
+                if (e.end == CHR_MAX_END) _insert(acc_id, sr_sg->v.pre_id, sr_sg->v.pre_n, sr_sg->v.pre_m, uint32_t)
+            }
+        }    
+        for (j = 0; j < sr_sg->site[don_site_id].exon_n; ++j) {
+            uint32_t don_id = sr_sg->site[don_site_id].exon_id[j];
+            for (k = 0; k < sr_sg->site[don_site_id].exon_n; ++k) {
+                uint32_t acc_id = sr_sg->site[acc_site_id].exon_id[k];
+                // set next/pre
+                if (sr_sg->node[don_id].next_n >= sr_sg->node[don_id].next_m) _realloc(sr_sg->node[don_id].next_id, sr_sg->node[don_id].next_m, uint32_t)
+                    sr_sg->node[don_id].next_id[sr_sg->node[don_id].next_n++] = acc_id;
+                if (sr_sg->node[acc_id].pre_n >= sr_sg->node[acc_id].pre_m) _realloc(sr_sg->node[acc_id].pre_id, sr_sg->node[acc_id].pre_m, uint32_t)
+                    sr_sg->node[acc_id].pre_id[sr_sg->node[acc_id].pre_n++] = don_id;
+            }
         }
     }
-    // alloc mem for node&site
-    for (i = 0; i < sg_g.SG_n; ++i) {
-        sg_init_node(sr_sg_g->SG[i]); sg_init_site(sr_sg_g->SG[i]);
-    }
-    // 5. updage_edge(edge[edge_id])
+
+    for (i = 0; i < sg_g.SG_n; ++i) free(node_map[i]); free(node_map);
     return 0;
 }
 
@@ -509,7 +574,7 @@ int predict_SpliceGraph(SG_group sg_g, FILE *sj_p, chr_name_t *cname, SG_group *
     free(sj_group);
     return 0;
 }
-/***************************************************************/
+/****************************************************************/
 
 
 /*****************************
@@ -544,23 +609,6 @@ void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *
         if (sg.node[i].next_n > 1) (*entry)[n1++] = sg.node[i].node_id;
         if (sg.node[i].pre_n > 1) (*exit)[n2++] = sg.node[i].node_id;;
     }
-}
-
-#define _insert(v, p, n, m, type) { \
-    int i, flag=0;                  \
-    for (i = 0; i < n; ++i) {       \
-        if (p[i] == v) {            \
-            flag = 1;               \
-            break;                  \
-        }                           \
-    }                               \
-    if (flag == 0) {                \
-        if (n == m) {               \
-            m <<= 1;                \
-            p = (type*)_err_realloc(p, m * sizeof(type));   \
-        }                           \
-        p[n++] = v;                 \
-    }                               \
 }
 
 void sg_update_asm(SG sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
@@ -620,7 +668,7 @@ void gen_ASM(SG sg, uint32_t sg_id, SGasm_group *asm_g)
     int entry_n, exit_n;
     uint32_t *entry, *exit;
     cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n);
-    if (entry_n == 0 || exit_n == 0) return;
+    if (entry_n == 0 || exit_n == 0) goto END;
 
     int i, j, hit;
     for (i = 0; i < entry_n; ++i) {
@@ -642,7 +690,7 @@ void gen_ASM(SG sg, uint32_t sg_id, SGasm_group *asm_g)
         }
         if (hit) continue;
     }
-    free(entry); free(exit);
+    END: free(entry); free(exit);
 }
 /*****************************/
 
@@ -664,7 +712,7 @@ int sg(int argc, char *argv[])
                      return sg_usage();
         }
     }
-    if (argc - optind != 1) return sg_usage();
+    if (argc - optind != 2) return sg_usage();
     FILE *gtf = fopen(argv[optind], "r");
     chr_name_t *cname = chr_name_init();
 
@@ -687,7 +735,12 @@ int sg(int argc, char *argv[])
     for (i = 0; i < sg_g->SG_n; ++i) gen_ASM(*(sg_g->SG[i]), i, asm_g);
     printf("ASM: %d\n", asm_g->sg_asm_n);
 
+    FILE *sj_fp = fopen(argv[optind+1], "r");
+    SG_group *sr_sg_g = sg_init_group(1);
+    predict_SpliceGraph(*sg_g, sj_fp, cname, sr_sg_g, 0);
+
     sg_free_group(sg_g); sg_free_asm_group(asm_g);
-    fclose(gtf); chr_name_free(cname);
+    fclose(gtf); chr_name_free(cname); fclose(sj_fp);
+    sg_free_group(sr_sg_g);
     return 0;
 }

@@ -36,7 +36,7 @@
  *                      2 (manually annotated loci),
  *                      3 (automatically annotated loci)
  */
-#define MAX_END 2147483647
+#define CHR_MAX_END 2147483647
 #define DON_SITE_F 0
 #define ACC_SITE_F 1
 
