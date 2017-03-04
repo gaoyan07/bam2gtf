@@ -572,11 +572,11 @@ int update_gtf(int argc, char *argv[])
     } else { // gtf input
         if ((in = sam_open(bamfn, "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", bamfn);
         if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", bamfn);
-        FILE *fp = fopen(argv[optind], "r");
+        FILE *fp = xopen(argv[optind], "r");
         read_anno_trans(fp, h, bam_T);
     }
 
-    FILE *gfp = fopen(argv[optind+1], "r");
+    FILE *gfp = xopen(argv[optind+1], "r");
     // read all anno-transcript
     read_anno_trans(gfp, h, anno_T);
     // read intron file

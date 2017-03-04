@@ -168,7 +168,7 @@ int read_intron_group(intron_group_t *I, FILE *fp)
 int main(int argc, char *argv[])
 {
     if (argc != 4) return usage();
-    FILE *fp1 = fopen(argv[1], "r"), *fp2 = fopen(argv[2], "r");
+    FILE *fp1 = xopen(argv[1], "r"), *fp2 = xopen(argv[2], "r");
     int dis = atoi(argv[3]);
     read_trans_t *T1, *T2;
     T1 = read_trans_init(), T2 = read_trans_init();

@@ -115,7 +115,7 @@ int bam_filter(int argc, char *argv[])
     b = bam_init1();  best_b = bam_init1();
 
     // read rRNA gtf
-    FILE *fp = fopen(argv[optind+1], "r"); read_trans_t *r = read_trans_init();
+    FILE *fp = xopen(argv[optind+1], "r"); read_trans_t *r = read_trans_init();
     read_anno_trans(fp, h, r);
     fclose(fp); 
 
