@@ -76,6 +76,23 @@ typedef struct {
     int SG_n, SG_m;
 } SG_group;
 
-int sg(int argc, char *argv[]);
+SG *sg_init_node(SG *sg);
+SG *sg_init_site(SG *sg);
+SG_group *sg_init_group(int g_n);
+void sg_free_group(SG_group *sg_g);
+
+int sg_update_node(SG *sg, exon_t e);
+int sg_update_site(SG *sg, int32_t site, uint8_t type);
+
+int sg_bin_sch_node(SG sg, exon_t e, int *hit);
+int sg_bin_sch_site(SG sg, int32_t s, int *hit);
+int sg_bin_sch_edge(SG sg, uint32_t don_site_id, uint32_t acc_site_id, int *hit);
+
+void cal_pre_domn(SG *sg);
+void cal_post_domn(SG *sg);
+
+SG_group *construct_SpliceGraph(FILE *gtf_fp, chr_name_t *cname);
+
+int build_sg(int argc, char *argv[]);
 
 #endif

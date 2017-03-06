@@ -119,7 +119,6 @@ int bam2gtf(int argc, char *argv[])
             case 's': strcpy(src, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return bam2gtf_usage();
-                     break;
         }
     }
     if (argc - optind != 1) return bam2gtf_usage();
