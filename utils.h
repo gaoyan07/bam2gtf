@@ -48,6 +48,8 @@
 
 #define xassert(cond, msg) if ((cond) == 0) _err_fatal_simple_core(__func__, msg)
 
+#define _err_func_printf(msg) err_func_printf(__func__, msg)
+
 typedef struct {
 	uint64_t x, y;
 } pair64_t;
@@ -77,6 +79,8 @@ extern "C" {
         ATTRIBUTE((format(printf, 2, 3)));
 	int err_printf(const char *format, ...)
         ATTRIBUTE((format(printf, 1, 2)));
+	int err_func_printf(const char *func, const char *format, ...)
+        ATTRIBUTE((format(printf, 2, 3)));
 	int stdout_printf(const char *format, ...)
         ATTRIBUTE((format(printf, 1, 2)));
 	int err_fputc(int c, FILE *stream);

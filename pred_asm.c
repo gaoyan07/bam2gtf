@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <string.h>
 #include "gtf.h"
 #include "build_sg.h"
 #include "pred_sg.h"
@@ -12,7 +13,7 @@ int pred_asm_usage(void)
     err_printf("Usage:   %s asm [option] <in.gtf> <in.sj> > out.asm\n\n", PROG);
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
-    //err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
+    err_printf("         -f --gtf-format  [STR]    file format of GTF input: plain GTF file(GTF) or binary splice-graph file(SG). [SG]\n");
 	err_printf("\n");
 	return 1;
 }
@@ -152,6 +153,8 @@ SGasm_group *gen_ASM(SG_group sg_g)
     int sg_i;
     SGasm_group *asm_g = sg_init_asm_group();
     for (sg_i = 0; sg_i < sg_g.SG_n; ++sg_i) {
+        if (sg_i == 5607)
+            printf("debug");
         SG sg = *(sg_g.SG[sg_i]);
         cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n);
         if (entry_n == 0 || exit_n == 0) goto END;
@@ -184,6 +187,7 @@ END: free(entry); free(exit);
 /*****************************/
 const struct option asm_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
+    { "gtf-format", 1, NULL, 'f' },
 
     { 0, 0, 0, 0 }
 };
@@ -191,10 +195,14 @@ const struct option asm_long_opt [] = {
 int pred_asm(int argc, char *argv[])
 {
     int c;
-    int no_novel_sj=1;
-	while ((c = getopt_long(argc, argv, "n", asm_long_opt, NULL)) >= 0) {
+    int no_novel_sj=1, SG_format=1;
+	while ((c = getopt_long(argc, argv, "nf:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj = 0; break;
+            case 'f': if (strcmp(optarg, "GTF")==0) SG_format = 0; 
+                      else if (strcmp(optarg, "SG")==0) SG_format = 1; 
+                      else return pred_asm_usage();
+                  break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return pred_asm_usage();
         }
@@ -202,15 +210,19 @@ int pred_asm(int argc, char *argv[])
     
     if (argc - optind != 2) return pred_asm_usage();
 
-    FILE *gtf_fp, *sj_fp;
+    FILE *sj_fp;
 
-    gtf_fp = xopen(argv[optind], "r");
     sj_fp = xopen(argv[optind+1], "r");
 
     chr_name_t *cname = chr_name_init();
     // build splice-graph with GTF
-    SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
-
+    SG_group *sg_g;
+    if (SG_format) sg_g = sg_restore(argv[optind]);
+    else  {
+        FILE *gtf_fp = xopen(argv[optind], "r");
+        sg_g = construct_SpliceGraph(gtf_fp, cname);
+        err_fclose(gtf_fp);
+    }
     // predict splice-graph with GTF-based splice-graph and splice-junciton
     SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_fp, cname, no_novel_sj);
 
@@ -220,10 +232,10 @@ int pred_asm(int argc, char *argv[])
     printf("%d\n", asm_g->sg_asm_n);
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         int sg_i = asm_g->sg_asm[i]->SG_id;
-        printf("%d:\t%c%d: (%d,%d)-(%d,%d)\n", i+1, "+-"[sr_sg_g->SG[sg_i]->is_rev], sr_sg_g->SG[sg_i]->tid, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.end);
+        printf("%d(%d):\t%c%d: (%d,%d)-(%d,%d)\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], sr_sg_g->SG[sg_i]->tid, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.end);
     }
 
     sg_free_group(sg_g); sg_free_group(sr_sg_g); sg_free_asm_group(asm_g);
-    err_fclose(gtf_fp), err_fclose(sj_fp); chr_name_free(cname);
+    err_fclose(sj_fp); chr_name_free(cname);
     return 0;
 }

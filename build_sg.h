@@ -22,32 +22,32 @@
 typedef struct {
     uint32_t node_id; // unique id in corresponding gene-locus
     exon_t e;
-    uint32_t *next_id;  int next_n, next_m;
-    uint32_t *pre_id;    int pre_n, pre_m;
-    uint32_t *pre_domn;  int pre_domn_n, pre_domn_m;
-    uint32_t *post_domn; int post_domn_n, post_domn_m;
+    uint32_t *next_id;  int32_t next_n, next_m;
+    uint32_t *pre_id;    int32_t pre_n, pre_m;
+    uint32_t *pre_domn;  int32_t pre_domn_n, pre_domn_m;
+    uint32_t *post_domn; int32_t post_domn_n, post_domn_m;
 } SGnode; // node of splicing-graph
 
 typedef struct {
     uint32_t site_id;
     int32_t site;
-    uint32_t *exon_id; int exon_n, exon_m;
+    uint32_t *exon_id; int32_t exon_n, exon_m;
     uint8_t type; // 0: 5'(donor), 1: 3'(acceptor)
 } SGsite; // splice-site of splicing-graph
 
 typedef struct {
     uint32_t don_site_id, acc_site_id;
     uint8_t is_rev;
-    double cov;
+    int32_t cov;
     uint8_t motif, is_anno;
     int32_t uniq_c, multi_c, max_over;
 } SGedge; // edge of splicing-graph, splice junction
 
 typedef struct {
     SGnode v;  // virtual start and end node
-    SGnode *node; int node_n, node_m; // sort by e.start and e.end 
-    SGsite *site; int site_n, site_m; // sort by site
-    SGedge *edge; int edge_n, edge_m; // sort by don_id and acc_id
+    SGnode *node; int32_t node_n, node_m; // sort by e.start and e.end 
+    SGsite *site; int32_t site_n, site_m; // sort by site
+    SGedge *edge; int32_t edge_n, edge_m; // sort by don_id and acc_id
     int32_t tid; uint8_t is_rev;
     // boundaries of splice-sites
     int32_t start, end; 
@@ -62,8 +62,8 @@ typedef struct {
 typedef struct {
     uint32_t SG_id;
     uint32_t v_start, v_end; // virtual start and end node
-    uint32_t *node_id; int node_n, node_m;
-    uint32_t *edge_id; int edge_n, edge_m;
+    uint32_t *node_id; int32_t node_n, node_m;
+    uint32_t *edge_id; int32_t edge_n, edge_m;
 } SGasm;
 
 typedef struct {
@@ -73,7 +73,7 @@ typedef struct {
  
 typedef struct {
     SG **SG;
-    int SG_n, SG_m;
+    int32_t SG_n, SG_m;
 } SG_group;
 
 SG *sg_init_node(SG *sg);
@@ -94,5 +94,7 @@ void cal_post_domn(SG *sg);
 SG_group *construct_SpliceGraph(FILE *gtf_fp, chr_name_t *cname);
 
 int build_sg(int argc, char *argv[]);
+void sg_dump(SG_group sg_g, const char *sg_name);
+SG_group *sg_restore(const char *sg_name);
 
 #endif

@@ -9,9 +9,9 @@ extern char PROG[20];
 int sg_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s sg [option] <in.gtf> <in.sj>\n\n", PROG);
+    err_printf("Usage:   %s build-sg [option] <in.gtf>\n\n", PROG);
     err_printf("Options:\n\n");
-    //err_printf("         -e --exon-min    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
+    err_printf("         -f --sg-name [STR]    file name to store splice-graph. [prefix.sg]\n");
     err_printf("\n");
 
     return 0;
@@ -55,6 +55,7 @@ SG *sg_init(void)
     sg->v.next_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
     sg->v.pre_n = 0; sg->v.pre_m = 1;
     sg->v.pre_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
+    sg->v.pre_domn_n = 0; sg->v.post_domn_n = 0; sg->v.pre_domn = NULL, sg->v.post_domn = NULL;
     sg->node_n = 0, sg->node_m = 2;
     sg->node = (SGnode*)_err_malloc(2 * sizeof(SGnode));
     sg->site_n = 0, sg->site_m = 2;
@@ -64,6 +65,7 @@ SG *sg_init(void)
 
     sg->start = CHR_MAX_END, sg->end = 0;
     // path_map will be alloced when SG is done
+    sg->path_map = NULL;
     return sg;
 }
 
@@ -103,10 +105,16 @@ void sg_free_site(SG *sg)
 void sg_free(SG *sg)
 {
     free(sg->v.next_id); free(sg->v.pre_id);
+    if (sg->v.pre_domn != NULL) free(sg->v.pre_domn); 
+    if (sg->v.post_domn != NULL) free(sg->v.post_domn); 
     sg_free_node(sg); sg_free_site(sg); free(sg->edge);
-    if (sg->node_n > 0) {
-        int i; for (i = 0; i < sg->node_n; ++i) free(sg->path_map[i]);
-        free(sg->path_map);
+    if (sg->path_map != NULL) {
+        if (sg->node_n > 0) {
+            int i; for (i = 0; i < sg->node_n; ++i) {
+                if (sg->path_map[i] != NULL) free(sg->path_map[i]);
+            }
+            free(sg->path_map);
+        }
     }
     free(sg);
 }
@@ -437,42 +445,177 @@ int trav_SpliceGraph()
     return 0;
 }
 
+void sg_dump_node(SGnode n, FILE *sg_fp)
+{
+    int i;
+    err_fwrite(&n.node_id, sizeof(uint32_t), 1, sg_fp);
+    err_fwrite(&n.e.tid, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fwrite(&n.e.start, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.e.end, sizeof(int32_t), 1, sg_fp);
+    err_fwrite(&n.next_n, sizeof(int32_t), 1, sg_fp);
+    for (i = 0; i < n.next_n; ++i) err_fwrite(n.next_id, sizeof(uint32_t), n.next_n, sg_fp);
+    err_fwrite(&n.pre_n, sizeof(int32_t), 1, sg_fp);
+    for (i = 0; i < n.pre_n; ++i) err_fwrite(n.pre_id, sizeof(uint32_t), n.pre_n, sg_fp);
+    err_fwrite(&n.pre_domn_n, sizeof(int32_t), 1, sg_fp);
+    for (i = 0; i < n.pre_domn_n; ++i) err_fwrite(n.pre_domn, sizeof(uint32_t), n.pre_domn_n, sg_fp);
+    err_fwrite(&n.post_domn_n, sizeof(int32_t), 1, sg_fp);
+    for (i = 0; i < n.post_domn_n; ++i) err_fwrite(n.post_domn, sizeof(uint32_t), n.post_domn_n, sg_fp);
+}
+
+void sg_restore_node(SGnode *n, FILE *sg_fp)
+{
+    int i;
+    err_fread_noeof(&n->node_id, sizeof(uint32_t), 1, sg_fp);
+    err_fread_noeof(&n->e.tid, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fread_noeof(&n->e.start, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->e.end, sizeof(int32_t), 1, sg_fp);
+    err_fread_noeof(&n->next_n, sizeof(int32_t), 1, sg_fp); n->next_m = n->next_n;
+    n->next_id = (uint32_t*)_err_malloc(n->next_n * sizeof(uint32_t));
+    for (i = 0; i < n->next_n; ++i) err_fread_noeof(n->next_id, sizeof(uint32_t), n->next_n, sg_fp);
+    err_fread_noeof(&n->pre_n, sizeof(int32_t), 1, sg_fp); n->pre_m = n->pre_n;
+    n->pre_id = (uint32_t*)_err_malloc(n->pre_n * sizeof(uint32_t));
+    for (i = 0; i < n->pre_n; ++i) err_fread_noeof(n->pre_id, sizeof(uint32_t), n->pre_n, sg_fp);
+    err_fread_noeof(&n->pre_domn_n, sizeof(int32_t), 1, sg_fp); n->pre_domn_m = n->pre_domn_n;
+    n->pre_domn = (uint32_t*)_err_malloc(n->pre_domn_n * sizeof(uint32_t));
+    for (i = 0; i < n->pre_domn_n; ++i) err_fread_noeof(n->pre_domn, sizeof(uint32_t), n->pre_domn_n, sg_fp);
+    err_fread_noeof(&n->post_domn_n, sizeof(int32_t), 1, sg_fp); n->post_domn_m = n->post_domn_n;
+    n->post_domn = (uint32_t*)_err_malloc(n->post_domn_n * sizeof(uint32_t));
+    for (i = 0; i < n->post_domn_n; ++i) err_fread_noeof(n->post_domn, sizeof(uint32_t), n->post_domn_n, sg_fp);
+}
+
+void sg_dump_site(SGsite s, FILE *sg_fp)
+{
+    int i;
+    err_fwrite(&s.site_id, sizeof(uint32_t), 1, sg_fp);
+    err_fwrite(&s.site, sizeof(int32_t), 1, sg_fp);
+    err_fwrite(&s.exon_n, sizeof(int32_t), 1, sg_fp);
+    for (i = 0; i < s.exon_n; ++i) err_fwrite(s.exon_id, sizeof(uint32_t), s.exon_n, sg_fp);
+    err_fwrite(&s.type, sizeof(uint8_t), 1, sg_fp);
+}
+
+void sg_restore_site(SGsite *s, FILE *sg_fp)
+{
+    int i;
+    err_fread_noeof(&s->site_id, sizeof(uint32_t), 1, sg_fp);
+    err_fread_noeof(&s->site, sizeof(int32_t), 1, sg_fp);
+    err_fread_noeof(&s->exon_n, sizeof(int32_t), 1, sg_fp);
+    s->exon_id = (uint32_t*)_err_malloc(s->exon_n * sizeof(uint32_t));
+    for (i = 0; i < s->exon_n; ++i) err_fread_noeof(s->exon_id, sizeof(uint32_t), s->exon_n, sg_fp);
+    err_fread_noeof(&s->type, sizeof(uint8_t), 1, sg_fp);
+}
+
+void sg_dump_edge(SGedge e, FILE *sg_fp)
+{
+    err_fwrite(&e.don_site_id, sizeof(uint32_t), 1, sg_fp); err_fwrite(&e.acc_site_id, sizeof(uint32_t), 1, sg_fp);
+    err_fwrite(&e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fwrite(&e.cov, sizeof(int32_t), 1, sg_fp); 
+    err_fwrite(&e.motif, sizeof(uint8_t), 1, sg_fp); err_fwrite(&e.is_anno, sizeof(uint8_t), 1, sg_fp); 
+    err_fwrite(&e.uniq_c, sizeof(int32_t), 1, sg_fp); err_fwrite(&e.multi_c, sizeof(int32_t), 1, sg_fp); err_fwrite(&e.max_over, sizeof(int32_t), 1, sg_fp);
+}
+
+void sg_restore_edge(SGedge *e, FILE *sg_fp)
+{
+    err_fread_noeof(&e->don_site_id, sizeof(uint32_t), 1, sg_fp); err_fread_noeof(&e->acc_site_id, sizeof(uint32_t), 1, sg_fp);
+    err_fread_noeof(&e->is_rev, sizeof(uint8_t), 1, sg_fp); err_fread_noeof(&e->cov, sizeof(int32_t), 1, sg_fp); 
+    err_fread_noeof(&e->motif, sizeof(uint8_t), 1, sg_fp); err_fread_noeof(&e->is_anno, sizeof(uint8_t), 1, sg_fp); 
+    err_fread_noeof(&e->uniq_c, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&e->multi_c, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&e->max_over, sizeof(int32_t), 1, sg_fp);
+}
+
+void sg_dump_core(SG sg, FILE *sg_fp)
+{
+    int i;
+    sg_dump_node(sg.v, sg_fp); // virtual start and end
+    // node
+    err_fwrite(&sg.node_n, sizeof(int32_t), 1, sg_fp);
+    for (i = 0; i < sg.node_n; ++i) sg_dump_node(sg.node[i], sg_fp);
+    // site
+    err_fwrite(&sg.site_n, sizeof(int32_t), 1, sg_fp);
+    for (i = 0; i < sg.site_n; ++i) sg_dump_site(sg.site[i], sg_fp);
+    // edge
+    err_fwrite(&sg.edge_n, sizeof(int32_t), 1, sg_fp);
+    for (i = 0; i < sg.edge_n; ++i) sg_dump_edge(sg.edge[i], sg_fp);
+    // tid, is_rev, start, end
+    err_fwrite(&sg.tid, sizeof(int32_t), 1, sg_fp); // XXX name
+    err_fwrite(&sg.is_rev, sizeof(uint8_t), 1, sg_fp);
+    err_fwrite(&sg.start, sizeof(int32_t), 1, sg_fp);
+    err_fwrite(&sg.end, sizeof(int32_t), 1, sg_fp);
+}
+
+void sg_restore_core(SG *sg, FILE *sg_fp)
+{
+    int i;
+    sg_restore_node(&sg->v, sg_fp); // virtual start and end
+    // node
+    err_fread_noeof(&sg->node_n, sizeof(int32_t), 1, sg_fp); sg->node_m = sg->node_n;
+    sg->node = (SGnode*)_err_malloc(sg->node_n * sizeof(SGnode));
+    for (i = 0; i  < sg->node_n; ++i) sg_restore_node(sg->node+i, sg_fp);
+    // site
+    err_fread_noeof(&sg->site_n, sizeof(int32_t), 1, sg_fp); sg->site_m = sg->site_n;
+    sg->site = (SGsite*)_err_malloc(sg->site_n* sizeof(SGnode));
+    for (i = 0; i  < sg->site_n; ++i) sg_restore_site(sg->site+i, sg_fp);
+    // edge
+    err_fread_noeof(&sg->edge_n, sizeof(int32_t), 1, sg_fp); sg->edge_m = sg->edge_n;
+    sg->edge = (SGedge*)_err_malloc(sg->edge_n* sizeof(SGnode));
+    for (i = 0; i  < sg->edge_n; ++i) sg_restore_edge(sg->edge+i, sg_fp);
+    // tid, is_rev, start, end
+    err_fread_noeof(&sg->tid, sizeof(int32_t), 1, sg_fp);
+    err_fread_noeof(&sg->is_rev, sizeof(uint8_t), 1, sg_fp);
+    err_fread_noeof(&sg->start, sizeof(int32_t), 1, sg_fp);
+    err_fread_noeof(&sg->end, sizeof(int32_t), 1, sg_fp);
+}
+
+
+void sg_dump(SG_group sg_g, const char *sg_name)
+{
+    _err_func_printf("Writing splice-graph to file ...\n");
+    FILE *sg_fp = xopen(sg_name, "wb");
+    err_fwrite(&sg_g.SG_n, sizeof(int32_t), 1, sg_fp);
+    int i;
+    for (i = 0; i < sg_g.SG_n; ++i)
+        sg_dump_core(*(sg_g.SG[i]), sg_fp);
+    _err_func_printf("Writing splice-graph to file done!\n");
+    err_fclose(sg_fp);
+}
+
+SG_group *sg_restore(const char *sg_name)
+{
+    _err_func_printf("Restoring splice-graph from file ...\n");
+    FILE *sg_fp = xopen(sg_name, "rb");
+    SG_group *sg_g = (SG_group*)_err_malloc(sizeof(SG_group));
+    err_fread_noeof(&(sg_g->SG_n), sizeof(int32_t), 1, sg_fp); sg_g->SG_m = sg_g->SG_n;
+    sg_g->SG = (SG**)_err_malloc(sg_g->SG_n * sizeof(SG*));
+    int i; 
+    for (i = 0; i < sg_g->SG_n; ++i) {
+        sg_g->SG[i] = (SG*)_err_malloc(sizeof(SG));
+        sg_restore_core(sg_g->SG[i], sg_fp);
+        // path_map
+        sg_g->SG[i]->path_map = NULL;
+    }
+    _err_func_printf("Restoring splice-graph from file done!\n");
+    err_fclose(sg_fp);
+    return sg_g;
+}
+
 const struct option sg_long_opt [] = {
+    {"sg-name", 1, NULL, 'f' },
     {0, 0, 0, 0}
 };
 
 int build_sg(int argc, char *argv[])
 {
     int c;
-    while ((c = getopt_long(argc, argv, "", sg_long_opt, NULL)) >= 0) {
+    char sg_name[1024] = "";
+    while ((c = getopt_long(argc, argv, "f:", sg_long_opt, NULL)) >= 0) {
         switch (c) {
+            case 'f': strcpy(sg_name, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return sg_usage();
         }
     }
-    if (argc - optind != 2) return sg_usage();
+    if (argc - optind != 1) return sg_usage();
     FILE *gtf_fp = xopen(argv[optind], "r");
-    chr_name_t *cname = chr_name_init();
+    if (strlen(sg_name) == 0) strcpy(sg_name, argv[optind]); strcat(sg_name, ".sg");
 
+    chr_name_t *cname = chr_name_init();
     SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
 
-    /*FILE *sj_fp = xopen(argv[optind+1], "r");
-    SG_group *sr_sg_g = sg_init_group(1);
-
-    int i, j;
-    for (i = 0; i < sr_sg_g->SG[0]->v.next_n; ++i) printf("%d\t", sr_sg_g->SG[0]->v.next_id[i]); printf("\n");
-    for (i = 0; i < sr_sg_g->SG[0]->v.pre_n; ++i) printf("%d\t", sr_sg_g->SG[0]->v.pre_id[i]); printf("\n");
-    for (i = 0; i < sr_sg_g->SG[0]->node_n; ++i) printf("\t%d", i+1); printf("\n");
-
-    for (i = 0; i < sr_sg_g->SG[0]->node_n; ++i) {
-        printf("%d\t", i+1);
-        for (j = 0; j < i; ++j) {
-            printf("%d\t", sr_sg_g->SG[0]->path_map[j][i]);
-        }
-        printf("\n");
-    }*/
+    sg_dump(*sg_g, sg_name);
 
     sg_free_group(sg_g); err_fclose(gtf_fp); chr_name_free(cname); 
-    //err_fclose(sj_fp); sg_free_group(sr_sg_g);
     return 0;
 }
