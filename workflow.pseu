@@ -13,32 +13,29 @@
 
     
 2. SR-SJ-SG
-    // update site
-    1. sj(don, acc) ==> update_site(don, acc, cov ...) {site, type}
-    // update node
-    2. sj(don, acc) ==> GTF_site_id
+    // update node & site
+    1. sj(don, acc) ==> GTF_site_id
         map[site[GTF_don_id].exon[]] = 1
         map[site[GTF_acc_id].exon[]] = 1
         if (Node.map & Node.map == 1) {
             update_node(Node) {e}
+            // update site
+            update_site(e.start, e.end)
         }
     // alloc for node&site
-    3. init_node/site {id, malloc(node[next/pre]/site[exon_id]}
-    4. update edge, node.next/pre, site.exon_id
-        4.0 sj(don, acc) ==> site_id
-        4.1 update_edge(site_id, cov)                   // EDGE DONE
+    2. init_node/site {id, malloc(node[next/pre]/site[exon_id]}
+    3. update edge, node.next/pre, site.exon_id
+        3.0 sj(don, acc) ==> site_id 
+            if (hit == 0) continue;
+        3.1 update_edge(site_id, cov)                   // EDGE DONE
 
+        3.2 update_node_next/pre
         sj(don, acc) ==> GTF_site_id
         for (site[GTF_site_id].exon[]) {
             if (map == 1) {
-                (exon) ==> node_id
-                update_site_exon(site_id, node_id)
-            }
-        }
-        for (site[GTF_site_id].exon[]) {
-            if (map == 1) {
-                (exon) ==> node_id
-                update_site_exon(site_id, exon)     // SITE DONE
+                (exon) ==> node_id // sch(sr_sg)
+                if (hit == 0) continue;
+                update_site_exon(site_id, node_id)      // SITE DONE
             }
         }
         for (don_site_id.exon[]) {
@@ -46,3 +43,6 @@
                 update_node_next(don.exon[], acc.exon[])    // NODE DONE
             }
         }
+
+OTHERS
+1. rewrite "can not hit"

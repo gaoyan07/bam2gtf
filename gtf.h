@@ -91,7 +91,7 @@ typedef struct {
 
 typedef struct {
     trans_t *trans; int trans_n, anno_tran_n, trans_m;
-    int32_t tid; uint32_t is_rev;
+    int32_t tid; uint8_t is_rev;
     int32_t start, end;
     char gname[100];
 } gene_t;

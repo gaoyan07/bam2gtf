@@ -98,9 +98,10 @@ void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *
 void sg_update_asm_edge(SG sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
 {
     int hit = 0;
-    uint32_t pre_site_id = sg_bin_sch_site(sg, sg.node[pre_id].e.end+1, &hit); if (hit==0) err_fatal_simple("Can not hit site.(3)\n");
+    if (sg.node[pre_id].e.end == 0 || sg.node[cur_id].e.start == CHR_MAX_END) return;
+    uint32_t pre_site_id = sg_bin_sch_site(sg, sg.node[pre_id].e.end+1, &hit); if (hit==0) err_fatal_core(__func__, "Can not hit site: (%d).(3)\n", sg.node[pre_id].e.end+1);
     uint32_t cur_site_id = sg_bin_sch_site(sg, sg.node[cur_id].e.start-1, &hit); if (hit==0) err_fatal_simple("Can not hit site.(3)\n");
-    uint32_t edge_i = sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); if (hit == 0) err_fatal_simple("Can not hit edge.(3)\n");
+    uint32_t edge_i = sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); if (hit == 0) err_fatal_core(__func__, "Can not hit edge.(%d,%d) (3)\n", sg.node[pre_id].e.end, sg.node[cur_id].e.start);
     if (hit == 0) err_fatal_simple("Can not hit edge.(3)\n");
     _insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, uint32_t)
 }
@@ -153,8 +154,6 @@ SGasm_group *gen_ASM(SG_group sg_g)
     int sg_i;
     SGasm_group *asm_g = sg_init_asm_group();
     for (sg_i = 0; sg_i < sg_g.SG_n; ++sg_i) {
-        if (sg_i == 5607)
-            printf("debug");
         SG sg = *(sg_g.SG[sg_i]);
         cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n);
         if (entry_n == 0 || exit_n == 0) goto END;

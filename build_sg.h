@@ -44,7 +44,8 @@ typedef struct {
 } SGedge; // edge of splicing-graph, splice junction
 
 typedef struct {
-    SGnode v;  // virtual start and end node
+    //SGnode v;  // virtual start and end node
+    // virtual_start: node[0]; virtual_end: node[node_n-1]
     SGnode *node; int32_t node_n, node_m; // sort by e.start and e.end 
     SGsite *site; int32_t site_n, site_m; // sort by site
     SGedge *edge; int32_t edge_n, edge_m; // sort by don_id and acc_id
