@@ -205,7 +205,6 @@ int sg_update_site(SG *sg, int32_t site, uint8_t type)
                     memmove(sg->don_site+s_i+1, sg->don_site+s_i, (sg->don_site_n-s_i-1) * sizeof(SGsite));
             // set site
             sg->don_site[s_i].site = site;
-            sg->don_site[s_i].type = type;
         }
     } else {
         int s_i = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, site, &hit);
@@ -218,7 +217,6 @@ int sg_update_site(SG *sg, int32_t site, uint8_t type)
                     memmove(sg->acc_site+s_i+1, sg->acc_site+s_i, (sg->acc_site_n-s_i-1) * sizeof(SGsite));
             // set site
             sg->acc_site[s_i].site = site;
-            sg->acc_site[s_i].type = type;
         }
     }
     return 0;
@@ -499,7 +497,6 @@ void sg_dump_site(SGsite s, FILE *sg_fp)
     err_fwrite(&s.site, sizeof(int32_t), 1, sg_fp);
     err_fwrite(&s.exon_n, sizeof(int32_t), 1, sg_fp);
     err_fwrite(s.exon_id, sizeof(uint32_t), s.exon_n, sg_fp);
-    err_fwrite(&s.type, sizeof(uint8_t), 1, sg_fp);
 }
 
 void sg_restore_site(SGsite *s, FILE *sg_fp)
@@ -509,7 +506,6 @@ void sg_restore_site(SGsite *s, FILE *sg_fp)
     err_fread_noeof(&s->exon_n, sizeof(int32_t), 1, sg_fp);
     s->exon_id = (uint32_t*)_err_malloc(s->exon_n * sizeof(uint32_t));
     err_fread_noeof(s->exon_id, sizeof(uint32_t), s->exon_n, sg_fp);
-    err_fread_noeof(&s->type, sizeof(uint8_t), 1, sg_fp);
 }
 
 void sg_dump_edge(SGedge e, FILE *sg_fp)
@@ -555,18 +551,18 @@ void sg_restore_core(SG *sg, FILE *sg_fp)
     // node
     err_fread_noeof(&sg->node_n, sizeof(int32_t), 1, sg_fp); sg->node_m = sg->node_n;
     sg->node = (SGnode*)_err_malloc(sg->node_n * sizeof(SGnode));
-    for (i = 0; i  < sg->node_n; ++i) sg_restore_node(sg->node+i, sg_fp);
+    for (i = 0; i < sg->node_n; ++i) sg_restore_node(sg->node+i, sg_fp);
     // site
     err_fread_noeof(&sg->don_site_n, sizeof(int32_t), 1, sg_fp); sg->don_site_m = sg->don_site_n;
     sg->don_site = (SGsite*)_err_malloc(sg->don_site_n* sizeof(SGnode));
-    for (i = 0; i  < sg->don_site_n; ++i) sg_restore_site(sg->don_site+i, sg_fp);
+    for (i = 0; i < sg->don_site_n; ++i) sg_restore_site(sg->don_site+i, sg_fp);
     err_fread_noeof(&sg->acc_site_n, sizeof(int32_t), 1, sg_fp); sg->acc_site_m = sg->acc_site_n;
     sg->acc_site = (SGsite*)_err_malloc(sg->acc_site_n* sizeof(SGnode));
-    for (i = 0; i  < sg->acc_site_n; ++i) sg_restore_site(sg->acc_site+i, sg_fp);
+    for (i = 0; i < sg->acc_site_n; ++i) sg_restore_site(sg->acc_site+i, sg_fp);
     // edge
     err_fread_noeof(&sg->edge_n, sizeof(int32_t), 1, sg_fp); sg->edge_m = sg->edge_n;
     sg->edge = (SGedge*)_err_malloc(sg->edge_n* sizeof(SGnode));
-    for (i = 0; i  < sg->edge_n; ++i) sg_restore_edge(sg->edge+i, sg_fp);
+    for (i = 0; i < sg->edge_n; ++i) sg_restore_edge(sg->edge+i, sg_fp);
     // tid, is_rev, start, end
     err_fread_noeof(&sg->tid, sizeof(int32_t), 1, sg_fp);
     err_fread_noeof(&sg->is_rev, sizeof(uint8_t), 1, sg_fp);
@@ -581,8 +577,7 @@ void sg_dump(SG_group sg_g, const char *sg_name)
     FILE *sg_fp = xopen(sg_name, "wb");
     err_fwrite(&sg_g.SG_n, sizeof(int32_t), 1, sg_fp);
     int i;
-    for (i = 0; i < sg_g.SG_n; ++i)
-        sg_dump_core(*(sg_g.SG[i]), sg_fp);
+    for (i = 0; i < sg_g.SG_n; ++i) sg_dump_core(*(sg_g.SG[i]), sg_fp);
     _err_func_printf("Writing splice-graph to file done!\n");
     err_fclose(sg_fp);
 }

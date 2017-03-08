@@ -32,7 +32,6 @@ typedef struct {
     uint32_t site_id;
     int32_t site;
     uint32_t *exon_id; int32_t exon_n, exon_m;
-    uint8_t type; // 0: 5'(donor), 1: 3'(acceptor)
 } SGsite; // splice-site of splicing-graph
 
 typedef struct {
