@@ -47,7 +47,8 @@ typedef struct {
     //SGnode v;  // virtual start and end node
     // virtual_start: node[0]; virtual_end: node[node_n-1]
     SGnode *node; int32_t node_n, node_m; // sort by e.start and e.end 
-    SGsite *site; int32_t site_n, site_m; // sort by site
+    SGsite *don_site; int32_t don_site_n, don_site_m; // sort by site
+    SGsite *acc_site; int32_t acc_site_n, acc_site_m; // sort by site
     SGedge *edge; int32_t edge_n, edge_m; // sort by don_id and acc_id
     int32_t tid; uint8_t is_rev;
     // boundaries of splice-sites
@@ -86,7 +87,7 @@ int sg_update_node(SG *sg, exon_t e);
 int sg_update_site(SG *sg, int32_t site, uint8_t type);
 
 int sg_bin_sch_node(SG sg, exon_t e, int *hit);
-int sg_bin_sch_site(SG sg, int32_t s, int *hit);
+int sg_bin_sch_site(SGsite *site, int32_t site_n, int32_t s, int *hit);
 int sg_bin_sch_edge(SG sg, uint32_t don_site_id, uint32_t acc_site_id, int *hit);
 
 void cal_pre_domn(SG *sg);
