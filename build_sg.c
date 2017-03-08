@@ -463,56 +463,52 @@ int trav_SpliceGraph()
 
 void sg_dump_node(SGnode n, FILE *sg_fp)
 {
-    int i;
     err_fwrite(&n.node_id, sizeof(uint32_t), 1, sg_fp);
     err_fwrite(&n.e.tid, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fwrite(&n.e.start, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.e.end, sizeof(int32_t), 1, sg_fp);
     err_fwrite(&n.next_n, sizeof(int32_t), 1, sg_fp);
-    for (i = 0; i < n.next_n; ++i) err_fwrite(n.next_id, sizeof(uint32_t), n.next_n, sg_fp);
+    err_fwrite(n.next_id, sizeof(uint32_t), n.next_n, sg_fp);
     err_fwrite(&n.pre_n, sizeof(int32_t), 1, sg_fp);
-    for (i = 0; i < n.pre_n; ++i) err_fwrite(n.pre_id, sizeof(uint32_t), n.pre_n, sg_fp);
+    err_fwrite(n.pre_id, sizeof(uint32_t), n.pre_n, sg_fp);
     err_fwrite(&n.pre_domn_n, sizeof(int32_t), 1, sg_fp);
-    for (i = 0; i < n.pre_domn_n; ++i) err_fwrite(n.pre_domn, sizeof(uint32_t), n.pre_domn_n, sg_fp);
+    err_fwrite(n.pre_domn, sizeof(uint32_t), n.pre_domn_n, sg_fp);
     err_fwrite(&n.post_domn_n, sizeof(int32_t), 1, sg_fp);
-    for (i = 0; i < n.post_domn_n; ++i) err_fwrite(n.post_domn, sizeof(uint32_t), n.post_domn_n, sg_fp);
+    err_fwrite(n.post_domn, sizeof(uint32_t), n.post_domn_n, sg_fp);
 }
 
 void sg_restore_node(SGnode *n, FILE *sg_fp)
 {
-    int i;
     err_fread_noeof(&n->node_id, sizeof(uint32_t), 1, sg_fp);
     err_fread_noeof(&n->e.tid, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fread_noeof(&n->e.start, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->e.end, sizeof(int32_t), 1, sg_fp);
     err_fread_noeof(&n->next_n, sizeof(int32_t), 1, sg_fp); n->next_m = n->next_n;
     n->next_id = (uint32_t*)_err_malloc(n->next_n * sizeof(uint32_t));
-    for (i = 0; i < n->next_n; ++i) err_fread_noeof(n->next_id, sizeof(uint32_t), n->next_n, sg_fp);
+    err_fread_noeof(n->next_id, sizeof(uint32_t), n->next_n, sg_fp);
     err_fread_noeof(&n->pre_n, sizeof(int32_t), 1, sg_fp); n->pre_m = n->pre_n;
     n->pre_id = (uint32_t*)_err_malloc(n->pre_n * sizeof(uint32_t));
-    for (i = 0; i < n->pre_n; ++i) err_fread_noeof(n->pre_id, sizeof(uint32_t), n->pre_n, sg_fp);
+    err_fread_noeof(n->pre_id, sizeof(uint32_t), n->pre_n, sg_fp);
     err_fread_noeof(&n->pre_domn_n, sizeof(int32_t), 1, sg_fp); n->pre_domn_m = n->pre_domn_n;
     n->pre_domn = (uint32_t*)_err_malloc(n->pre_domn_n * sizeof(uint32_t));
-    for (i = 0; i < n->pre_domn_n; ++i) err_fread_noeof(n->pre_domn, sizeof(uint32_t), n->pre_domn_n, sg_fp);
+    err_fread_noeof(n->pre_domn, sizeof(uint32_t), n->pre_domn_n, sg_fp);
     err_fread_noeof(&n->post_domn_n, sizeof(int32_t), 1, sg_fp); n->post_domn_m = n->post_domn_n;
     n->post_domn = (uint32_t*)_err_malloc(n->post_domn_n * sizeof(uint32_t));
-    for (i = 0; i < n->post_domn_n; ++i) err_fread_noeof(n->post_domn, sizeof(uint32_t), n->post_domn_n, sg_fp);
+    err_fread_noeof(n->post_domn, sizeof(uint32_t), n->post_domn_n, sg_fp);
 }
 
 void sg_dump_site(SGsite s, FILE *sg_fp)
 {
-    int i;
     err_fwrite(&s.site_id, sizeof(uint32_t), 1, sg_fp);
     err_fwrite(&s.site, sizeof(int32_t), 1, sg_fp);
     err_fwrite(&s.exon_n, sizeof(int32_t), 1, sg_fp);
-    for (i = 0; i < s.exon_n; ++i) err_fwrite(s.exon_id, sizeof(uint32_t), s.exon_n, sg_fp);
+    err_fwrite(s.exon_id, sizeof(uint32_t), s.exon_n, sg_fp);
     err_fwrite(&s.type, sizeof(uint8_t), 1, sg_fp);
 }
 
 void sg_restore_site(SGsite *s, FILE *sg_fp)
 {
-    int i;
     err_fread_noeof(&s->site_id, sizeof(uint32_t), 1, sg_fp);
     err_fread_noeof(&s->site, sizeof(int32_t), 1, sg_fp);
     err_fread_noeof(&s->exon_n, sizeof(int32_t), 1, sg_fp);
     s->exon_id = (uint32_t*)_err_malloc(s->exon_n * sizeof(uint32_t));
-    for (i = 0; i < s->exon_n; ++i) err_fread_noeof(s->exon_id, sizeof(uint32_t), s->exon_n, sg_fp);
+    err_fread_noeof(s->exon_id, sizeof(uint32_t), s->exon_n, sg_fp);
     err_fread_noeof(&s->type, sizeof(uint8_t), 1, sg_fp);
 }
 
