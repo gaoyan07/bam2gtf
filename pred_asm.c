@@ -101,10 +101,9 @@ void sg_update_asm(SG sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
     sg_update_asm_edge(sg, sg_asm, pre_id, cur_id);
 }
 
-
-void sub_splice_graph(SG sg, SGasm *sg_asm, uint32_t cur_id, uint32_t e_id)
+void sub_splice_graph(SG sg, int **node_visit, SGasm *sg_asm, uint32_t cur_id, uint32_t e_id)
 {
-    //if (sg.node[cur_id].next_n == 0) err_fatal_simple("No next node!\n");
+    if ((*node_visit)[cur_id] == 1) return; else (*node_visit)[cur_id] = 1;
 
     if (cur_id == e_id) return;
     int i;
@@ -114,7 +113,7 @@ void sub_splice_graph(SG sg, SGasm *sg_asm, uint32_t cur_id, uint32_t e_id)
             continue;
         } else {
             sg_update_asm(sg, sg_asm, cur_id, sg.node[cur_id].next_id[i]); 
-            sub_splice_graph(sg, sg_asm, sg.node[cur_id].next_id[i], e_id);
+            sub_splice_graph(sg, node_visit, sg_asm, sg.node[cur_id].next_id[i], e_id);
         }
     }
 }
@@ -136,7 +135,6 @@ int sg_asm_group_add(SGasm_group *asm_g, SGasm *sg_asm)
     asm_g->sg_asm_n++;
     return asm_g->sg_asm_n;
 }
-
 SGasm_group *gen_ASM(SG_group sg_g)
 {
     int entry_n, exit_n; uint32_t *entry, *exit;
@@ -147,6 +145,7 @@ SGasm_group *gen_ASM(SG_group sg_g)
         cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n);
         if (entry_n == 0 || exit_n == 0) goto END;
 
+        int *node_visit = (int*)_err_calloc(sg.node_n, sizeof(int));
         int i, j, hit;
         for (i = 0; i < entry_n; ++i) {
             hit = 0;
@@ -157,17 +156,16 @@ SGasm_group *gen_ASM(SG_group sg_g)
                         && sg.node[entry[i]].post_domn[1] == exit[j] 
                         && sg.node[exit[j]].pre_domn[1] == entry[i]) {
                     SGasm *sg_asm = sg_init_asm(sg_i, entry[i], exit[j]);
-                    sub_splice_graph(sg, sg_asm, entry[i], exit[j]);
+                    sub_splice_graph(sg, &node_visit, sg_asm, entry[i], exit[j]);
                     sg_asm_group_add(asm_g, sg_asm);
-                    //asm_sg = rm_max_edge(asm_sg);
-                    //get_ASM(asm_sg, asm_g);
                     sg_free_asm(sg_asm);
                     hit = 1; break;
                 }
             }
             if (hit) continue;
         }
-END: free(entry); free(exit);
+        free(node_visit);
+        END: free(entry); free(exit);
     }
     return asm_g;
 }
@@ -197,12 +195,7 @@ int pred_asm(int argc, char *argv[])
                      return pred_asm_usage();
         }
     }
-    
     if (argc - optind != 2) return pred_asm_usage();
-
-    FILE *sj_fp;
-
-    sj_fp = xopen(argv[optind+1], "r");
 
     // build splice-graph with GTF
     SG_group *sg_g;
@@ -214,15 +207,19 @@ int pred_asm(int argc, char *argv[])
         err_fclose(gtf_fp); chr_name_free(cname);
     }
     // predict splice-graph with GTF-based splice-graph and splice-junciton
+    FILE *sj_fp = xopen(argv[optind+1], "r");
     SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_fp, no_novel_sj);
+    err_fclose(sj_fp); sg_free_group(sg_g); 
 
-    // predict ASM with short-read splice-graph
+    // generate ASM with short-read splice-graph
     SGasm_group *asm_g = gen_ASM(*sr_sg_g);
+
     FILE *out = xopen(out_fn, "w");
-    int i; chr_name_t *cname = sg_g->cname;
+    chr_name_t *cname = sr_sg_g->cname;
     fprintf(out, "%d\n", asm_g->sg_asm_n);
+    int i, sg_i; 
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
-        int sg_i = asm_g->sg_asm[i]->SG_id;
+        sg_i = asm_g->sg_asm[i]->SG_id;
         int start, end;
         uint32_t v_s = asm_g->sg_asm[i]->v_start, v_e = asm_g->sg_asm[i]->v_end;
         if (sr_sg_g->SG[sg_i]->node[v_s].e.start == 0) start = sr_sg_g->SG[sg_i]->start-100; else start = sr_sg_g->SG[sg_i]->node[v_s].e.start;
@@ -230,8 +227,6 @@ int pred_asm(int argc, char *argv[])
 
         fprintf(out, "%d(%d):\t%c%s: (%d,%d)-(%d,%d) %s:%d-%d\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.end, cname->chr_name[sr_sg_g->SG[sg_i]->tid], start, end);
     }
-
-    sg_free_group(sg_g); sg_free_group(sr_sg_g); sg_free_asm_group(asm_g);
-    err_fclose(sj_fp);  err_fclose(out);
+    sg_free_group(sr_sg_g); sg_free_asm_group(asm_g); err_fclose(out);
     return 0;
 }
