@@ -103,7 +103,7 @@ typedef struct {
 
 typedef struct {
     char **chr_name;
-    int chr_n, chr_m;
+    int32_t chr_n, chr_m;
 } chr_name_t;
 
 exon_t *exon_init(int n);

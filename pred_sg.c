@@ -9,12 +9,12 @@ extern const char PROG[20];
 int pred_sg_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s pred_sg [option] <in.gtf> <in.sj> > out.sg\n\n", PROG);
+    err_printf("Usage:   %s pred_sg [option] <in.gtf> <in.sj>\n\n", PROG);
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -f --gtf-format  [STR]    file format of GTF input: \n");
     err_printf("                                     plain GTF file(GTF) or binary splice-graph file(SG). [SG]\n");
-    err_printf("         -o --out-sg      [STR]    file name of output splice-graph. [stdout]\n");
+    err_printf("         -o --out-prefix  [STR]    prefix of output splice-graph file. [in.sj]\n");
     err_printf("\n");
     return 1;
 }
@@ -123,8 +123,6 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
     for (i = 0; i < sr_sg_g->SG_n; ++i) {
         sg_init_node(sr_sg_g->SG[i]); sg_init_site(sr_sg_g->SG[i]);
         if (sr_sg_g->SG[i]->node_n == 0) continue;
-        sr_sg_g->SG[i]->path_map = (uint8_t**)_err_malloc(sr_sg_g->SG[i]->node_n * sizeof(uint8_t*));
-        for (j = 0; j < sr_sg_g->SG[i]->node_n; ++j) sr_sg_g->SG[i]->path_map[j] = (uint8_t*)_err_calloc(sr_sg_g->SG[i]->node_n, sizeof(uint8_t));
     }
     // 3. updage_edge(edge[edge_id])
     i = 0, last_sg_i = 0;
@@ -182,8 +180,6 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                             sr_sg->node[don_id].next_id[sr_sg->node[don_id].next_n++] = acc_id;
                         if (sr_sg->node[acc_id].pre_n == sr_sg->node[acc_id].pre_m) _realloc(sr_sg->node[acc_id].pre_id, sr_sg->node[acc_id].pre_m, uint32_t)
                             sr_sg->node[acc_id].pre_id[sr_sg->node[acc_id].pre_n++] = don_id;
-
-                        sr_sg->path_map[don_id][acc_id] = 1;
                     }
                 }
                 break;
@@ -195,27 +191,29 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
     int m;
     for (m = 0; m < sr_sg_g->SG_n; ++m) {
         SG *sr_sg = sr_sg_g->SG[m];
-        for (i = 0; i < sr_sg->node_n; ++i) {
-            for (j = i+2; j < sr_sg->node_n; ++j) {
-                if (sr_sg->path_map[i][j] == 1) continue;
-                for (k = i+1; k < j; ++k) {
-                    if (sr_sg->path_map[i][k] > 0 && sr_sg->path_map[k][j] > 0)
-                        sr_sg->path_map[i][j] = 2;
-                }
-            }
-        }
         cal_pre_domn(sr_sg); cal_post_domn(sr_sg);
     }
     return 0;
 }
 
 // sr_sg_g.SG_n == sg_g.SG_n
-SG_group *predict_SpliceGraph(SG_group sg_g, FILE *sj_p, chr_name_t *cname, int no_novel_sj)
+SG_group *predict_SpliceGraph(SG_group sg_g, FILE *sj_p, int no_novel_sj)
 {
     SG_group *sr_sg_g = sg_init_group(sg_g.SG_n);
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t));
-    int sj_n, sj_m = 10000;
-    sj_n = read_sj_group(sj_p, cname, &sj_group, sj_m);
+    int sj_n, sj_m = 10000, i;
+    sj_n = read_sj_group(sj_p, sg_g.cname, &sj_group, sj_m);
+
+    if (sg_g.cname->chr_n > sr_sg_g->cname->chr_m) {
+        sr_sg_g->cname->chr_name = (char**)_err_realloc(sr_sg_g->cname, sg_g.cname->chr_n * sizeof(char*));
+        for (i = sr_sg_g->cname->chr_m; i < sg_g.cname->chr_n; ++i) sr_sg_g->cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
+        sr_sg_g->cname->chr_m = sg_g.cname->chr_n;
+    }
+    sr_sg_g->cname->chr_n = sg_g.cname->chr_n;
+    for (i = 0; i < sr_sg_g->cname->chr_n; ++i) strcpy(sr_sg_g->cname->chr_name[i], sg_g.cname->chr_name[i]);
+
+
+
     predict_SpliceGraph_core(sg_g, sj_group, sj_n, sr_sg_g, no_novel_sj);
     free(sj_group);
     return sr_sg_g;
@@ -225,7 +223,7 @@ SG_group *predict_SpliceGraph(SG_group sg_g, FILE *sj_p, chr_name_t *cname, int 
 const struct option pred_sg_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
     { "gtf-format", 1, NULL, 'f' }, 
-    { "out-sg", 1, NULL, 'o' },
+    { "out-prefix", 1, NULL, 'o' },
 
     { 0, 0, 0, 0}
 };
@@ -233,7 +231,7 @@ const struct option pred_sg_long_opt [] = {
 int pred_sg(int argc, char *argv[])
 {
     int c;
-    int no_novel_sj = 1, SG_format = 1; char out_file[1024]="-";
+    int no_novel_sj = 1, SG_format = 1; char out_prefix[1024]="";
     while ((c = getopt_long(argc, argv, "nf:o:", pred_sg_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj = 0; break;
@@ -241,7 +239,7 @@ int pred_sg(int argc, char *argv[])
                       else if (strcmp(optarg, "SG")==0) SG_format = 1; 
                       else return pred_sg_usage();
                   break;
-            case 'o': strcpy(out_file, optarg); break;
+            case 'o': strcpy(out_prefix, optarg); break;
             default: err_printf("Error: unknown optin: %s.\n", optarg);
                      return pred_sg_usage();
         }
@@ -251,22 +249,23 @@ int pred_sg(int argc, char *argv[])
 
     sj_fp = xopen(argv[optind+1], "r");
 
-    chr_name_t *cname = chr_name_init();
     // build splice-graph with GTF
     SG_group *sg_g;
     if (SG_format) sg_g = sg_restore(argv[optind]);
     else  {
         FILE *gtf_fp = xopen(argv[optind], "r");
+        chr_name_t *cname = chr_name_init();
         sg_g = construct_SpliceGraph(gtf_fp, cname);
-        err_fclose(gtf_fp);
+        err_fclose(gtf_fp);  chr_name_free(cname);
     }
     // predict splice-graph with GTF-based splice-graph and splice-junciton
-    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_fp, cname, no_novel_sj);
+    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_fp, no_novel_sj);
 
     // dump predicted splice-graph to file
-    sg_dump(*sg_g, out_file);
+    if (strlen(out_prefix) == 0) strcpy(out_prefix, argv[optind+1]);
+    sg_dump(*sr_sg_g, out_prefix);
 
     sg_free_group(sg_g); sg_free_group(sr_sg_g);
-    err_fclose(sj_fp); chr_name_free(cname);
+    err_fclose(sj_fp);
     return 0;
 }

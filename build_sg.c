@@ -11,7 +11,7 @@ int sg_usage(void)
     err_printf("\n");
     err_printf("Usage:   %s build-sg [option] <in.gtf>\n\n", PROG);
     err_printf("Options:\n\n");
-    err_printf("         -f --sg-name [STR]    file name to store splice-graph. [prefix.sg]\n");
+    err_printf("         -f --prefix  [STR]    file name to store splice-graph. [in.gtf]\n");
     err_printf("\n");
 
     return 0;
@@ -66,8 +66,6 @@ SG *sg_init(void)
     sg->edge = (SGedge*)_err_malloc(2 * sizeof(SGedge));
 
     sg->start = CHR_MAX_END, sg->end = 0;
-    // path_map will be alloced when SG is done
-    sg->path_map = NULL;
     return sg;
 }
 
@@ -76,6 +74,7 @@ SG_group *sg_init_group(int g_n)
     SG_group *sg_g = (SG_group*)_err_malloc(sizeof(SG_group));
     sg_g->SG_n = g_n, sg_g->SG_m = g_n;
     sg_g->SG = (SG**)_err_malloc(g_n * sizeof(SG*));
+    sg_g->cname = chr_name_init();
     int i; for (i = 0; i < g_n; ++i) sg_g->SG[i] = sg_init();
     return sg_g;
 }
@@ -109,21 +108,14 @@ void sg_free_site(SG *sg)
 void sg_free(SG *sg)
 {
     sg_free_node(sg); sg_free_site(sg); free(sg->edge);
-    if (sg->path_map != NULL) {
-        if (sg->node_n > 0) {
-            int i; for (i = 0; i < sg->node_n; ++i) {
-                if (sg->path_map[i] != NULL) free(sg->path_map[i]);
-            }
-            free(sg->path_map);
-        }
-    }
     free(sg);
 }
 
 void sg_free_group(SG_group *sg_g)
 {
     int i; for (i = 0; i < sg_g->SG_m; i++) sg_free(sg_g->SG[i]);
-    free(sg_g->SG); free(sg_g);
+    free(sg_g->SG); chr_name_free(sg_g->cname);
+    free(sg_g);
 }
 
 /***************************/
@@ -356,9 +348,6 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
 
     // alloc for next_id/pre_id/pre_domn/post_domn
     sg_init_node(sg); sg_init_site(sg);
-    // XXX alloc path_map
-    sg->path_map = (uint8_t**)_err_malloc(sg->node_n * sizeof(uint8_t*));
-    for (i = 0; i < sg->node_n; ++i) sg->path_map[i] = (uint8_t*)_err_calloc(sg->node_n, sizeof(uint8_t));
 
     // search node and generate edge 
     if (gene.is_rev == 0) {
@@ -381,8 +370,6 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                 acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(2)\n");
 
                 sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
-                // XXX path map
-                sg->path_map[don_id][acc_id] = 1;
 
                 if (e.end == CHR_MAX_END) break;
                 don_id = acc_id;
@@ -412,8 +399,6 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                 don_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(5)\n");
 
                 sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
-                // XXX path map
-                sg->path_map[don_id][acc_id] = 1;
 
                 if (e.start == 0) break;
                 acc_id = don_id;
@@ -422,17 +407,6 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             // set next_id of v_start
             _insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, uint32_t)
             _insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, uint32_t)
-        }
-    }
-    // XXX update path_map
-    int k;
-    for (i = 0; i < sg->node_n; ++i) {
-        for (j = i+2; j < sg->node_n; ++j) {
-            if (sg->path_map[i][j] == 1) continue;
-            for (k = i+1; k < j; ++k) {
-                if (sg->path_map[i][k] > 0 && sg->path_map[k][j] > 0) 
-                    sg->path_map[i][j] = 2;
-            }
         }
     }
     // cal pre/post domn
@@ -444,10 +418,16 @@ SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
     gene_group_t *gg = gene_group_init();
     int g_n = read_gene_group(gtf, cname, gg);
     SG_group *sg_g = sg_init_group(g_n);
+    int i;
+    if (cname->chr_n > sg_g->cname->chr_m) {
+        sg_g->cname->chr_name = (char**)_err_realloc(sg_g->cname, cname->chr_n * sizeof(char*));
+        for (i = sg_g->cname->chr_m; i < cname->chr_n; ++i) sg_g->cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
+        sg_g->cname->chr_m = cname->chr_n;
+    }
+    sg_g->cname->chr_n = cname->chr_n;
+    for (i = 0; i < sg_g->cname->chr_n; ++i) strcpy(sg_g->cname->chr_name[i], cname->chr_name[i]);
 
-    int i; 
-    for (i = 0; i < gg->gene_n; ++i) 
-        construct_SpliceGraph_core(sg_g->SG[i], gg->g[i]);
+    for (i = 0; i < gg->gene_n; ++i) construct_SpliceGraph_core(sg_g->SG[i], gg->g[i]);
 
     gene_group_free(gg);
     return sg_g;
@@ -571,60 +551,83 @@ void sg_restore_core(SG *sg, FILE *sg_fp)
 }
 
 
-void sg_dump(SG_group sg_g, const char *sg_name)
+void sg_dump(SG_group sg_g, const char *prefix)
 {
     _err_func_printf("Writing splice-graph to file ...\n");
-    FILE *sg_fp = xopen(sg_name, "wb");
-    err_fwrite(&sg_g.SG_n, sizeof(int32_t), 1, sg_fp);
     int i;
+    // dump cname
+    char *sg_fn = (char*)_err_calloc(strlen(prefix)+10, sizeof(char));
+    strcpy(sg_fn, prefix); strcat(sg_fn, ".cname");
+    FILE *name_fp = xopen(sg_fn, "w");
+    err_fprintf(name_fp, "%d\n", sg_g.cname->chr_n);
+    for (i = 0; i < sg_g.cname->chr_n; ++i) err_fprintf(name_fp, "%s\n", sg_g.cname->chr_name[i]);
+    err_fclose(name_fp);
+    // dump SG
+    strcpy(sg_fn, prefix); strcat(sg_fn, ".sg");
+    FILE *sg_fp = xopen(sg_fn, "wb");
+    err_fwrite(&sg_g.SG_n, sizeof(int32_t), 1, sg_fp);
     for (i = 0; i < sg_g.SG_n; ++i) sg_dump_core(*(sg_g.SG[i]), sg_fp);
     _err_func_printf("Writing splice-graph to file done!\n");
-    err_fclose(sg_fp);
+    free(sg_fn); err_fclose(sg_fp);
 }
 
-SG_group *sg_restore(const char *sg_name)
+SG_group *sg_restore(const char *prefix)
 {
     _err_func_printf("Restoring splice-graph from file ...\n");
-    FILE *sg_fp = xopen(sg_name, "rb");
+    int i;
     SG_group *sg_g = (SG_group*)_err_malloc(sizeof(SG_group));
+    // restore cname
+    char *sg_fn = (char*)_err_calloc(strlen(prefix)+10, sizeof(char));
+    strcpy(sg_fn, prefix); strcat(sg_fn, ".cname");
+    FILE *name_fp = xopen(sg_fn, "r");
+    sg_g->cname = chr_name_init();
+    fscanf(name_fp, "%d", &sg_g->cname->chr_n);
+    if (sg_g->cname->chr_n > sg_g->cname->chr_m) {
+        sg_g->cname->chr_name = (char**)_err_realloc(sg_g->cname->chr_name, sg_g->cname->chr_n * sizeof(char*));
+        for (i = sg_g->cname->chr_m; i < sg_g->cname->chr_n; ++i) sg_g->cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
+        sg_g->cname->chr_m = sg_g->cname->chr_n;
+    }
+    for (i = 0; i < sg_g->cname->chr_n; ++i) fscanf(name_fp, "%s", sg_g->cname->chr_name[i]);
+    err_fclose(name_fp);
+
+    // restore SG
+    strcpy(sg_fn, prefix); strcat(sg_fn, ".sg");
+    FILE *sg_fp = xopen(sg_fn, "rb");
     err_fread_noeof(&(sg_g->SG_n), sizeof(int32_t), 1, sg_fp); sg_g->SG_m = sg_g->SG_n;
     sg_g->SG = (SG**)_err_malloc(sg_g->SG_n * sizeof(SG*));
-    int i; 
     for (i = 0; i < sg_g->SG_n; ++i) {
         sg_g->SG[i] = (SG*)_err_malloc(sizeof(SG));
         sg_restore_core(sg_g->SG[i], sg_fp);
-        // path_map
-        sg_g->SG[i]->path_map = NULL;
     }
     _err_func_printf("Restoring splice-graph from file done!\n");
-    err_fclose(sg_fp);
+    free(sg_fn); err_fclose(sg_fp);
     return sg_g;
 }
 
 const struct option sg_long_opt [] = {
-    {"sg-name", 1, NULL, 'f' },
+    {"prefix", 1, NULL, 'f' },
     {0, 0, 0, 0}
 };
 
 int build_sg(int argc, char *argv[])
 {
     int c;
-    char sg_name[1024] = "";
+    char prefix[1024] = "";
     while ((c = getopt_long(argc, argv, "f:", sg_long_opt, NULL)) >= 0) {
         switch (c) {
-            case 'f': strcpy(sg_name, optarg); break;
+            case 'f': strcpy(prefix, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return sg_usage();
         }
     }
     if (argc - optind != 1) return sg_usage();
     FILE *gtf_fp = xopen(argv[optind], "r");
-    if (strlen(sg_name) == 0) strcpy(sg_name, argv[optind]); strcat(sg_name, ".sg");
+    if (strlen(prefix) == 0) strcpy(prefix, argv[optind]);
 
     chr_name_t *cname = chr_name_init();
     SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
 
-    sg_dump(*sg_g, sg_name);
+    sg_dump(*sg_g, prefix);
 
     sg_free_group(sg_g); err_fclose(gtf_fp); chr_name_free(cname); 
     return 0;

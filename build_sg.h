@@ -52,12 +52,6 @@ typedef struct {
     int32_t tid; uint8_t is_rev;
     // boundaries of splice-sites
     int32_t start, end; 
-    // for calculate max-edge XXX
-    uint8_t **path_map; // size: node_n * node_n, but only 1/2 of the bit-map is valid
-                        // path_map[i][j] == 1 : path from i to j
-                        // 0: none path
-                        // 1: original edge
-                        // 2: indirect path
 } SG;
 
 typedef struct {
@@ -75,6 +69,7 @@ typedef struct {
 typedef struct {
     SG **SG;
     int32_t SG_n, SG_m;
+    chr_name_t *cname;
 } SG_group;
 
 SG *sg_init_node(SG *sg);

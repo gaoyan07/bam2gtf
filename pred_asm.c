@@ -13,7 +13,9 @@ int pred_asm_usage(void)
     err_printf("Usage:   %s asm [option] <in.gtf> <in.sj> > out.asm\n\n", PROG);
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
-    err_printf("         -f --gtf-format  [STR]    file format of GTF input: plain GTF file(GTF) or binary splice-graph file(SG). [SG]\n");
+    err_printf("         -f --gtf-format  [STR]    file format of GTF input: \n");
+    err_printf("                                     plain GTF file(GTF) or binary splice-graph file(SG). [SG]\n");
+    err_printf("         -o --output      [STR]    file name of output ASM. [stdout]\n");
 	err_printf("\n");
 	return 1;
 }
@@ -63,19 +65,6 @@ void sg_free_asm_group(SGasm_group *asm_g)
     free(asm_g->sg_asm);
     free(asm_g);
 }
-
-// XXX sort edge by interval
-/*int sg_max_edge(SG *sg)
-{
-    int i, j;
-    for (i = 1; i < sg->edge_n; ++i) {
-        for (j = 0; j < i; ++j) {
-            if ([j] > [i])
-                [i] is NOT max
-        }
-    }
-    return 0;
-}*/
 
 void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *exit_n)
 {
@@ -187,6 +176,7 @@ END: free(entry); free(exit);
 const struct option asm_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
     { "gtf-format", 1, NULL, 'f' },
+    { "output", 1, NULL, 'o' },
 
     { 0, 0, 0, 0 }
 };
@@ -194,14 +184,15 @@ const struct option asm_long_opt [] = {
 int pred_asm(int argc, char *argv[])
 {
     int c;
-    int no_novel_sj=1, SG_format=1;
-	while ((c = getopt_long(argc, argv, "nf:", asm_long_opt, NULL)) >= 0) {
+    int no_novel_sj=1, SG_format=1; char out_fn[1024]="-";
+	while ((c = getopt_long(argc, argv, "nf:o:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj = 0; break;
             case 'f': if (strcmp(optarg, "GTF")==0) SG_format = 0; 
                       else if (strcmp(optarg, "SG")==0) SG_format = 1; 
                       else return pred_asm_usage();
                   break;
+            case 'o': strcpy(out_fn, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return pred_asm_usage();
         }
@@ -213,22 +204,23 @@ int pred_asm(int argc, char *argv[])
 
     sj_fp = xopen(argv[optind+1], "r");
 
-    chr_name_t *cname = chr_name_init();
     // build splice-graph with GTF
     SG_group *sg_g;
     if (SG_format) sg_g = sg_restore(argv[optind]);
     else  {
         FILE *gtf_fp = xopen(argv[optind], "r");
+        chr_name_t *cname = chr_name_init();
         sg_g = construct_SpliceGraph(gtf_fp, cname);
-        err_fclose(gtf_fp);
+        err_fclose(gtf_fp); chr_name_free(cname);
     }
     // predict splice-graph with GTF-based splice-graph and splice-junciton
-    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_fp, cname, no_novel_sj);
+    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_fp, no_novel_sj);
 
     // predict ASM with short-read splice-graph
     SGasm_group *asm_g = gen_ASM(*sr_sg_g);
-    int i;
-    printf("%d\n", asm_g->sg_asm_n);
+    FILE *out = xopen(out_fn, "w");
+    int i; chr_name_t *cname = sg_g->cname;
+    fprintf(out, "%d\n", asm_g->sg_asm_n);
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         int sg_i = asm_g->sg_asm[i]->SG_id;
         int start, end;
@@ -236,10 +228,10 @@ int pred_asm(int argc, char *argv[])
         if (sr_sg_g->SG[sg_i]->node[v_s].e.start == 0) start = sr_sg_g->SG[sg_i]->start-100; else start = sr_sg_g->SG[sg_i]->node[v_s].e.start;
         if (sr_sg_g->SG[sg_i]->node[v_e].e.end == CHR_MAX_END) end = sr_sg_g->SG[sg_i]->end+100; else end = sr_sg_g->SG[sg_i]->node[v_e].e.end;
 
-        printf("%d(%d):\t%c%s: (%d,%d)-(%d,%d) %s:%d-%d\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.end, cname->chr_name[sr_sg_g->SG[sg_i]->tid], start, end);
+        fprintf(out, "%d(%d):\t%c%s: (%d,%d)-(%d,%d) %s:%d-%d\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.end, cname->chr_name[sr_sg_g->SG[sg_i]->tid], start, end);
     }
 
     sg_free_group(sg_g); sg_free_group(sr_sg_g); sg_free_asm_group(asm_g);
-    err_fclose(sj_fp); chr_name_free(cname);
+    err_fclose(sj_fp);  err_fclose(out);
     return 0;
 }
