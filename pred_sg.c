@@ -205,7 +205,7 @@ SG_group *predict_SpliceGraph(SG_group sg_g, FILE *sj_p, int no_novel_sj)
     sj_n = read_sj_group(sj_p, sg_g.cname, &sj_group, sj_m);
 
     if (sg_g.cname->chr_n > sr_sg_g->cname->chr_m) {
-        sr_sg_g->cname->chr_name = (char**)_err_realloc(sr_sg_g->cname, sg_g.cname->chr_n * sizeof(char*));
+        sr_sg_g->cname->chr_name = (char**)_err_realloc(sr_sg_g->cname->chr_name, sg_g.cname->chr_n * sizeof(char*));
         for (i = sr_sg_g->cname->chr_m; i < sg_g.cname->chr_n; ++i) sr_sg_g->cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
         sr_sg_g->cname->chr_m = sg_g.cname->chr_n;
     }

@@ -420,7 +420,7 @@ SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
     SG_group *sg_g = sg_init_group(g_n);
     int i;
     if (cname->chr_n > sg_g->cname->chr_m) {
-        sg_g->cname->chr_name = (char**)_err_realloc(sg_g->cname, cname->chr_n * sizeof(char*));
+        sg_g->cname->chr_name = (char**)_err_realloc(sg_g->cname->chr_name, cname->chr_n * sizeof(char*));
         for (i = sg_g->cname->chr_m; i < cname->chr_n; ++i) sg_g->cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
         sg_g->cname->chr_m = cname->chr_n;
     }
