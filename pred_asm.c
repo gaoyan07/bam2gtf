@@ -145,7 +145,6 @@ SGasm_group *gen_ASM(SG_group sg_g)
         cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n);
         if (entry_n == 0 || exit_n == 0) goto END;
 
-        int *node_visit = (int*)_err_calloc(sg.node_n, sizeof(int));
         int i, j, hit;
         for (i = 0; i < entry_n; ++i) {
             hit = 0;
@@ -156,7 +155,9 @@ SGasm_group *gen_ASM(SG_group sg_g)
                         && sg.node[entry[i]].post_domn[1] == exit[j] 
                         && sg.node[exit[j]].pre_domn[1] == entry[i]) {
                     SGasm *sg_asm = sg_init_asm(sg_i, entry[i], exit[j]);
+                    int *node_visit = (int*)_err_calloc(sg.node_n, sizeof(int));
                     sub_splice_graph(sg, &node_visit, sg_asm, entry[i], exit[j]);
+                    free(node_visit);
                     sg_asm_group_add(asm_g, sg_asm);
                     sg_free_asm(sg_asm);
                     hit = 1; break;
@@ -164,7 +165,6 @@ SGasm_group *gen_ASM(SG_group sg_g)
             }
             if (hit) continue;
         }
-        free(node_visit);
         END: free(entry); free(exit);
     }
     return asm_g;
@@ -216,8 +216,9 @@ int pred_asm(int argc, char *argv[])
 
     FILE *out = xopen(out_fn, "w");
     chr_name_t *cname = sr_sg_g->cname;
-    fprintf(out, "%d\n", asm_g->sg_asm_n);
+    //fprintf(out, "%d\n", asm_g->sg_asm_n);
     int i, sg_i; 
+    fprintf(out, "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         sg_i = asm_g->sg_asm[i]->SG_id;
         int start, end;
@@ -225,7 +226,7 @@ int pred_asm(int argc, char *argv[])
         if (sr_sg_g->SG[sg_i]->node[v_s].e.start == 0) start = sr_sg_g->SG[sg_i]->start-100; else start = sr_sg_g->SG[sg_i]->node[v_s].e.start;
         if (sr_sg_g->SG[sg_i]->node[v_e].e.end == CHR_MAX_END) end = sr_sg_g->SG[sg_i]->end+100; else end = sr_sg_g->SG[sg_i]->node[v_e].e.end;
 
-        fprintf(out, "%d(%d):\t%c%s: (%d,%d)-(%d,%d) %s:%d-%d\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.end, cname->chr_name[sr_sg_g->SG[sg_i]->tid], start, end);
+        fprintf(out, "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.end, asm_g->sg_asm[i]->node_n, cname->chr_name[sr_sg_g->SG[sg_i]->tid], start, end);
     }
     sg_free_group(sr_sg_g); sg_free_asm_group(asm_g); err_fclose(out);
     return 0;
