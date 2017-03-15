@@ -10,11 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include "bam2gtf.h"
 #include "htslib/htslib/sam.h"
 #include "utils.h"
 #include "gtf.h"
-
-#define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
 
 extern const char PROG[20];
 int bam2gtf_usage(void)

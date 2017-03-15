@@ -5,6 +5,7 @@
 #include "bam_filter.h"
 #include "update_gtf.h"
 #include "bam2gtf.h"
+#include "bam2sj.h"
 #include "build_sg.h"
 #include "pred_sg.h"
 #include "pred_asm.h"
@@ -34,6 +35,7 @@ int main(int argc, char *argv[])
     if (strcmp(argv[1], "filter") == 0) return bam_filter(argc-1, argv+1);
 	else if (strcmp(argv[1], "update-gtf") == 0) return update_gtf(argc-1, argv+1);
 	else if (strcmp(argv[1], "bam2gtf") == 0) return bam2gtf(argc-1, argv+1);
+    else if (strcmp(argv[1], "bam2sj") == 0) return bam2sj(argc-1, argv+1);
     else if (strcmp(argv[1], "build-sg") == 0) return build_sg(argc-1, argv+1);
     else if (strcmp(argv[1], "predict-sg") == 0) return pred_sg(argc-1, argv+1);
     else if (strcmp(argv[1], "asm") == 0) return pred_asm(argc-1, argv+1);
