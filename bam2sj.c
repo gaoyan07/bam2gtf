@@ -84,36 +84,23 @@ int gen_sj(bam1_t *b, sj_t **sj, int *sj_m)
         }
     }
 
-    return 1;
+    return sj_n;
 }
 
-int sj_bin_sch_group(sj_t *SJ, int SJ_n, sj_t sj, int *hit)
+int sj_sch_group(sj_t *SJ, int SJ_n, sj_t sj, int *hit)
 {
     *hit = 0;
-    int32_t mid_tid, mid_don, mid_acc;
-    int32_t tmp_tid, tmp_don, tmp_acc;
-    int left = 0, right = SJ_n-1, mid;
-    if (right == -1) return 0;
+    if (SJ_n == 0) return 0;
 
-    while (left <= right) {
-        mid = ((left + right) >> 1);
-        mid_tid = SJ[mid].tid; mid_don = SJ[mid].don; mid_acc = SJ[mid].acc;
-        if (mid_tid == sj.tid &&  mid_don == sj.don && mid_acc == sj.acc) { *hit = 1; return mid; }
-        else if (mid_tid > sj.tid) // [mid] > query
-            right = mid - 1;
-        else if (mid_tid < sj.tid) // [mid] < query
-            left = mid + 1;
-        else { // [mid] == query
-            if (mid_don > sj.don || (mid_don == sj.don && mid_acc > sj.acc)) { // [mid] > query
-                if (mid != 0)
-                    tmp_tid = SJ[mid-1].tid; tmp_don = SJ[mid-1].don; tmp_acc = SJ[mid-1].acc;
-                if (mid == 0 || tmp_tid < sj.tid || tmp_don < sj.don || (tmp_don == sj.don && tmp_acc < sj.acc)) // [mid-1] < query
-                    return mid;
-            } else right = mid-1;
-        }
+    int i;
+    int32_t tid, don, acc;
+    for (i = SJ_n-1; i >= 0; i--) {
+        tid = SJ[i].tid, don = SJ[i].don, acc = SJ[i].acc;
+        if (tid == sj.tid &&  don == sj.don && acc == sj.acc) { *hit = 1; return i; }
+        else if (tid < sj.tid || don < sj.don || (don == sj.don && acc < sj.acc)) // SJ[i] < sj
+            return i+1; 
     }
-    return SJ_n;
-
+    return 0;
 }
 
 int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
@@ -121,7 +108,7 @@ int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
     if (sj_n + *SJ_n > *SJ_m) _realloc(*SJ_group, *SJ_m, sj_t)
     int i, hit=0;
     for (i = 0; i < sj_n; ++i) {
-        int sj_i = sj_bin_sch_group(*SJ_group, *SJ_n, sj[i], &hit);
+        int sj_i = sj_sch_group(*SJ_group, *SJ_n, sj[i], &hit);
         if (hit == 0) {
             if ((*SJ_n)++ >= *SJ_m) _realloc(*SJ_group, *SJ_m, sj_t)
             // memmove
@@ -146,13 +133,13 @@ int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
 
 int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, sj_t **SJ_group, int SJ_m)
 {
-    int sj_n = 0, SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
+    int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
     while (sam_read1(in, h, b) >= 0) {
         int sj_n = gen_sj(b, &sj, &sj_m);
-        sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
+        if (sj_n > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
     }
     free(sj);
-    return sj_n;
+    return SJ_n;
 }
 
 void print_sj(sj_t *sj_group, int sj_n, FILE *out)

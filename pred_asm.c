@@ -170,6 +170,23 @@ SGasm_group *gen_ASM(SG_group sg_g)
     return asm_g;
 }
 
+/* int cal_asm_exon_cnt(SGasm_group *asm_g, SG_group *sg_g)
+{
+    while (read(b)) {
+        for (i = last_sg_i; i < ; ++i) {
+            if (sg_g[i] < b) last_sg_i = i+1; continue;
+            else if (sg_g[i] > b) break;
+            else {
+                for (each asm) {
+                    for (each node) {
+                        if (fully) ++cnt;
+                    }
+                }
+            }
+        }
+    }
+}*/
+
 /*****************************/
 const struct option asm_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
@@ -209,16 +226,20 @@ int pred_asm(int argc, char *argv[])
     // predict splice-graph with GTF-based splice-graph and splice-junciton
     FILE *sj_fp = xopen(argv[optind+1], "r");
     SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_fp, no_novel_sj);
-    err_fclose(sj_fp); sg_free_group(sg_g); 
+    err_fclose(sj_fp); sg_free_group(sg_g);
 
     // generate ASM with short-read splice-graph
     SGasm_group *asm_g = gen_ASM(*sr_sg_g);
 
+    // calculate number of reads falling into exon-body
+    //cal_asm_exon_cnt(asm_g, sr_sg_g);
+
+    // output
     FILE *out = xopen(out_fn, "w");
     chr_name_t *cname = sr_sg_g->cname;
     //fprintf(out, "%d\n", asm_g->sg_asm_n);
-    int i, sg_i; 
     fprintf(out, "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
+    int i, sg_i;
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         sg_i = asm_g->sg_asm[i]->SG_id;
         int start, end;

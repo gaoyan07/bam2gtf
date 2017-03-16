@@ -25,6 +25,7 @@ SG *sg_init_node(SG *sg)
     int i;
     for (i = 0; i < sg->node_n; ++i) {
         sg->node[i].node_id = i;
+        sg->node[i].cnt = 0;
         sg->node[i].next_n = 0; sg->node[i].next_m = 1;
         sg->node[i].next_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
         sg->node[i].pre_n = 0; sg->node[i].pre_m = 1;
@@ -65,7 +66,7 @@ SG *sg_init(void)
     sg->edge_n = 0, sg->edge_m = 2;
     sg->edge = (SGedge*)_err_malloc(2 * sizeof(SGedge));
 
-    sg->start = CHR_MAX_END, sg->end = 0;
+    sg->start = MAX_SITE, sg->end = 0;
     return sg;
 }
 
@@ -443,6 +444,7 @@ void sg_dump_node(SGnode n, FILE *sg_fp)
 {
     err_fwrite(&n.node_id, sizeof(uint32_t), 1, sg_fp);
     err_fwrite(&n.e.tid, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fwrite(&n.e.start, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.e.end, sizeof(int32_t), 1, sg_fp);
+    err_fwrite(&n.cnt, sizeof(uint32_t), 1, sg_fp);
     err_fwrite(&n.next_n, sizeof(int32_t), 1, sg_fp);
     if (n.next_n > 0) err_fwrite(n.next_id, sizeof(uint32_t), n.next_n, sg_fp);
     err_fwrite(&n.pre_n, sizeof(int32_t), 1, sg_fp);
@@ -457,6 +459,7 @@ void sg_restore_node(SGnode *n, FILE *sg_fp)
 {
     err_fread_noeof(&n->node_id, sizeof(uint32_t), 1, sg_fp);
     err_fread_noeof(&n->e.tid, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fread_noeof(&n->e.start, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->e.end, sizeof(int32_t), 1, sg_fp);
+    err_fwrite(&n->cnt, sizeof(uint32_t), 1, sg_fp);
     err_fread_noeof(&n->next_n, sizeof(int32_t), 1, sg_fp); n->next_m = n->next_n;
     n->next_id = (uint32_t*)_err_malloc(n->next_n * sizeof(uint32_t));
     if (n->next_n > 0) err_fread_noeof(n->next_id, sizeof(uint32_t), n->next_n, sg_fp);

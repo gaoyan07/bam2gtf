@@ -21,7 +21,7 @@
 
 typedef struct {
     uint32_t node_id; // unique id in corresponding gene-locus
-    exon_t e;
+    exon_t e; uint32_t cnt;
     uint32_t *next_id;  int32_t next_n, next_m;
     uint32_t *pre_id;    int32_t pre_n, pre_m;
     uint32_t *pre_domn;  int32_t pre_domn_n, pre_domn_m;
