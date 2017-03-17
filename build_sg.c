@@ -25,7 +25,7 @@ SG *sg_init_node(SG *sg)
     int i;
     for (i = 0; i < sg->node_n; ++i) {
         sg->node[i].node_id = i;
-        sg->node[i].cnt = 0;
+        sg->node[i].cnt = 0; sg->node[i].is_init = 0; sg->node[i].is_termi = 0;
         sg->node[i].next_n = 0; sg->node[i].next_m = 1;
         sg->node[i].next_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
         sg->node[i].pre_n = 0; sg->node[i].pre_m = 1;
@@ -135,11 +135,11 @@ int sg_bin_sch_node(SG sg, exon_t e, int *hit)
 
     while (left <= right) {
         mid = ((left + right) >> 1);
-        mid_s = sg.node[mid].e.start, mid_e = sg.node[mid].e.end;
+        mid_s = sg.node[mid].node_e.start, mid_e = sg.node[mid].node_e.end;
         if (mid_s == start && mid_e == end) { *hit = 1; return mid; }
         else if (mid_s > start || (mid_s == start && mid_e > end)) { // [mid] is bigger than query
             if (mid != 0) {
-                tmp_s = sg.node[mid-1].e.start, tmp_e = sg.node[mid-1].e.end;
+                tmp_s = sg.node[mid-1].node_e.start, tmp_e = sg.node[mid-1].node_e.end;
             }
             if (mid == 0 || (start > tmp_s || (start == tmp_s && end > tmp_e))) {
                 return mid;
@@ -149,7 +149,7 @@ int sg_bin_sch_node(SG sg, exon_t e, int *hit)
     return sg.node_n;
 }
 
-int sg_update_node(SG *sg, exon_t e)
+int sg_update_node(SG *sg, exon_t e, int32_t start, int32_t end)
 {
     int hit = 0;
     int n_i = sg_bin_sch_node(*sg, e, &hit);
@@ -159,7 +159,12 @@ int sg_update_node(SG *sg, exon_t e)
         if (n_i <= sg->node_n-2)
             memmove(sg->node+n_i+1, sg->node+n_i, (sg->node_n-n_i-1) * sizeof(SGnode));
         // set node
-        sg->node[n_i].e = e;
+        sg->node[n_i].node_e = e;
+        sg->node[n_i].start = start;
+        sg->node[n_i].end = end;
+    } else {
+        if (start < sg->node[n_i].start) sg->node[n_i].start = start;
+        if (end > sg->node[n_i].end) sg->node[n_i].end = end;
     }
     return 0;
 }
@@ -328,24 +333,25 @@ void cal_post_domn(SG *sg)
 // construct splice-graph for each gene
 void construct_SpliceGraph_core(SG *sg, gene_t gene)
 {
-    int i, j, hit; uint32_t don_id, acc_id, don_site_id, acc_site_id; exon_t e;
+    int i, j, hit; uint32_t don_id, acc_id, don_site_id, acc_site_id; exon_t e; int32_t start, end;
     
     sg->tid = gene.tid, sg->is_rev = gene.is_rev;
     // generate node
     // update v_start
-    sg_update_node(sg, (exon_t){gene.tid, gene.is_rev, 0, 0});
+    sg_update_node(sg, (exon_t){gene.tid, gene.is_rev, 0, 0}, 0, 0);
     for (i = 0; i < gene.trans_n; ++i) {
         for (j = 0; j < gene.trans[i].exon_n; ++j) {
             e = gene.trans[i].exon[j];
-            if ((j == 0 && gene.is_rev == 0) || (j == gene.trans[i].exon_n-1 && gene.is_rev == 1)) e.start = 0;
-            if ((j == gene.trans[i].exon_n-1 && gene.is_rev == 0) || (j == 0 && gene.is_rev == 1)) e.end = CHR_MAX_END;
-            sg_update_node(sg, e);
-            if (e.start != 0) sg_update_site(sg, e.start-1, ACC_SITE_F);
-            if (e.end != CHR_MAX_END) sg_update_site(sg, e.end+1, DON_SITE_F);
+            start = e.start, end = e.end;
+            if ((gene.is_rev == 0 && j == 0) || (gene.is_rev == 1 && j == gene.trans[i].exon_n-1)) e.start = 0;
+            else sg_update_site(sg, e.start-1, ACC_SITE_F);
+            if ((j == gene.trans[i].exon_n-1 && gene.is_rev == 0) || (j == 0 && gene.is_rev == 1)) e.end = MAX_SITE;
+            else sg_update_site(sg, e.end+1, DON_SITE_F);
+            sg_update_node(sg, e, start, end);
         }
     }
     // update v_end
-    sg_update_node(sg, (exon_t){gene.tid, gene.is_rev, CHR_MAX_END, CHR_MAX_END});
+    sg_update_node(sg, (exon_t){gene.tid, gene.is_rev, MAX_SITE, MAX_SITE}, MAX_SITE, MAX_SITE);
 
     // alloc for next_id/pre_id/pre_domn/post_domn
     sg_init_node(sg); sg_init_site(sg);
@@ -363,27 +369,31 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             _insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, uint32_t)
             _insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, uint32_t)
 
+            sg->node[don_id].is_init = 1;
+
             for (j = 1; j < gene.trans[i].exon_n; ++j) {
                 e = gene.trans[i].exon[j];
-                if (j == gene.trans[i].exon_n-1) e.end = CHR_MAX_END;
+                if (j == gene.trans[i].exon_n-1) e.end = MAX_SITE;
 
                 acc_id = sg_bin_sch_node(*sg, e, &hit); if (hit == 0) err_fatal_simple("Can not hit node.(2)\n");
                 acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(2)\n");
 
                 sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
 
-                if (e.end == CHR_MAX_END) break;
+                if (j == gene.trans[i].exon_n-1) break;
                 don_id = acc_id;
                 don_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(3)\n");
             }
             // set pre_id of v_end
             _insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, uint32_t)
             _insert((uint32_t)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, uint32_t)
+
+            sg->node[acc_id].is_termi = 1;
         }
     } else {
         for (i = 0; i < gene.trans_n; ++i) {
             if (gene.trans[i].exon_n == 1) continue;
-            e = gene.trans[i].exon[0]; e.end = CHR_MAX_END;
+            e = gene.trans[i].exon[0]; e.end = MAX_SITE;
 
             acc_id = sg_bin_sch_node(*sg, e, &hit); if (hit == 0) err_fatal_simple("Can not hit node.(3)\n");
             acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(4)\n");
@@ -391,6 +401,8 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             // set pre_id of v_end
             _insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, uint32_t)
             _insert((uint32_t)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, uint32_t)
+
+            sg->node[acc_id].is_termi = 1;
 
             for (j = 1; j < gene.trans[i].exon_n; ++j) {
                 e = gene.trans[i].exon[j]; 
@@ -401,13 +413,15 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
 
                 sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
 
-                if (e.start == 0) break;
+                if (j == gene.trans[i].exon_n-1) break;
                 acc_id = don_id;
                 acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(6)\n");
             }
             // set next_id of v_start
             _insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, uint32_t)
             _insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, uint32_t)
+
+            sg->node[don_id].is_init = 1;
         }
     }
     // cal pre/post domn
@@ -443,7 +457,9 @@ int trav_SpliceGraph()
 void sg_dump_node(SGnode n, FILE *sg_fp)
 {
     err_fwrite(&n.node_id, sizeof(uint32_t), 1, sg_fp);
-    err_fwrite(&n.e.tid, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fwrite(&n.e.start, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.e.end, sizeof(int32_t), 1, sg_fp);
+    err_fwrite(&n.start, sizeof(uint32_t), 1, sg_fp); err_fwrite(&n.end, sizeof(uint32_t), 1, sg_fp);
+    err_fwrite(&n.node_e.tid, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.node_e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fwrite(&n.node_e.start, sizeof(int32_t), 1, sg_fp); err_fwrite(&n.node_e.end, sizeof(int32_t), 1, sg_fp);
+    err_fwrite(&n.is_init, sizeof(uint8_t), 1, sg_fp); err_fwrite(&n.is_termi, sizeof(uint8_t), 1, sg_fp);
     err_fwrite(&n.cnt, sizeof(uint32_t), 1, sg_fp);
     err_fwrite(&n.next_n, sizeof(int32_t), 1, sg_fp);
     if (n.next_n > 0) err_fwrite(n.next_id, sizeof(uint32_t), n.next_n, sg_fp);
@@ -458,8 +474,10 @@ void sg_dump_node(SGnode n, FILE *sg_fp)
 void sg_restore_node(SGnode *n, FILE *sg_fp)
 {
     err_fread_noeof(&n->node_id, sizeof(uint32_t), 1, sg_fp);
-    err_fread_noeof(&n->e.tid, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fread_noeof(&n->e.start, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->e.end, sizeof(int32_t), 1, sg_fp);
-    err_fwrite(&n->cnt, sizeof(uint32_t), 1, sg_fp);
+    err_fread_noeof(&n->start, sizeof(uint32_t), 1, sg_fp); err_fread_noeof(&n->end, sizeof(uint32_t), 1, sg_fp);
+    err_fread_noeof(&n->node_e.tid, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->node_e.is_rev, sizeof(uint8_t), 1, sg_fp); err_fread_noeof(&n->node_e.start, sizeof(int32_t), 1, sg_fp); err_fread_noeof(&n->node_e.end, sizeof(int32_t), 1, sg_fp);
+    err_fread_noeof(&n->is_init, sizeof(uint8_t), 1, sg_fp); err_fread_noeof(&n->is_termi, sizeof(uint8_t), 1, sg_fp);
+    err_fread_noeof(&n->cnt, sizeof(uint32_t), 1, sg_fp);
     err_fread_noeof(&n->next_n, sizeof(int32_t), 1, sg_fp); n->next_m = n->next_n;
     n->next_id = (uint32_t*)_err_malloc(n->next_n * sizeof(uint32_t));
     if (n->next_n > 0) err_fread_noeof(n->next_id, sizeof(uint32_t), n->next_n, sg_fp);

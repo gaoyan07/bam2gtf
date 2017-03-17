@@ -87,11 +87,11 @@ void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *
 void sg_update_asm_edge(SG sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
 {
     int hit = 0;
-    if (sg.node[pre_id].e.end == 0 || sg.node[cur_id].e.start == CHR_MAX_END) return;
-    uint32_t pre_site_id = sg_bin_sch_site(sg.don_site, sg.don_site_n, sg.node[pre_id].e.end+1, &hit); if (hit==0) err_fatal_core(__func__, "Can not hit site: (%d).(3)\n", sg.node[pre_id].e.end+1);
-    uint32_t cur_site_id = sg_bin_sch_site(sg.acc_site, sg.acc_site_n, sg.node[cur_id].e.start-1, &hit); if (hit==0) err_fatal_simple("Can not hit site.(3)\n");
+    if (sg.node[pre_id].node_e.end == 0 || sg.node[cur_id].node_e.start == MAX_SITE) return;
+    uint32_t pre_site_id = sg_bin_sch_site(sg.don_site, sg.don_site_n, sg.node[pre_id].node_e.end+1, &hit); if (hit==0) err_fatal_core(__func__, "Can not hit site: (%d).(3)\n", sg.node[pre_id].node_e.end+1);
+    uint32_t cur_site_id = sg_bin_sch_site(sg.acc_site, sg.acc_site_n, sg.node[cur_id].node_e.start-1, &hit); if (hit==0) err_fatal_simple("Can not hit sitnode_e.(3)\n");
     uint32_t edge_i = sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); 
-    if (hit == 0) err_fatal_core(__func__, "Can not hit edge.(%d,%d) (3)\n", sg.node[pre_id].e.end, sg.node[cur_id].e.start);
+    if (hit == 0) err_fatal_core(__func__, "Can not hit edgnode_e.(%d,%d) (3)\n", sg.node[pre_id].node_e.end, sg.node[cur_id].node_e.start);
     _insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, uint32_t)
 }
 
@@ -244,10 +244,10 @@ int pred_asm(int argc, char *argv[])
         sg_i = asm_g->sg_asm[i]->SG_id;
         int start, end;
         uint32_t v_s = asm_g->sg_asm[i]->v_start, v_e = asm_g->sg_asm[i]->v_end;
-        if (sr_sg_g->SG[sg_i]->node[v_s].e.start == 0) start = sr_sg_g->SG[sg_i]->start-100; else start = sr_sg_g->SG[sg_i]->node[v_s].e.start;
-        if (sr_sg_g->SG[sg_i]->node[v_e].e.end == CHR_MAX_END) end = sr_sg_g->SG[sg_i]->end+100; else end = sr_sg_g->SG[sg_i]->node[v_e].e.end;
+        if (sr_sg_g->SG[sg_i]->node[v_s].node_e.start == 0) start = sr_sg_g->SG[sg_i]->start-100; else start = sr_sg_g->SG[sg_i]->node[v_s].node_e.start;
+        if (sr_sg_g->SG[sg_i]->node[v_e].node_e.end == MAX_SITE) end = sr_sg_g->SG[sg_i]->end+100; else end = sr_sg_g->SG[sg_i]->node[v_e].node_e.end;
 
-        fprintf(out, "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].e.end, asm_g->sg_asm[i]->node_n, cname->chr_name[sr_sg_g->SG[sg_i]->tid], start, end);
+        fprintf(out, "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].node_e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].node_e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].node_e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].node_e.end, asm_g->sg_asm[i]->node_n, cname->chr_name[sr_sg_g->SG[sg_i]->tid], start, end);
     }
     sg_free_group(sr_sg_g); sg_free_asm_group(asm_g); err_fclose(out);
     return 0;

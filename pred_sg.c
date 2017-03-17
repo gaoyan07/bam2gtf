@@ -62,20 +62,20 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
         sr_sg_g->SG[i]->tid = sg_g.SG[i]->tid;
         sr_sg_g->SG[i]->is_rev = sg_g.SG[i]->is_rev;
         // update v_start & v_end
-        sg_update_node(sr_sg_g->SG[i], (exon_t){sg_g.SG[i]->tid, sg_g.SG[i]->is_rev, 0, 0});
-        sg_update_node(sr_sg_g->SG[i], (exon_t){sg_g.SG[i]->tid, sg_g.SG[i]->is_rev, CHR_MAX_END, CHR_MAX_END});
+        sg_update_node(sr_sg_g->SG[i], (exon_t){sg_g.SG[i]->tid, sg_g.SG[i]->is_rev, 0, 0}, 0, 0);
+        sg_update_node(sr_sg_g->SG[i], (exon_t){sg_g.SG[i]->tid, sg_g.SG[i]->is_rev, MAX_SITE, MAX_SITE}, MAX_SITE, MAX_SITE);
 
         node_map[i] = (uint8_t*)_err_calloc(sg_g.SG[i]->node_n, sizeof(uint8_t));
         for (j = 0; j < sg_g.SG[i]->node_n; ++j) {
-            if (sg_g.SG[i]->node[j].e.start == 0) node_map[i][j] |= 2;
-            if (sg_g.SG[i]->node[j].e.end == CHR_MAX_END) node_map[i][j] |= 1;
+            if (sg_g.SG[i]->node[j].is_init == 1) node_map[i][j] |= 2;
+            if (sg_g.SG[i]->node[j].is_termi == 1) node_map[i][j] |= 1;
         }
     }
     int last_sg_i=0, sg_i;
     
     i = 0, last_sg_i = 0;
     while (i < sj_n && last_sg_i < sg_g.SG_n) {
-        if (sg_g.SG[last_sg_i]->node_n <= 3 || sg_g.SG[last_sg_i]->start == CHR_MAX_END || sg_g.SG[last_sg_i]->end == 0) { ++last_sg_i; continue; }
+        if (sg_g.SG[last_sg_i]->node_n <= 3 || sg_g.SG[last_sg_i]->start == MAX_SITE || sg_g.SG[last_sg_i]->end == 0) { ++last_sg_i; continue; }
         int comp_res = comp_sj_sg(sj_group[i], *(sg_g.SG[last_sg_i]));
         if (comp_res < 0) { i++; continue; }
         else if (comp_res > 0) { last_sg_i++; continue; }
@@ -94,23 +94,25 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                     node_map[sg_i][GTF_don_id] |= 1;
                     if (node_map[sg_i][GTF_don_id] == 3) { // update node
                         node_map[sg_i][GTF_don_id] |= 4;
-                        exon_t e = sg->node[GTF_don_id].e;
-                        sg_update_node(sr_sg, e);
+                        exon_t node_e = sg->node[GTF_don_id].node_e;
+                        int32_t start = sg->node[GTF_don_id].start, end = sg->node[GTF_don_id].end;
+                        sg_update_node(sr_sg, node_e, start, end);
                         // 1.2 update site(don_site, e.start)
                         sg_update_site(sr_sg, sj_group[i].don, DON_SITE_F);
-                        if (e.start != 0) sg_update_site(sr_sg, e.start-1, ACC_SITE_F);
+                        if (node_e.start != 0) sg_update_site(sr_sg, node_e.start-1, ACC_SITE_F);
                     }
                 }
                 for (j = 0; j < sg->acc_site[GTF_acc_site_id].exon_n; ++j) {
                     uint32_t GTF_acc_id = sg->acc_site[GTF_acc_site_id].exon_id[j];
                     node_map[sg_i][GTF_acc_id] |= 2;
                     if (node_map[sg_i][GTF_acc_id] == 3) { // update node
-                        exon_t e = sg->node[GTF_acc_id].e;
+                        exon_t node_e = sg->node[GTF_acc_id].node_e;
+                        int32_t start = sg->node[GTF_acc_id].start, end = sg->node[GTF_acc_id].end;
                         node_map[sg_i][GTF_acc_id] |= 4;
-                        sg_update_node(sr_sg, e);
+                        sg_update_node(sr_sg, node_e, start, end);
                         // 1.3 update site(acc_site, e.end)
                         sg_update_site(sr_sg, sj_group[i].acc, ACC_SITE_F);
-                        if (e.end != CHR_MAX_END) sg_update_site(sr_sg, e.end+1, DON_SITE_F);
+                        if (node_e.end != MAX_SITE) sg_update_site(sr_sg, node_e.end+1, DON_SITE_F);
                     }
                 }
                 break;
@@ -127,14 +129,14 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
     // 3. updage_edge(edge[edge_id])
     i = 0, last_sg_i = 0;
     while (i < sj_n && last_sg_i < sr_sg_g->SG_n) {
-        if (sr_sg_g->SG[last_sg_i]->node_n <= 3 || sr_sg_g->SG[last_sg_i]->start == CHR_MAX_END || sr_sg_g->SG[last_sg_i]->end == 0) { ++last_sg_i; continue; }
+        if (sr_sg_g->SG[last_sg_i]->node_n <= 3 || sr_sg_g->SG[last_sg_i]->start == MAX_SITE || sr_sg_g->SG[last_sg_i]->end == 0) { ++last_sg_i; continue; }
         int comp_res = comp_sj_sg(sj_group[i], *(sr_sg_g->SG[last_sg_i]));
         if (comp_res < 0) { ++i; continue; }
         else if (comp_res > 0) { ++last_sg_i; continue; }
         else {
             for (sg_i = last_sg_i; sg_i < sg_g.SG_n; ++sg_i) {
                 SG *sg = sg_g.SG[sg_i], *sr_sg = sr_sg_g->SG[sg_i];
-                if (sr_sg->node_n <= 3 || (sr_sg->don_site_n+sr_sg->acc_site_n) <= 1 || sr_sg->start == CHR_MAX_END || sr_sg->end == 0) continue;
+                if (sr_sg->node_n <= 3 || (sr_sg->don_site_n+sr_sg->acc_site_n) <= 1 || sr_sg->start == MAX_SITE || sr_sg->end == 0) continue;
                 if (comp_sj_sg(sj_group[i], *sr_sg) < 0) break;
                 // 3.0. (don_site, acc_site) => (don_site_id, acc_site_id)
                 don_site_id = sg_bin_sch_site(sr_sg->don_site, sr_sg->don_site_n, sj_group[i].don, &hit); if (hit == 0) continue;
@@ -148,26 +150,28 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 for (j = 0; j < sg->don_site[GTF_don_site_id].exon_n; ++j) {
                     uint32_t GTF_don_id = sg->don_site[GTF_don_site_id].exon_id[j];
                     if (node_map[sg_i][GTF_don_id] == 7) {
-                        exon_t e = sg->node[GTF_don_id].e;
-                        uint32_t don_id = sg_bin_sch_node(*sr_sg, e, &hit); if (hit == 0) err_fatal_simple("Can not hit node. (pred_sg 1)\n");
+                        exon_t node_e = sg->node[GTF_don_id].node_e;
+                        uint32_t don_id = sg_bin_sch_node(*sr_sg, node_e, &hit); if (hit == 0) err_fatal_simple("Can not hit node. (pred_sg 1)\n");
                         _insert(don_id, sr_sg->don_site[don_site_id].exon_id, sr_sg->don_site[don_site_id].exon_n, sr_sg->don_site[don_site_id].exon_m, uint32_t)
                         // update v_start
-                        if (e.start == 0) {
+                        if (sg->node[GTF_don_id].is_init == 1) {
                             _insert(don_id, sr_sg->node[0].next_id, sr_sg->node[0].next_n, sr_sg->node[0].next_m, uint32_t)
                             _insert(0, sr_sg->node[don_id].pre_id, sr_sg->node[don_id].pre_n, sr_sg->node[don_id].pre_m, uint32_t)
+                            sr_sg->node[don_id].is_init = 1;
                         }
                     }
                 }
                 for (j = 0; j < sg->acc_site[GTF_acc_site_id].exon_n; ++j) {
                     uint32_t GTF_acc_id = sg->acc_site[GTF_acc_site_id].exon_id[j];
                     if (node_map[sg_i][GTF_acc_id] == 7) {
-                        exon_t e = sg->node[GTF_acc_id].e;
-                        uint32_t acc_id = sg_bin_sch_node(*sr_sg, e, &hit);
+                        exon_t node_e = sg->node[GTF_acc_id].node_e;
+                        uint32_t acc_id = sg_bin_sch_node(*sr_sg, node_e, &hit);
                         _insert(acc_id, sr_sg->acc_site[acc_site_id].exon_id, sr_sg->acc_site[acc_site_id].exon_n, sr_sg->acc_site[acc_site_id].exon_m, uint32_t)
                         // update v_end
-                        if (e.end == CHR_MAX_END) {
+                        if (sg->node[GTF_acc_id].is_termi == 1) {
                             _insert(acc_id, sr_sg->node[sr_sg->node_n-1].pre_id, sr_sg->node[sr_sg->node_n-1].pre_n, sr_sg->node[sr_sg->node_n-1].pre_m, uint32_t)
                             _insert((uint32_t)sr_sg->node_n-1, sr_sg->node[acc_id].next_id, sr_sg->node[acc_id].next_n, sr_sg->node[acc_id].next_m, uint32_t)
+                            sr_sg->node[acc_id].is_termi = 1;
                         }
                     }
                 }    
@@ -211,8 +215,6 @@ SG_group *predict_SpliceGraph(SG_group sg_g, FILE *sj_p, int no_novel_sj)
     }
     sr_sg_g->cname->chr_n = sg_g.cname->chr_n;
     for (i = 0; i < sr_sg_g->cname->chr_n; ++i) strcpy(sr_sg_g->cname->chr_name[i], sg_g.cname->chr_name[i]);
-
-
 
     predict_SpliceGraph_core(sg_g, sj_group, sj_n, sr_sg_g, no_novel_sj);
     free(sj_group);
