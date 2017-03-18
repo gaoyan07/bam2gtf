@@ -27,7 +27,7 @@ int pred_sg_usage(void)
 int sg_update_edge_pred(SG *sg, sj_t sj, uint32_t don_site_id, uint32_t acc_site_id)
 {
     int hit = 0;
-    int e_i = sg_bin_sch_edge(*sg, don_site_id, acc_site_id, &hit);
+    int e_i = sg_bin_sch_edge(sg, don_site_id, acc_site_id, &hit);
     if (hit == 0) { // insert new edge
         if (sg->edge_n++ >= sg->edge_m) _realloc(sg->edge, sg->edge_m, SGedge)
             // copy edge
@@ -87,7 +87,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 // 0. search site/edge: (GTF_don_site_id, GTF_acc_site_id) => GTF_edge_id
                 GTF_don_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, sj_group[i].don, &hit); if (hit == 0) continue;
                 GTF_acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sj_group[i].acc, &hit); if (hit == 0) continue;
-                sg_bin_sch_edge(*sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
+                sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
                 // 1. update node & site
                 //    1.1 map[exon] = 1
                 for (j = 0; j < sg->don_site[GTF_don_site_id].exon_n; ++j) {
@@ -144,7 +144,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 acc_site_id = sg_bin_sch_site(sr_sg->acc_site, sr_sg->acc_site_n, sj_group[i].acc, &hit); if (hit == 0) continue;
                 GTF_don_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, sj_group[i].don, &hit);
                 GTF_acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sj_group[i].acc, &hit);
-                sg_bin_sch_edge(*sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
+                sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
                 // XXX 3.1. update edge(sj_group[i])
                 sg_update_edge_pred(sr_sg, sj_group[i], don_site_id, acc_site_id);
                 // 3.2. update node()
@@ -152,7 +152,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                     uint32_t GTF_don_id = sg->don_site[GTF_don_site_id].exon_id[j];
                     if (node_map[sg_i][GTF_don_id] == 7) {
                         exon_t node_e = sg->node[GTF_don_id].node_e;
-                        uint32_t don_id = sg_bin_sch_node(*sr_sg, node_e, &hit); if (hit == 0) err_fatal_simple("Can not hit node. (pred_sg 1)\n");
+                        uint32_t don_id = sg_bin_sch_node(sr_sg, node_e, &hit); if (hit == 0) err_fatal_simple("Can not hit node. (pred_sg 1)\n");
                         _insert(don_id, sr_sg->don_site[don_site_id].exon_id, sr_sg->don_site[don_site_id].exon_n, sr_sg->don_site[don_site_id].exon_m, uint32_t)
                         // update v_start
                         if (sg->node[GTF_don_id].is_init == 1) {
@@ -166,7 +166,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                     uint32_t GTF_acc_id = sg->acc_site[GTF_acc_site_id].exon_id[j];
                     if (node_map[sg_i][GTF_acc_id] == 7) {
                         exon_t node_e = sg->node[GTF_acc_id].node_e;
-                        uint32_t acc_id = sg_bin_sch_node(*sr_sg, node_e, &hit);
+                        uint32_t acc_id = sg_bin_sch_node(sr_sg, node_e, &hit);
                         _insert(acc_id, sr_sg->acc_site[acc_site_id].exon_id, sr_sg->acc_site[acc_site_id].exon_n, sr_sg->acc_site[acc_site_id].exon_m, uint32_t)
                         // update v_end
                         if (sg->node[GTF_acc_id].is_termi == 1) {

@@ -27,12 +27,12 @@ int pred_asm_usage(void)
 /*****************************
  *       generate ASM        *
  *****************************/
-SGasm *sg_init_asm(uint32_t sg_id, uint32_t v_start, uint32_t v_end, int32_t start, int32_t end)
+SGasm *sg_init_asm(uint32_t sg_id, uint32_t v_start, uint32_t v_end)
 {
     SGasm *sg_asm = (SGasm*)_err_malloc(sizeof(SGasm));
     sg_asm->SG_id = sg_id;
     sg_asm->v_start = v_start; sg_asm->v_end = v_end;
-    sg_asm->start = start; sg_asm->end = end;
+    sg_asm->start = MAX_SITE; sg_asm->end = 0;
     sg_asm->node_n = 0; sg_asm->node_m = 1;
     sg_asm->node_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
     sg_asm->edge_n = 0; sg_asm->edge_m = 1;
@@ -45,7 +45,7 @@ SGasm_group *sg_init_asm_group(void)
     SGasm_group *asm_g = (SGasm_group*)_err_malloc(sizeof(SGasm_group));
     asm_g->sg_asm_n = 0; asm_g->sg_asm_m = 1;
     asm_g->sg_asm = (SGasm**)_err_malloc(sizeof(SGasm*));
-    asm_g->sg_asm[0] = sg_init_asm(0, 0, 0, 0, 0);
+    asm_g->sg_asm[0] = sg_init_asm(0, 0, 0);
     return asm_g;
 }
 
@@ -54,7 +54,7 @@ SGasm_group *sg_realloc_asm_group(SGasm_group *asm_g)
     asm_g->sg_asm_m <<= 1;
     asm_g->sg_asm = (SGasm**)_err_realloc(asm_g->sg_asm, asm_g->sg_asm_m * sizeof(SGasm*));
     int i;
-    for (i = asm_g->sg_asm_m >> 1; i < asm_g->sg_asm_m; ++i) asm_g->sg_asm[i] = sg_init_asm(0, 0, 0, 0, 0);
+    for (i = asm_g->sg_asm_m >> 1; i < asm_g->sg_asm_m; ++i) asm_g->sg_asm[i] = sg_init_asm(0, 0, 0);
     return asm_g;
 }
 
@@ -89,36 +89,39 @@ void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *
     }
 }
 
-void sg_update_asm_edge(SG sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
+void sg_update_asm_edge(SG *sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
 {
     int hit = 0;
-    if (sg.node[pre_id].node_e.end == 0 || sg.node[cur_id].node_e.start == MAX_SITE) return;
-    uint32_t pre_site_id = sg_bin_sch_site(sg.don_site, sg.don_site_n, sg.node[pre_id].node_e.end+1, &hit); if (hit==0) err_fatal_core(__func__, "Can not hit site: (%d).(3)\n", sg.node[pre_id].node_e.end+1);
-    uint32_t cur_site_id = sg_bin_sch_site(sg.acc_site, sg.acc_site_n, sg.node[cur_id].node_e.start-1, &hit); if (hit==0) err_fatal_simple("Can not hit sitnode_e.(3)\n");
+    if (sg->node[pre_id].node_e.end == 0 || sg->node[cur_id].node_e.start == MAX_SITE) return;
+    uint32_t pre_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, sg->node[pre_id].node_e.end+1, &hit); if (hit==0) err_fatal_core(__func__, "Can not hit site: (%d).(3)\n", sg->node[pre_id].node_e.end+1);
+    uint32_t cur_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sg->node[cur_id].node_e.start-1, &hit); if (hit==0) err_fatal_simple("Can not hit sitnode_e.(3)\n");
     uint32_t edge_i = sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); 
-    if (hit == 0) err_fatal_core(__func__, "Can not hit edgnode_e.(%d,%d) (3)\n", sg.node[pre_id].node_e.end, sg.node[cur_id].node_e.start);
+    if (hit == 0) err_fatal_core(__func__, "Can not hit edgnode_e.(%d,%d) (3)\n", sg->node[pre_id].node_e.end, sg->node[cur_id].node_e.start);
     _insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, uint32_t)
 }
 
-void sg_update_asm(SG sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
+void sg_update_asm(SG *sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
 {
     _insert(cur_id, sg_asm->node_id, sg_asm->node_n, sg_asm->node_m, uint32_t)
+    if (sg->node[cur_id].node_e.start < sg_asm->start) sg_asm->start = sg->node[cur_id].node_e.start;
+    if (sg->node[cur_id].node_e.end > sg_asm->end) sg_asm->end = sg->node[cur_id].node_e.end;
+    sg->node[cur_id].is_asm = 1;
     sg_update_asm_edge(sg, sg_asm, pre_id, cur_id);
 }
 
-void sub_splice_graph(SG sg, int **node_visit, SGasm *sg_asm, uint32_t cur_id, uint32_t e_id)
+void sub_splice_graph(SG *sg, int **node_visit, SGasm *sg_asm, uint32_t cur_id, uint32_t e_id)
 {
     if ((*node_visit)[cur_id] == 1) return; else (*node_visit)[cur_id] = 1;
 
     if (cur_id == e_id) return;
     int i;
-    for (i = 0; i < sg.node[cur_id].next_n; ++i) {
-        if (sg.node[cur_id].next_id[i] == e_id) {
+    for (i = 0; i < sg->node[cur_id].next_n; ++i) {
+        if (sg->node[cur_id].next_id[i] == e_id) {
             sg_update_asm_edge(sg, sg_asm, cur_id, e_id);
             continue;
         } else {
-            sg_update_asm(sg, sg_asm, cur_id, sg.node[cur_id].next_id[i]); 
-            sub_splice_graph(sg, node_visit, sg_asm, sg.node[cur_id].next_id[i], e_id);
+            sg_update_asm(sg, sg_asm, cur_id, sg->node[cur_id].next_id[i]); 
+            sub_splice_graph(sg, node_visit, sg_asm, sg->node[cur_id].next_id[i], e_id);
         }
     }
 }
@@ -142,28 +145,28 @@ int sg_asm_group_add(SGasm_group *asm_g, SGasm *sg_asm)
     return asm_g->sg_asm_n;
 }
 
-SGasm_group *gen_ASM(SG_group sg_g)
+SGasm_group *gen_asm(SG_group *sg_g)
 {
     err_printf("[%s] generating alternative-splice-module with predicted SJ-SG ...\n", __func__);
     int entry_n, exit_n; uint32_t *entry, *exit;
     int sg_i;
     SGasm_group *asm_g = sg_init_asm_group();
-    for (sg_i = 0; sg_i < sg_g.SG_n; ++sg_i) {
-        SG sg = *(sg_g.SG[sg_i]);
-        cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n);
+    for (sg_i = 0; sg_i < sg_g->SG_n; ++sg_i) {
+        SG *sg = sg_g->SG[sg_i];
+        cal_cand_node(*sg, &entry, &exit, &entry_n, &exit_n);
         if (entry_n == 0 || exit_n == 0) goto END;
 
         int i, j, hit;
         for (i = 0; i < entry_n; ++i) {
             hit = 0;
             for (j = 0; j < exit_n; ++j) {
-                int post_domn_n = sg.node[entry[i]].post_domn_n;
-                int pre_domn_n = sg.node[exit[j]].pre_domn_n;
+                int post_domn_n = sg->node[entry[i]].post_domn_n;
+                int pre_domn_n = sg->node[exit[j]].pre_domn_n;
                 if (post_domn_n > 1 && pre_domn_n > 1 
-                        && sg.node[entry[i]].post_domn[1] == exit[j] 
-                        && sg.node[exit[j]].pre_domn[1] == entry[i]) {
-                    SGasm *sg_asm = sg_init_asm(sg_i, entry[i], exit[j], sg.node[entry[i]].end+1, sg.node[exit[j]].start-1);
-                    int *node_visit = (int*)_err_calloc(sg.node_n, sizeof(int));
+                        && sg->node[entry[i]].post_domn[1] == exit[j] 
+                        && sg->node[exit[j]].pre_domn[1] == entry[i]) {
+                    SGasm *sg_asm = sg_init_asm(sg_i, entry[i], exit[j]);
+                    int *node_visit = (int*)_err_calloc(sg->node_n, sizeof(int));
                     sub_splice_graph(sg, &node_visit, sg_asm, entry[i], exit[j]);
                     free(node_visit);
                     sg_asm_group_add(asm_g, sg_asm);
@@ -179,22 +182,21 @@ SGasm_group *gen_ASM(SG_group sg_g)
     return asm_g;
 }
 
-int cal_asm_exon_cnt(SGasm_group *asm_g, SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
+int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
 {
     err_printf("[%s] calculating read count for AS exons ...\n", __func__);
-    int i, j, last_asm_i = 0;
+    int i, j, last_sg_i = 0;
     while (sam_read1(in, h, b) >= 0) {
         int bam_start = b->core.pos+1;
-        if (bam_start == 1275627)
-            printf("debug");
         int bam_end = b->core.pos+bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
+        /*
         for (i = last_asm_i; i < asm_g->sg_asm_n; ++i) {
-            err_printf("%d\n", i);
             SGasm *a = asm_g->sg_asm[i];
             SG *sg = sg_g->SG[a->SG_id];
             int32_t tid = sg->tid, start = a->start, end = a->end;
             if (tid < b->core.tid || (tid == b->core.tid && end <= bam_start)) {
-                last_asm_i = ++i; break;
+                if (i == last_asm_i) last_asm_i++;
+                continue; 
             } else if (tid > b->core.tid || (tid == b->core.tid && start >= bam_end)) break;
             else {
                 for (j = 0; j < a->node_n; ++j) {
@@ -204,6 +206,25 @@ int cal_asm_exon_cnt(SGasm_group *asm_g, SG_group *sg_g, samFile *in, bam_hdr_t 
                 }
             }
         }
+        if (last_asm_i == asm_g->sg_asm_n) break;
+        */
+
+        for (i = last_sg_i; i < sg_g->SG_n; ++i) {
+            SG *sg = sg_g->SG[i];
+            int32_t tid = sg->tid, start = sg->start, end = sg->end;
+            if (start == MAX_SITE || end == 0 || tid < b->core.tid || (tid == b->core.tid && end <= bam_start)) {
+                if (i == last_sg_i) last_sg_i++; continue;
+            } else if (tid > b->core.tid || (tid == b->core.tid && start >= bam_end)) break;
+            else {
+                for (j = 0; j < sg->node_n; ++j) {
+                    if (sg->node[j].is_asm) {
+                        if (sg->node[j].start <= bam_start && sg->node[j].end >= bam_end) 
+                        sg->node[j].cnt++;
+                    }
+                }
+            }
+        }
+        if (last_sg_i == sg_g->SG_n) break;
     }
     err_printf("[%s] calculating read count for AS exons done!\n", __func__);
     return 0;
@@ -270,13 +291,13 @@ int pred_asm(int argc, char *argv[])
     sg_free_group(sg_g);
 
     // generate ASM with short-read splice-graph
-    SGasm_group *asm_g = gen_ASM(*sr_sg_g);
+    SGasm_group *asm_g = gen_asm(sr_sg_g);
 
     // calculate number of reads falling into exon-body
     if (BAM_format) {
         samFile *in; bam_hdr_t *h; bam1_t *b;
         in = sam_open(argv[optind+1], "rb"); h = sam_hdr_read(in); b = bam_init1(); 
-        cal_asm_exon_cnt(asm_g, sr_sg_g, in, h, b);
+        cal_asm_exon_cnt(sr_sg_g, in, h, b);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     }
 
@@ -310,6 +331,6 @@ int pred_asm(int argc, char *argv[])
             fprintf(cnt_out, "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->node_id[j]].start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->node_id[j]].end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->node_id[j]].cnt);
         }
     }
-    sg_free_group(sr_sg_g); sg_free_asm_group(asm_g); err_fclose(asm_out); err_fclose(cnt_out);
+    sg_free_group(sr_sg_g); sg_free_asm_group(asm_g); err_fclose(asm_out); err_fclose(cnt_out); free(asm_fn); free(cnt_fn);
     return 0;
 }
