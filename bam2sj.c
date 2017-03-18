@@ -133,12 +133,14 @@ int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
 
 int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, sj_t **SJ_group, int SJ_m)
 {
+    err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
     int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
     while (sam_read1(in, h, b) >= 0) {
         int sj_n = gen_sj(b, &sj, &sj_m);
         if (sj_n > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
     }
     free(sj);
+    err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
     return SJ_n;
 }
 
@@ -173,11 +175,11 @@ int bam2sj(int argc, char *argv[])
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
 
     int sj_n = bam2sj_core(in, h, b, &sj_group, sj_m);
+    bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
 
     print_sj(sj_group, sj_n, stdout);
 
     free(sj_group);
     if (gtf_fp != NULL) err_fclose(gtf_fp);
-    bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     return 0;
 }

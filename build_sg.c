@@ -430,6 +430,7 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
 
 SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
 {
+    err_printf("[%s] constructing splice-graph with GTF file ...\n", __func__);
     gene_group_t *gg = gene_group_init();
     int g_n = read_gene_group(gtf, cname, gg);
     SG_group *sg_g = sg_init_group(g_n);
@@ -445,6 +446,7 @@ SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
     for (i = 0; i < gg->gene_n; ++i) construct_SpliceGraph_core(sg_g->SG[i], gg->g[i]);
 
     gene_group_free(gg);
+    err_printf("[%s] constructing splice-graph with GTF file done!\n", __func__);
     return sg_g;
 }
 

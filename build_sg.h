@@ -61,6 +61,7 @@ typedef struct {
     uint32_t v_start, v_end; // virtual start and end node
     uint32_t *node_id; int32_t node_n, node_m;
     uint32_t *edge_id; int32_t edge_n, edge_m;
+    int32_t start, end;
 } SGasm;
 
 typedef struct {

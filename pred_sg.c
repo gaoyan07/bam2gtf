@@ -4,6 +4,7 @@
 #include <getopt.h>
 #include "gtf.h"
 #include "build_sg.h"
+#include "bam2sj.h"
 
 extern const char PROG[20];
 int pred_sg_usage(void)
@@ -201,13 +202,12 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
 }
 
 // sr_sg_g.SG_n == sg_g.SG_n
-SG_group *predict_SpliceGraph(SG_group sg_g, FILE *sj_p, int no_novel_sj)
+SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, int no_novel_sj)
 {
+    err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG ...\n", __func__);
     SG_group *sr_sg_g = sg_init_group(sg_g.SG_n);
-    sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t));
-    int sj_n, sj_m = 10000, i;
-    sj_n = read_sj_group(sj_p, sg_g.cname, &sj_group, sj_m);
 
+    int i;
     if (sg_g.cname->chr_n > sr_sg_g->cname->chr_m) {
         sr_sg_g->cname->chr_name = (char**)_err_realloc(sr_sg_g->cname->chr_name, sg_g.cname->chr_n * sizeof(char*));
         for (i = sr_sg_g->cname->chr_m; i < sg_g.cname->chr_n; ++i) sr_sg_g->cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
@@ -218,6 +218,7 @@ SG_group *predict_SpliceGraph(SG_group sg_g, FILE *sj_p, int no_novel_sj)
 
     predict_SpliceGraph_core(sg_g, sj_group, sj_n, sr_sg_g, no_novel_sj);
     free(sj_group);
+    err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG done!\n", __func__);
     return sr_sg_g;
 }
 /****************************************************************/
@@ -260,8 +261,26 @@ int pred_sg(int argc, char *argv[])
         sg_g = construct_SpliceGraph(gtf_fp, cname);
         err_fclose(gtf_fp);  chr_name_free(cname);
     }
+
+    // get splice-junction
+    /* based on .sj file
+    FILE *sj_fp = xopen(argv[optind+1], "r");
+    sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t));
+    int sj_n, sj_m = 10000;
+    sj_n = read_sj_group(sj_fp, sg_g->cname, &sj_group, sj_m);
+
+    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, no_novel_sj);
+    err_fclose(sj_fp); sg_free_group(sg_g);
+    */
+    // based on .bam file
+    samFile *in; bam_hdr_t *h; bam1_t *b;
+    if ((in = sam_open(argv[optind+1], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+1]);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
+    b = bam_init1(); 
+    sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
+    int sj_n = bam2sj_core(in, h, b, &sj_group, sj_m); 
     // predict splice-graph with GTF-based splice-graph and splice-junciton
-    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_fp, no_novel_sj);
+    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, no_novel_sj);
 
     // dump predicted splice-graph to file
     if (strlen(out_prefix) == 0) strcpy(out_prefix, argv[optind+1]);
