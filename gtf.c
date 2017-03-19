@@ -343,6 +343,31 @@ int get_chr_id(chr_name_t *cname, char *chr)
     return cname->chr_n++;
 }
 
+int bam_set_cname(bam_hdr_t *h, chr_name_t *cname)
+{
+    int i;
+    for (i = 0; i < h->n_targets; ++i) {
+        get_chr_id(cname, h->target_name[i]);
+    }
+    return 0;
+}
+
+int sj_group_comp(const void *_a, const void *_b)
+{
+    sj_t *a = (sj_t*)_a, *b = (sj_t*)_b;
+    if (a->tid != b->tid) return a->tid - b->tid;
+    else if (a->don != b->don) return a->don - b->don;
+    else return a->acc - b->acc;
+}
+
+int gene_group_comp(const void *_a, const void *_b)
+{
+    gene_t *a = (gene_t*)_a, *b = (gene_t*)_b;
+    if (a->tid != b->tid) return a->tid - b->tid;
+    else if (a->start != b->start) return a->start - b->start;
+    else return a->end - b->end;
+}
+
 // read splice-junction
 int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m)
 {
@@ -356,6 +381,8 @@ int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m)
         int tid = get_chr_id(cname, ref);
         (*sj_group)[sj_n++].tid = tid;
     }
+    // sort with cname
+    qsort(sj_group, sj_n, sizeof(sj_t), sj_group_comp);
     return sj_n;
 }
 
@@ -376,7 +403,6 @@ int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
  
         if (strcmp(type, "gene") == 0) { // new gene starts old gene ends
             if (++gg->gene_n == gg->gene_m) gg = gene_group_realloc(gg);
-
             cur_g = gg->g + gg->gene_n-1;
             cur_g->tid = tid; cur_g->is_rev = is_rev;
             cur_g->start = start; cur_g->end = end;
@@ -384,7 +410,6 @@ int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
             cur_g->trans_n = 0;
         } else if (strcmp(type, "transcript") == 0) { // new trans starts, old trans ends
             if (++cur_g->trans_n == cur_g->trans_m) cur_g = trans_realloc(cur_g);
-
             cur_t = cur_g->trans + cur_g->trans_n-1;
             cur_t->tid = tid; cur_t->is_rev = is_rev;
             cur_t->start = start; cur_t->end = end;
@@ -398,6 +423,8 @@ int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
             cur_e->start = start; cur_e->end = end;
         }
     }
+    // sort with cname
+    qsort(gg->g, gg->gene_n, sizeof(gene_t), gene_group_comp);
     return gg->gene_n;
 }
 

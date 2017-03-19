@@ -93,7 +93,5 @@ void cal_post_domn(SG *sg);
 SG_group *construct_SpliceGraph(FILE *gtf_fp, chr_name_t *cname);
 
 int build_sg(int argc, char *argv[]);
-void sg_dump(SG_group sg_g, const char *sg_name);
-SG_group *sg_restore(const char *sg_name);
 
 #endif

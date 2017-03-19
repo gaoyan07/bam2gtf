@@ -13,8 +13,6 @@ int pred_sg_usage(void)
     err_printf("Usage:   %s pred_sg [option] <in.gtf> <in.sj>\n\n", PROG);
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
-    err_printf("         -f --gtf-format  [STR]    file format of GTF input: \n");
-    err_printf("                                     plain GTF file(GTF) or binary splice-graph file(SG). [SG]\n");
     err_printf("         -o --out-prefix  [STR]    prefix of output splice-graph file. [in.sj]\n");
     err_printf("\n");
     return 1;
@@ -145,7 +143,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 GTF_don_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, sj_group[i].don, &hit);
                 GTF_acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sj_group[i].acc, &hit);
                 sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
-                // XXX 3.1. update edge(sj_group[i])
+                // 3.1. update edge(sj_group[i])
                 sg_update_edge_pred(sr_sg, sj_group[i], don_site_id, acc_site_id);
                 // 3.2. update node()
                 for (j = 0; j < sg->don_site[GTF_don_site_id].exon_n; ++j) {
@@ -225,7 +223,6 @@ SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, int no_no
 
 const struct option pred_sg_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
-    { "gtf-format", 1, NULL, 'f' }, 
     { "out-prefix", 1, NULL, 'o' },
 
     { 0, 0, 0, 0}
@@ -234,14 +231,10 @@ const struct option pred_sg_long_opt [] = {
 int pred_sg(int argc, char *argv[])
 {
     int c;
-    int no_novel_sj = 1, SG_format = 1; char out_prefix[1024]="";
-    while ((c = getopt_long(argc, argv, "nf:o:", pred_sg_long_opt, NULL)) >= 0) {
+    int no_novel_sj = 1; char out_prefix[1024]="";
+    while ((c = getopt_long(argc, argv, "no:", pred_sg_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj = 0; break;
-            case 'f': if (strcmp(optarg, "GTF")==0) SG_format = 0; 
-                      else if (strcmp(optarg, "SG")==0) SG_format = 1; 
-                      else return pred_sg_usage();
-                  break;
             case 'o': strcpy(out_prefix, optarg); break;
             default: err_printf("Error: unknown optin: %s.\n", optarg);
                      return pred_sg_usage();
@@ -254,13 +247,10 @@ int pred_sg(int argc, char *argv[])
 
     // build splice-graph with GTF
     SG_group *sg_g;
-    if (SG_format) sg_g = sg_restore(argv[optind]);
-    else  {
-        FILE *gtf_fp = xopen(argv[optind], "r");
-        chr_name_t *cname = chr_name_init();
-        sg_g = construct_SpliceGraph(gtf_fp, cname);
-        err_fclose(gtf_fp);  chr_name_free(cname);
-    }
+    FILE *gtf_fp = xopen(argv[optind], "r");
+    chr_name_t *cname = chr_name_init();
+    sg_g = construct_SpliceGraph(gtf_fp, cname);
+    err_fclose(gtf_fp);  chr_name_free(cname);
 
     // get splice-junction
     /* based on .sj file
@@ -284,7 +274,6 @@ int pred_sg(int argc, char *argv[])
 
     // dump predicted splice-graph to file
     if (strlen(out_prefix) == 0) strcpy(out_prefix, argv[optind+1]);
-    sg_dump(*sr_sg_g, out_prefix);
 
     sg_free_group(sg_g); sg_free_group(sr_sg_g);
     err_fclose(sj_fp);

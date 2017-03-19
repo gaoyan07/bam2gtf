@@ -16,8 +16,6 @@ int pred_asm_usage(void)
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [false]\n");
     err_printf("                                     with splice-junction input, the .cnt output will have no count information.\n");
-    err_printf("         -f --gtf-format  [STR]    file format of GTF input: \n");
-    err_printf("                                     plain GTF file(GTF) or binary splice-graph file(SG). [SG]\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT. [in.bam/sj]\n");
     err_printf("                                     prefix.asm & prefix.cnt\n");
 	err_printf("\n");
@@ -233,7 +231,6 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
 /*****************************/
 const struct option asm_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
-    { "gtf-format", 1, NULL, 'f' },
     { "sj-file", 0, NULL, 's' },
     { "output", 1, NULL, 'o' },
 
@@ -242,15 +239,10 @@ const struct option asm_long_opt [] = {
 
 int pred_asm(int argc, char *argv[])
 {
-    int c;
-    int no_novel_sj=1, SG_format=1, BAM_format=1; char out_fn[1024]="";
-	while ((c = getopt_long(argc, argv, "nsf:o:", asm_long_opt, NULL)) >= 0) {
+    int c, no_novel_sj=1, BAM_format=1; char out_fn[1024]="";
+	while ((c = getopt_long(argc, argv, "nso:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj = 0; break;
-            case 'f': if (strcmp(optarg, "GTF")==0) SG_format = 0; 
-                      else if (strcmp(optarg, "SG")==0) SG_format = 1; 
-                      else return pred_asm_usage();
-                  break;
             case 's': BAM_format = 0; break;
             case 'o': strcpy(out_fn, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
@@ -259,16 +251,20 @@ int pred_asm(int argc, char *argv[])
     }
     if (argc - optind != 2) return pred_asm_usage();
 
-    // FIXME GTF.tid != BAM.tid
+    chr_name_t *cname = chr_name_init();
+    // set cname if input is BAM
+    if (BAM_format) {
+        samFile *in; bam_hdr_t *h;
+        if ((in = sam_open(argv[optind+1], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+1]);
+        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
+        bam_set_cname(h, cname);
+        bam_hdr_destroy(h); sam_close(in);
+    }
     // build splice-graph with GTF
     SG_group *sg_g;
-    if (SG_format) sg_g = sg_restore(argv[optind]);
-    else  {
-        FILE *gtf_fp = xopen(argv[optind], "r");
-        chr_name_t *cname = chr_name_init();
-        sg_g = construct_SpliceGraph(gtf_fp, cname);
-        err_fclose(gtf_fp); chr_name_free(cname);
-    }
+    FILE *gtf_fp = xopen(argv[optind], "r");
+    sg_g = construct_SpliceGraph(gtf_fp, cname);
+    err_fclose(gtf_fp); chr_name_free(cname);
 
     // get splice-junction
     int sj_n, sj_m; sj_t *sj_group;
@@ -278,6 +274,7 @@ int pred_asm(int argc, char *argv[])
         if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
         b = bam_init1(); 
         sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
+        // FIXME bam2itv.tmp
         sj_n = bam2sj_core(in, h, b, &sj_group, sj_m);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     } else  { // based on .sj file
@@ -311,11 +308,11 @@ int pred_asm(int argc, char *argv[])
     } else {
         asm_fn = (char*)_err_malloc(strlen(out_fn)+10);
         cnt_fn = (char*)_err_malloc(strlen(out_fn)+10);
-        strcpy(asm_fn, argv[optind+1]); strcat(asm_fn, ".asm");
-        strcpy(cnt_fn, argv[optind+1]); strcat(cnt_fn, ".cnt");
+        strcpy(asm_fn, out_fn); strcat(asm_fn, ".asm");
+        strcpy(cnt_fn, out_fn); strcat(cnt_fn, ".cnt");
     }
     FILE *asm_out = xopen(asm_fn, "w"); FILE *cnt_out = xopen(cnt_fn, "w");
-    chr_name_t *cname = sr_sg_g->cname;
+    cname = sr_sg_g->cname;
     fprintf(asm_out, "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
     fprintf(cnt_out, "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tREAD_COUNT\n");
     int i, j, sg_i;
