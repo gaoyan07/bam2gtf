@@ -187,25 +187,7 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
     while (sam_read1(in, h, b) >= 0) {
         int bam_start = b->core.pos+1;
         int bam_end = b->core.pos+bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
-        /*
-        for (i = last_asm_i; i < asm_g->sg_asm_n; ++i) {
-            SGasm *a = asm_g->sg_asm[i];
-            SG *sg = sg_g->SG[a->SG_id];
-            int32_t tid = sg->tid, start = a->start, end = a->end;
-            if (tid < b->core.tid || (tid == b->core.tid && end <= bam_start)) {
-                if (i == last_asm_i) last_asm_i++;
-                continue; 
-            } else if (tid > b->core.tid || (tid == b->core.tid && start >= bam_end)) break;
-            else {
-                for (j = 0; j < a->node_n; ++j) {
-                    int node_i = a->node_id[j];
-                    if (sg->node[node_i].start <= bam_start && sg->node[node_i].end >= bam_end) 
-                        sg->node[node_i].cnt++;
-                }
-            }
-        }
-        if (last_asm_i == asm_g->sg_asm_n) break;
-        */
+        uint8_t is_uniq = bam_is_uniq_NH(b);
 
         for (i = last_sg_i; i < sg_g->SG_n; ++i) {
             SG *sg = sg_g->SG[i];
@@ -216,8 +198,10 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
             else {
                 for (j = 0; j < sg->node_n; ++j) {
                     if (sg->node[j].is_asm) {
-                        if (sg->node[j].start <= bam_start && sg->node[j].end >= bam_end) 
-                        sg->node[j].cnt++;
+                        if (sg->node[j].start <= bam_start && sg->node[j].end >= bam_end) {
+                            if (is_uniq) sg->node[j].uniq_c++;
+                            else sg->node[j].multi_c++;
+                        }
                     }
                 }
             }
@@ -225,6 +209,53 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
         if (last_sg_i == sg_g->SG_n) break;
     }
     err_printf("[%s] calculating read count for AS exons done!\n", __func__);
+    return 0;
+}
+
+int asm_output(char *fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
+{
+    char *asm_fn, *sj_cnt_fn, *exon_cnt_fn;
+    if (strlen(prefix) == 0) {
+        asm_fn = (char*)_err_malloc(strlen(fn)+10);
+        sj_cnt_fn = (char*)_err_malloc(strlen(fn)+10);
+        exon_cnt_fn = (char*)_err_malloc(strlen(fn)+10);
+        strcpy(asm_fn, fn); strcat(asm_fn, ".asm");
+        strcpy(sj_cnt_fn, fn); strcat(sj_cnt_fn, ".jcnt");
+        strcpy(exon_cnt_fn, fn); strcat(exon_cnt_fn, ".ecnt");
+    } else {
+        asm_fn = (char*)_err_malloc(strlen(prefix)+10);
+        sj_cnt_fn = (char*)_err_malloc(strlen(prefix)+10);
+        exon_cnt_fn = (char*)_err_malloc(strlen(prefix)+10);
+        strcpy(asm_fn, prefix); strcat(asm_fn, ".asm");
+        strcpy(sj_cnt_fn, prefix); strcat(sj_cnt_fn, ".jcnt");
+        strcpy(exon_cnt_fn, prefix); strcat(exon_cnt_fn, ".ecnt");
+    }
+    FILE *asm_out = xopen(asm_fn, "w"), *jcnt_out = xopen(sj_cnt_fn, "w"), *ecnt_out = xopen(exon_cnt_fn, "w");
+    chr_name_t *cname = sg_g->cname;
+    fprintf(asm_out, "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
+    fprintf(jcnt_out, "ASM_ID\tSG_ID\tSJ_ID\tSTRAND\tCHR\tINTRON_START\tINTRON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
+    fprintf(ecnt_out, "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
+    int i, j, sg_i;
+    for (i = 0; i < asm_g->sg_asm_n; ++i) {
+        SGasm *sg_asm = asm_g->sg_asm[i];
+        sg_i = sg_asm->SG_id; SG *sg = sg_g->SG[sg_i]; 
+        SGnode *node = sg->node; SGsite *acc_site = sg->acc_site; SGsite *don_site = sg->don_site; SGedge *edge = sg->edge;
+        int start, end; uint32_t v_s = sg_asm->v_start, v_e = sg_asm->v_end;
+
+        if (node[v_s].node_e.start == 0) start = sg->start-100; else start = node[v_s].node_e.start;
+        if (node[v_e].node_e.end == MAX_SITE) end = sg->end+100; else end = node[v_e].node_e.end;
+
+        fprintf(asm_out, "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[sg_asm->v_start].node_e.start, node[sg_asm->v_start].node_e.end, node[sg_asm->v_end].node_e.start, node[sg_asm->v_end].node_e.end, sg_asm->node_n, cname->chr_name[sg->tid], start, end);
+        for (j = 0; j < sg_asm->edge_n; ++j) {
+            uint32_t e_id = sg_asm->edge_id[j];
+            fprintf(jcnt_out, "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], don_site[edge[e_id].don_site_id].site, acc_site[edge[e_id].acc_site_id].site,  edge[e_id].uniq_c, edge[e_id].multi_c);
+        }
+        for (j = 0; j < sg_asm->node_n; ++j) {
+            uint32_t asm_n_id = sg_asm->node_id[j];
+            fprintf(ecnt_out, "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[asm_n_id].start, node[asm_n_id].end, node[asm_n_id].uniq_c, node[asm_n_id].multi_c);
+        }
+    }
+    err_fclose(asm_out); err_fclose(jcnt_out); err_fclose(ecnt_out); free(asm_fn); free(sj_cnt_fn); free(exon_cnt_fn);
     return 0;
 }
 
@@ -299,35 +330,8 @@ int pred_asm(int argc, char *argv[])
     }
 
     // output
-    char *asm_fn, *cnt_fn;
-    if (strlen(out_fn) == 0) {
-        asm_fn = (char*)_err_malloc(strlen(argv[optind+1])+10);
-        cnt_fn = (char*)_err_malloc(strlen(argv[optind+1])+10);
-        strcpy(asm_fn, argv[optind+1]); strcat(asm_fn, ".asm");
-        strcpy(cnt_fn, argv[optind+1]); strcat(cnt_fn, ".cnt");
-    } else {
-        asm_fn = (char*)_err_malloc(strlen(out_fn)+10);
-        cnt_fn = (char*)_err_malloc(strlen(out_fn)+10);
-        strcpy(asm_fn, out_fn); strcat(asm_fn, ".asm");
-        strcpy(cnt_fn, out_fn); strcat(cnt_fn, ".cnt");
-    }
-    FILE *asm_out = xopen(asm_fn, "w"); FILE *cnt_out = xopen(cnt_fn, "w");
-    cname = sr_sg_g->cname;
-    fprintf(asm_out, "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
-    fprintf(cnt_out, "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tREAD_COUNT\n");
-    int i, j, sg_i;
-    for (i = 0; i < asm_g->sg_asm_n; ++i) {
-        sg_i = asm_g->sg_asm[i]->SG_id;
-        int start, end;
-        uint32_t v_s = asm_g->sg_asm[i]->v_start, v_e = asm_g->sg_asm[i]->v_end;
-        if (sr_sg_g->SG[sg_i]->node[v_s].node_e.start == 0) start = sr_sg_g->SG[sg_i]->start-100; else start = sr_sg_g->SG[sg_i]->node[v_s].node_e.start;
-        if (sr_sg_g->SG[sg_i]->node[v_e].node_e.end == MAX_SITE) end = sr_sg_g->SG[sg_i]->end+100; else end = sr_sg_g->SG[sg_i]->node[v_e].node_e.end;
-
-        fprintf(asm_out, "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].node_e.start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_start].node_e.end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].node_e.start,sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->v_end].node_e.end, asm_g->sg_asm[i]->node_n, cname->chr_name[sr_sg_g->SG[sg_i]->tid], start, end);
-        for (j = 0; j < asm_g->sg_asm[i]->node_n; ++j) {
-            fprintf(cnt_out, "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sr_sg_g->SG[sg_i]->is_rev], cname->chr_name[sr_sg_g->SG[sg_i]->tid], sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->node_id[j]].start, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->node_id[j]].end, sr_sg_g->SG[sg_i]->node[asm_g->sg_asm[i]->node_id[j]].cnt);
-        }
-    }
-    sg_free_group(sr_sg_g); sg_free_asm_group(asm_g); err_fclose(asm_out); err_fclose(cnt_out); free(asm_fn); free(cnt_fn);
+    asm_output(argv[optind+1], out_fn, sr_sg_g, asm_g);
+    
+    sg_free_group(sr_sg_g); sg_free_asm_group(asm_g); 
     return 0;
 }

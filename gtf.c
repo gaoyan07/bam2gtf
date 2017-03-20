@@ -382,7 +382,7 @@ int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m)
         (*sj_group)[sj_n++].tid = tid;
     }
     // sort with cname
-    qsort(sj_group, sj_n, sizeof(sj_t), sj_group_comp);
+    qsort(*sj_group, sj_n, sizeof(sj_t), sj_group_comp);
     return sj_n;
 }
 

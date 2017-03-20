@@ -39,6 +39,16 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t ac
     return 0;
 }
 
+uint8_t bam_is_uniq_NH(bam1_t *b)
+{
+    uint8_t *p = bam_aux_get(b, "NH");
+    if (p == 0) {
+        err_printf("No \"NH\" tag.\n");
+        return 0;
+    }
+    return (bam_aux2i(p) == 1);
+}
+
 int gen_sj(bam1_t *b, sj_t **sj, int *sj_m)
 {
     if (bam_unmap(b)) return 0;
@@ -50,8 +60,7 @@ int gen_sj(bam1_t *b, sj_t **sj, int *sj_m)
     uint8_t *p, is_rev, is_uniq; 
     p = bam_aux_get(b, "XS");
     if (p == 0) is_rev = bam_is_rev(b); else is_rev = ((bam_aux2A(p)=='+')?0 : 1);
-    p = bam_aux_get(b, "NH");
-    if (p == 0) err_fatal_simple("No \"NH\" tag.\n"); else is_uniq = ((bam_aux2i(p) > 1)?0 : 1);
+    is_uniq = bam_is_uniq_NH(b);
     
     uint32_t i;
     int sj_n = 0;

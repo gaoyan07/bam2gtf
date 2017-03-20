@@ -23,7 +23,7 @@ typedef struct {
     uint32_t node_id; // unique id in corresponding gene-locus
     int32_t start, end; /* real exon */ exon_t node_e;    // node in splice-graph
     uint8_t is_init, is_termi;
-    uint8_t is_asm; uint32_t cnt; 
+    uint8_t is_asm; uint32_t uniq_c, multi_c;
     uint32_t *next_id;  int32_t next_n, next_m;
     uint32_t *pre_id;    int32_t pre_n, pre_m;
     uint32_t *pre_domn;  int32_t pre_domn_n, pre_domn_m;

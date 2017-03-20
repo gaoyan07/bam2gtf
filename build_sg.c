@@ -25,7 +25,7 @@ SG *sg_init_node(SG *sg)
     int i;
     for (i = 0; i < sg->node_n; ++i) {
         sg->node[i].node_id = i;
-        sg->node[i].is_asm = 0; sg->node[i].cnt = 0; sg->node[i].is_init = 0; sg->node[i].is_termi = 0;
+        sg->node[i].is_asm = 0; sg->node[i].uniq_c = 0; sg->node[i].multi_c = 0; sg->node[i].is_init = 0; sg->node[i].is_termi = 0;
         sg->node[i].next_n = 0; sg->node[i].next_m = 1;
         sg->node[i].next_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
         sg->node[i].pre_n = 0; sg->node[i].pre_m = 1;
