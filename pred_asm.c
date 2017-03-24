@@ -235,10 +235,11 @@ int asm_output(char *fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
     fprintf(asm_out, "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
     fprintf(jcnt_out, "ASM_ID\tSG_ID\tSJ_ID\tSTRAND\tCHR\tINTRON_START\tINTRON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
     fprintf(ecnt_out, "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
-    int i, j, sg_i;
+    int i, j;
+    
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         SGasm *sg_asm = asm_g->sg_asm[i];
-        sg_i = sg_asm->SG_id; SG *sg = sg_g->SG[sg_i]; 
+        int sg_i = sg_asm->SG_id; SG *sg = sg_g->SG[sg_i]; 
         SGnode *node = sg->node; SGsite *acc_site = sg->acc_site; SGsite *don_site = sg->don_site; SGedge *edge = sg->edge;
         int start, end; uint32_t v_s = sg_asm->v_start, v_e = sg_asm->v_end;
 
@@ -255,6 +256,27 @@ int asm_output(char *fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
             fprintf(ecnt_out, "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[asm_n_id].start, node[asm_n_id].end, node[asm_n_id].uniq_c, node[asm_n_id].multi_c);
         }
     }
+    
+    // for SE
+    /*for (i = 0; i < asm_g->sg_asm_n; ++i) {
+        if (asm_g->sg_asm[i]->node_n != 1) continue;
+        SGasm *sg_asm = asm_g->sg_asm[i];
+        sg_i = sg_asm->SG_id; SG *sg = sg_g->SG[sg_i]; 
+        SGnode *node = sg->node; SGsite *acc_site = sg->acc_site; SGsite *don_site = sg->don_site; SGedge *edge = sg->edge;
+        int start, end; uint32_t v_s = sg_asm->v_start, v_e = sg_asm->v_end;
+
+        if (node[v_s].node_e.start == 0) start = sg->start-100; else start = node[v_s].node_e.start;
+        if (node[v_e].node_e.end == MAX_SITE) end = sg->end+100; else end = node[v_e].node_e.end;
+
+        int ij_cnt, ej_cnt, e_cnt;
+        uint32_t i1_id = sg_asm->edge_id[0], i2_id = sg_asm->edge_id[1], ej_id = sg_asm->edge_id[2];
+        ij_cnt = edge[i1_id].uniq_c + edge[i2_id].uniq_c;
+        ej_cnt = edge[ej_id].uniq_c;
+        e_cnt = node[sg_asm->node_id[0]].uniq_c;
+
+        fprintf(jcnt_out, "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[sg_asm->node_id[0]].start, node[sg_asm->node_id[0]].end,  ij_cnt+ej_cnt, e_cnt);
+    }*/
+    // END of SE
     err_fclose(asm_out); err_fclose(jcnt_out); err_fclose(ecnt_out); free(asm_fn); free(sj_cnt_fn); free(exon_cnt_fn);
     return 0;
 }
