@@ -185,23 +185,19 @@ int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj
     return SJ_n;
 }
 
-kseq_t **kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
+kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
 {
-    int seq_n = 0, seq_m = 30, i;
-    kseq_t **seq = (kseq_t**)_err_malloc(30 * sizeof(kseq_t*));
-    for (i = 0; i < seq_m; ++i) {
-        seq[i] = kseq_init(genome_fp);
-    }
-    while (kseq_read(seq[seq_n]) >= 0) {
+    int seq_n = 0, seq_m = 30;
+    kseq_t *kseq = kseq_init(genome_fp), *seq = (kseq_t*)_err_malloc(30 * sizeof(kseq_t));
+    while (kseq_read(kseq) >= 0) {
+        kseq_copy(seq+seq_n, *kseq);
         seq_n++;
         if (seq_n == seq_m) {
             seq_m <<= 1;
-            seq = (kseq_t**)_err_realloc(seq, seq_m * sizeof(kseq_t*));
-            for (i = seq_m >> 1; i < seq_m; ++i) {
-                seq[i] = kseq_init(genome_fp);
-            }
+            seq = (kseq_t*)_err_realloc(seq, seq_m * sizeof(kseq_t));
         }
     }
+    kseq_destroy(kseq);
     *_seq_n = seq_n; *_seq_m = seq_m;
     return seq;
 }
@@ -241,11 +237,10 @@ int bam2sj(int argc, char *argv[])
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
     b = bam_init1(); 
 
-    int seq_n = 0, seq_m;kseq_t **seq;
-    seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
+    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
 
-    int sj_n = bam2sj_core(in, h, b, *seq, seq_n, &sj_group, sj_m);
+    int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m);
     bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
 
     print_sj(sj_group, sj_n, stdout);
@@ -254,7 +249,8 @@ int bam2sj(int argc, char *argv[])
     if (gtf_fp != NULL) err_fclose(gtf_fp);
     int i;
     for (i = 0; i < seq_m; ++i) {
-        kseq_destroy(seq[i]);
+        free(seq[i].name.s);
+        free(seq[i].seq.s);
     }
     free(seq);
     return 0;

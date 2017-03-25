@@ -213,6 +213,13 @@ typedef struct __kstring_t {
 		if (seq->seq.l != seq->qual.l) return -2; /* error: qual string is of a different length */ \
 		return seq->seq.l; \
 	}
+#define __KSEQ_COPY(SCOPE) \
+    SCOPE void kseq_copy(kseq_t *seq, kseq_t kseq)\
+    { \
+        seq->name.s = strdup(kseq.name.s);      \
+        seq->seq.s = strdup(kseq.seq.s);        \
+        seq->seq.l = kseq.seq.l;                \
+    }
 
 #define __KSEQ_TYPE(type_t)						\
 	typedef struct {							\
@@ -224,7 +231,8 @@ typedef struct __kstring_t {
 	KSTREAM_INIT(type_t, __read, 16384)			\
 	__KSEQ_TYPE(type_t)							\
 	__KSEQ_BASIC(SCOPE, type_t)					\
-	__KSEQ_READ(SCOPE)
+	__KSEQ_READ(SCOPE)                          \
+	__KSEQ_COPY(SCOPE)
 
 #define KSEQ_INIT(type_t, __read) KSEQ_INIT2(static, type_t, __read)
 
@@ -233,6 +241,7 @@ typedef struct __kstring_t {
 	__KSEQ_TYPE(type_t) \
 	extern kseq_t *kseq_init(type_t fd); \
 	void kseq_destroy(kseq_t *ks); \
-	int kseq_read(kseq_t *seq);
+	int kseq_read(kseq_t *seq);     \
+    int kseq_copy(kseq_t *seq, kseq_t kseq);
 
 #endif
