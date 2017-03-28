@@ -189,6 +189,8 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
 {
     int seq_n = 0, seq_m = 30;
     kseq_t *kseq = kseq_init(genome_fp), *seq = (kseq_t*)_err_malloc(30 * sizeof(kseq_t));
+
+    err_printf("[%s] loading genome fasta file ...\n", __func__);
     while (kseq_read(kseq) >= 0) {
         kseq_copy(seq+seq_n, *kseq);
         seq_n++;
@@ -197,12 +199,13 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
             seq = (kseq_t*)_err_realloc(seq, seq_m * sizeof(kseq_t));
         }
     }
+    err_printf("[%s] loading genome fasta file done!\n", __func__);
     kseq_destroy(kseq);
     *_seq_n = seq_n; *_seq_m = seq_m;
     return seq;
 }
 
-void print_sj(sj_t *sj_group, int sj_n, FILE *out)
+void print_sj(sj_t *sj_group, int sj_n, FILE *out, kseq_t *seq)
 {
     int i;
     fprintf(out, "###STRAND 0:undefined, 1:+, 2:-\n");
@@ -210,7 +213,7 @@ void print_sj(sj_t *sj_group, int sj_n, FILE *out)
     fprintf(out, "#CHR\tSTART\tEND\tSTRAND\tUNIQ_C\tMULTI_C\tMOTIF\n");
     for (i = 0; i < sj_n; ++i) {
         sj_t sj = sj_group[i];
-        fprintf(out, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", sj.tid, sj.don, sj.acc, sj.strand, sj.uniq_c, sj.multi_c, sj.motif);
+        fprintf(out, "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", seq[sj.tid].name.s, sj.don, sj.acc, sj.strand, sj.uniq_c, sj.multi_c, sj.motif);
     }
 }
 
@@ -243,7 +246,7 @@ int bam2sj(int argc, char *argv[])
     int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m);
     bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
 
-    print_sj(sj_group, sj_n, stdout);
+    print_sj(sj_group, sj_n, stdout, seq);
 
     free(sj_group); gzclose(genome_fp); 
     if (gtf_fp != NULL) err_fclose(gtf_fp);

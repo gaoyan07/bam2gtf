@@ -9,6 +9,7 @@
 #include "build_sg.h"
 #include "pred_sg.h"
 #include "pred_asm.h"
+#include "asm2ase.h"
 
 const char PROG[20] = "gtools";
 
@@ -25,6 +26,8 @@ static int usage(void)
     err_printf("         build-sg     construct splicing graph based on GTF file\n");
     err_printf("         predict-sg   predict splicing graph based on GTF file and short-read splice-junction\n");
     err_printf("         asm          generate ASM from GTF-based splicing graph and short-read splice-junction\n");
+    err_printf("         se           generate 5 types of alternative splice events from GTF-based splicing graph\n");
+    err_printf("                        and short-read splice-junction\n");
 	err_printf("\n");
 	return 1;
 }
@@ -40,6 +43,7 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "build-sg") == 0) return build_sg(argc-1, argv+1);
     else if (strcmp(argv[1], "predict-sg") == 0) return pred_sg(argc-1, argv+1);
     else if (strcmp(argv[1], "asm") == 0) return pred_asm(argc-1, argv+1);
+    else if (strcmp(argv[1], "ase") == 0) return pred_ase(argc-1, argv+1);
 	else { fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]); return 1; }
     return 0;
 }

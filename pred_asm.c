@@ -17,7 +17,7 @@ int pred_asm_usage(void)
     err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [false]\n");
     err_printf("                                     with splice-junction input, the .cnt output will have no count information.\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT. [in.bam/sj]\n");
-    err_printf("                                     prefix.asm & prefix.cnt\n");
+    err_printf("                                     prefix.ASM & prefix.JCNT & prefix.ECNT\n");
 	err_printf("\n");
 	return 1;
 }
@@ -95,12 +95,12 @@ void sg_update_asm_edge(SG *sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
     uint32_t cur_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sg->node[cur_id].node_e.start-1, &hit); if (hit==0) err_fatal_simple("Can not hit sitnode_e.(3)\n");
     uint32_t edge_i = sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); 
     if (hit == 0) err_fatal_core(__func__, "Can not hit edgnode_e.(%d,%d) (3)\n", sg->node[pre_id].node_e.end, sg->node[cur_id].node_e.start);
-    _insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, uint32_t)
+    _bin_insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, uint32_t)
 }
 
 void sg_update_asm(SG *sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
 {
-    _insert(cur_id, sg_asm->node_id, sg_asm->node_n, sg_asm->node_m, uint32_t)
+    _bin_insert(cur_id, sg_asm->node_id, sg_asm->node_n, sg_asm->node_m, uint32_t)
     if (sg->node[cur_id].node_e.start < sg_asm->start) sg_asm->start = sg->node[cur_id].node_e.start;
     if (sg->node[cur_id].node_e.end > sg_asm->end) sg_asm->end = sg->node[cur_id].node_e.end;
     sg->node[cur_id].is_asm = 1;
@@ -212,30 +212,26 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
     return 0;
 }
 
-int asm_output(char *fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
+int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
 {
-    char *asm_fn, *sj_cnt_fn, *exon_cnt_fn;
+    int i, j, out_n=3;
+    char suf[3][10] = { ".ASM", ".JCNT", ".ECNT" };
+    char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
     if (strlen(prefix) == 0) {
-        asm_fn = (char*)_err_malloc(strlen(fn)+10);
-        sj_cnt_fn = (char*)_err_malloc(strlen(fn)+10);
-        exon_cnt_fn = (char*)_err_malloc(strlen(fn)+10);
-        strcpy(asm_fn, fn); strcat(asm_fn, ".asm");
-        strcpy(sj_cnt_fn, fn); strcat(sj_cnt_fn, ".jcnt");
-        strcpy(exon_cnt_fn, fn); strcat(exon_cnt_fn, ".ecnt");
+        for (i = 0; i < out_n; ++i)
+            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suf[i]);
     } else {
-        asm_fn = (char*)_err_malloc(strlen(prefix)+10);
-        sj_cnt_fn = (char*)_err_malloc(strlen(prefix)+10);
-        exon_cnt_fn = (char*)_err_malloc(strlen(prefix)+10);
-        strcpy(asm_fn, prefix); strcat(asm_fn, ".asm");
-        strcpy(sj_cnt_fn, prefix); strcat(sj_cnt_fn, ".jcnt");
-        strcpy(exon_cnt_fn, prefix); strcat(exon_cnt_fn, ".ecnt");
+        for (i = 0; i < out_n; ++i)
+            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suf[i]);
     }
-    FILE *asm_out = xopen(asm_fn, "w"), *jcnt_out = xopen(sj_cnt_fn, "w"), *ecnt_out = xopen(exon_cnt_fn, "w");
+    FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
+    for (i = 0; i < out_n; ++i)
+        out_fp[i] = xopen(out_fn[i], "w");
+
     chr_name_t *cname = sg_g->cname;
-    fprintf(asm_out, "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
-    fprintf(jcnt_out, "ASM_ID\tSG_ID\tSJ_ID\tSTRAND\tCHR\tINTRON_START\tINTRON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
-    fprintf(ecnt_out, "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
-    int i, j;
+    fprintf(out_fp[0], "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
+    fprintf(out_fp[1], "ASM_ID\tSG_ID\tSJ_ID\tSTRAND\tCHR\tINTRON_START\tINTRON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
+    fprintf(out_fp[2], "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
     
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         SGasm *sg_asm = asm_g->sg_asm[i];
@@ -246,14 +242,14 @@ int asm_output(char *fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
         if (node[v_s].node_e.start == 0) start = sg->start-100; else start = node[v_s].node_e.start;
         if (node[v_e].node_e.end == MAX_SITE) end = sg->end+100; else end = node[v_e].node_e.end;
 
-        fprintf(asm_out, "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[sg_asm->v_start].node_e.start, node[sg_asm->v_start].node_e.end, node[sg_asm->v_end].node_e.start, node[sg_asm->v_end].node_e.end, sg_asm->node_n, cname->chr_name[sg->tid], start, end);
+        fprintf(out_fp[0], "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[sg_asm->v_start].node_e.start, node[sg_asm->v_start].node_e.end, node[sg_asm->v_end].node_e.start, node[sg_asm->v_end].node_e.end, sg_asm->node_n, cname->chr_name[sg->tid], start, end);
         for (j = 0; j < sg_asm->edge_n; ++j) {
             uint32_t e_id = sg_asm->edge_id[j];
-            fprintf(jcnt_out, "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], don_site[edge[e_id].don_site_id].site, acc_site[edge[e_id].acc_site_id].site,  edge[e_id].uniq_c, edge[e_id].multi_c);
+            fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], don_site[edge[e_id].don_site_id].site, acc_site[edge[e_id].acc_site_id].site,  edge[e_id].uniq_c, edge[e_id].multi_c);
         }
         for (j = 0; j < sg_asm->node_n; ++j) {
             uint32_t asm_n_id = sg_asm->node_id[j];
-            fprintf(ecnt_out, "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[asm_n_id].start, node[asm_n_id].end, node[asm_n_id].uniq_c, node[asm_n_id].multi_c);
+            fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[asm_n_id].start, node[asm_n_id].end, node[asm_n_id].uniq_c, node[asm_n_id].multi_c);
         }
     }
     
@@ -277,7 +273,10 @@ int asm_output(char *fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
         fprintf(jcnt_out, "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[sg_asm->node_id[0]].start, node[sg_asm->node_id[0]].end,  ij_cnt+ej_cnt, e_cnt);
     }*/
     // END of SE
-    err_fclose(asm_out); err_fclose(jcnt_out); err_fclose(ecnt_out); free(asm_fn); free(sj_cnt_fn); free(exon_cnt_fn);
+    for (i = 0; i < out_n; ++i) {
+        free(out_fn[i]); err_fclose(out_fp[i]);
+    }
+    free(out_fn); free(out_fp);
     return 0;
 }
 

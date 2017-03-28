@@ -54,33 +54,6 @@ typedef struct {
     int32_t uniq_c, multi_c, max_over;
 } sj_t;
 
-typedef struct {
-    exon_t up, se, down;
-} SE_t;   // skipped exon
-
-typedef struct {
-    exon_t up, lon, shor;
-} A3SS_t; // alternative 3' splice site
-
-typedef struct {
-    exon_t lon, shor, down;
-} A5SS_t; // alternative 3' splice site
-
-typedef struct {
-    exon_t up, fir, sec, down;
-} MXE_t; // mutually exclusive exon
-
-typedef struct {
-    exon_t up, down;
-} RI_t;  // retained intron
-
-typedef struct {
-    SE_t *se; int32_t se_n, se_m;
-    A5SS_t *a5ss; int32_t a5ss_n, a5ss_m;
-    A3SS_t *a3ss; int32_t a3ss_n, a3ss_m;
-    MXE_t *mxe; int32_t mxe_n, mxe_m;
-    RI_t *ri; int32_t ri_n, ri_m;
-} ASE_t;
 
 #define set_l_iden(map) (map |= 0x4)
 #define set_r_iden(map) (map |= 0x2)

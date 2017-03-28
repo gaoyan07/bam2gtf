@@ -19,6 +19,66 @@
     }                               \
 }
 
+#define _bin_insert(v, p, n, m, type) { \
+    int flag=0,k_i=-1,left=0,right=n-1,mid;    \
+    type mid_v, tmp_v;                 \
+    if (right == -1) k_i = 0;   \
+    else {                      \
+        while (left <= right) { \
+            mid = (left+right) >> 1;    \
+            mid_v = p[mid];             \
+            if (mid_v == v) {           \
+                flag = 1; break;        \
+            } else if (mid_v > v) {     \
+                if (mid != 0) {         \
+                    tmp_v = p[mid-1];   \
+                }                       \
+                if (mid == 0 || v > tmp_v)  \
+                    k_i = mid;              \
+            } else left = mid+1;        \
+        }                               \
+    }                                   \
+    if (k_i == -1) k_i = n;         \
+                                    \
+    if (flag == 0) {                \
+        if (n == m) {               \
+            _realloc(p, m, type)    \
+        }                           \
+        if (k_i <= n-1)             \
+            memmove(p+k_i+1, p+k_i, (n-k_i)*sizeof(type));  \
+        (p)[k_i] = v;               \
+        (n)++;                      \
+    }                               \
+}
+
+typedef struct {
+    exon_t up, se, down;
+} SE_t;   // skipped exon
+
+typedef struct {
+    exon_t lon, shor, down;
+} A5SS_t; // alternative 3' splice site
+
+typedef struct {
+    exon_t up, lon, shor;
+} A3SS_t; // alternative 3' splice site
+
+typedef struct {
+    exon_t up, fir, sec, down;
+} MXE_t; // mutually exclusive exon
+
+typedef struct {
+    exon_t up, down;
+} RI_t;  // retained intron
+
+typedef struct {
+    SE_t *se; int32_t se_n, se_m;
+    A5SS_t *a5ss; int32_t a5ss_n, a5ss_m;
+    A3SS_t *a3ss; int32_t a3ss_n, a3ss_m;
+    MXE_t *mxe; int32_t mxe_n, mxe_m;
+    RI_t *ri; int32_t ri_n, ri_m;
+} ASE_t;
+
 typedef struct {
     uint32_t node_id; // unique id in corresponding gene-locus
     int32_t start, end; /* real exon */ exon_t node_e;    // node in splice-graph

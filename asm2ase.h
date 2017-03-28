@@ -3,6 +3,6 @@
 #include "gtf.h"
 #include "build_sg.h"
 
-int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase);
+int pred_ase(int argc, char *argv[]);
 
 #endif
