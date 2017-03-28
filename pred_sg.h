@@ -4,6 +4,6 @@
 #include "build_sg.h"
 
 int pred_sg(int argc, char *argv[]);
-SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, int no_novel_sj);
+SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, int no_novel_sj, int no_novel_com);
 
 #endif

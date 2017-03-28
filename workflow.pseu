@@ -6,32 +6,31 @@
     2. alloc for node & site
         init_node/site({id, malloc(node[next/pre]/site[exon_id]}) 
     3. update edge
-        (don, acc) ==> (node_don_id, node_acc_id), (site_don_id, site_acc_id)
+        GTF(don, acc) ==> (node_don_id, node_acc_id), (site_don_id, site_acc_id)
         update_edge(site_don_id, site_acc_id)       // EDGE DONE
-        update_node_next(node_don_id, node_acc_id)  // NODE DONE
+        update_node_pre/next(node_don_id, node_acc_id)  // NODE DONE
         update_site_exon(site_don/acc_id, node_don/acc_id)  // SITE DONE
 
     
 2. SR-SJ-SG
     // update node & site
-    1. sj(don, acc) ==> GTF_site_id
-        map[site[GTF_don_id].exon[]] = 1
-        map[site[GTF_acc_id].exon[]] = 1
+    1. sj(don, acc) ==> GTF_don/acc_site_id // known sj (AND novel sj)
+        map[site[GTF_don/acc_id].exon[]] = 1
         if (Node.map & Node.map == 1) {
             update_node(Node) {e}
             // update site
-            update_site(e.start, e.end)
+            SJ_SG_update_site(e.start, e.end)
         }
     // alloc for node&site
     2. init_node/site {id, malloc(node[next/pre]/site[exon_id]}
     3. update edge, node.next/pre, site.exon_id
-        3.0 sj(don, acc) ==> site_id 
+        3.0 sj(don, acc) ==> SJ_SG_site_id 
             if (hit == 0) continue;
-        3.1 update_edge(site_id, cov)                   // EDGE DONE
+        3.1 SJ_SG_update_edge(site_id, cov)                   // EDGE DONE
 
         3.2 update_node_next/pre
-        sj(don, acc) ==> GTF_site_id
-        for (site[GTF_site_id].exon[]) {
+        sj(don, acc) ==> GTF_don/acc_site_id
+        for (site[GTF_don/acc_site_id].exon[]) {
             if (map == 1) {
                 (exon) ==> node_id // sch(sr_sg)
                 if (hit == 0) continue;
@@ -40,7 +39,10 @@
         }
         for (don_site_id.exon[]) {
             for (acc_site_id.exon[]) {
-                update_node_next(don.exon[], acc.exon[])    // NODE DONE
+                if (no_novel_sj) {
+                    if (GTF_node[don.exon[]].next == GTF_node[acc.exon[]])
+                        update_node_next(don.exon[], acc.exon[])
+                } else update_node_next(don.exon[], acc.exon[])    // NODE DONE
             }
         }
 

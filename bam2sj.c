@@ -225,7 +225,7 @@ void print_sj(sj_t *sj_group, int sj_n, FILE *out, char **cname)
 int bam2sj(int argc, char *argv[])
 {
     int c;
-    FILE *gtf_fp=NULL;
+    FILE *gtf_fp=NULL; // TODO gtf anno
 
 	while ((c = getopt_long(argc, argv, "g:", bam2sj_long_opt, NULL)) >= 0) {
         switch (c) {
