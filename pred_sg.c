@@ -241,20 +241,20 @@ int pred_sg(int argc, char *argv[])
         }
     }
     if (argc - optind != 2) return pred_sg_usage();
-    FILE *sj_fp;
 
-    sj_fp = xopen(argv[optind+1], "r");
+    gzFile genome_fp = gzopen(argv[optind], "r");
+    if (genome_fp == NULL) err_fatal(__func__, "Can not open genome file. %s\n", argv[optind]);
 
     // build splice-graph with GTF
     SG_group *sg_g;
-    FILE *gtf_fp = xopen(argv[optind], "r");
+    FILE *gtf_fp = xopen(argv[optind+1], "r");
     chr_name_t *cname = chr_name_init();
     sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp);  chr_name_free(cname);
 
     // get splice-junction
     /* based on .sj file
-    FILE *sj_fp = xopen(argv[optind+1], "r");
+    FILE *sj_fp = xopen(argv[optind+2], "r");
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t));
     int sj_n, sj_m = 10000;
     sj_n = read_sj_group(sj_fp, sg_g->cname, &sj_group, sj_m);
@@ -264,18 +264,17 @@ int pred_sg(int argc, char *argv[])
     */
     // based on .bam file
     samFile *in; bam_hdr_t *h; bam1_t *b;
-    if ((in = sam_open(argv[optind+1], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+1]);
-    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
+    if ((in = sam_open(argv[optind+2], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+2]);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+2]);
     b = bam_init1(); 
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
-    int sj_n = bam2sj_core(in, h, b, &sj_group, sj_m); 
+    int sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m); 
     // predict splice-graph with GTF-based splice-graph and splice-junciton
     SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, no_novel_sj);
 
     // dump predicted splice-graph to file
-    if (strlen(out_prefix) == 0) strcpy(out_prefix, argv[optind+1]);
+    if (strlen(out_prefix) == 0) strcpy(out_prefix, argv[optind+2]);
 
-    sg_free_group(sg_g); sg_free_group(sr_sg_g);
-    err_fclose(sj_fp);
+    sg_free_group(sg_g); sg_free_group(sr_sg_g); gzclose(genome_fp);
     return 0;
 }

@@ -172,19 +172,6 @@ int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
     return 0;
 }
 
-int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m)
-{
-    err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
-    int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
-    while (sam_read1(in, h, b) >= 0) {
-        int sj_n = gen_sj(b, seq, seq_n, &sj, &sj_m);
-        if (sj_n > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
-    }
-    free(sj);
-    err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
-    return SJ_n;
-}
-
 kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
 {
     int seq_n = 0, seq_m = 30;
@@ -205,7 +192,25 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
     return seq;
 }
 
-void print_sj(sj_t *sj_group, int sj_n, FILE *out, kseq_t *seq)
+int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, gzFile genome_fp, sj_t **SJ_group, int SJ_m)
+{
+    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
+    err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
+    int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
+    while (sam_read1(in, h, b) >= 0) {
+        int sj_n = gen_sj(b, seq, seq_n, &sj, &sj_m);
+        if (sj_n > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
+    }
+    free(sj);
+    err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
+    int i;
+    for (i = 0; i < seq_n; ++i) {
+        free(seq[i].name.s); free(seq[i].seq.s);
+    } free(seq);
+    return SJ_n;
+}
+
+void print_sj(sj_t *sj_group, int sj_n, FILE *out, char **cname)
 {
     int i;
     fprintf(out, "###STRAND 0:undefined, 1:+, 2:-\n");
@@ -213,7 +218,7 @@ void print_sj(sj_t *sj_group, int sj_n, FILE *out, kseq_t *seq)
     fprintf(out, "#CHR\tSTART\tEND\tSTRAND\tUNIQ_C\tMULTI_C\tMOTIF\n");
     for (i = 0; i < sj_n; ++i) {
         sj_t sj = sj_group[i];
-        fprintf(out, "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", seq[sj.tid].name.s, sj.don, sj.acc, sj.strand, sj.uniq_c, sj.multi_c, sj.motif);
+        fprintf(out, "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", cname[sj.tid], sj.don, sj.acc, sj.strand, sj.uniq_c, sj.multi_c, sj.motif);
     }
 }
 
@@ -240,21 +245,14 @@ int bam2sj(int argc, char *argv[])
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
     b = bam_init1(); 
 
-    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
 
-    int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m);
-    bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+    int sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m);
 
-    print_sj(sj_group, sj_n, stdout, seq);
+    print_sj(sj_group, sj_n, stdout, h->target_name);
 
+    bam_destroy1(b); sam_close(in); bam_hdr_destroy(h); 
     free(sj_group); gzclose(genome_fp); 
     if (gtf_fp != NULL) err_fclose(gtf_fp);
-    int i;
-    for (i = 0; i < seq_m; ++i) {
-        free(seq[i].name.s);
-        free(seq[i].seq.s);
-    }
-    free(seq);
     return 0;
 }

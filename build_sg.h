@@ -33,8 +33,11 @@
                 if (mid != 0) {         \
                     tmp_v = p[mid-1];   \
                 }                       \
-                if (mid == 0 || v > tmp_v)  \
-                    k_i = mid;              \
+                if (mid == 0 || v > tmp_v) { \
+                    k_i = mid;          \
+                    break;              \
+                }                       \
+                else right = mid-1;     \
             } else left = mid+1;        \
         }                               \
     }                                   \
@@ -53,22 +56,27 @@
 
 typedef struct {
     exon_t up, se, down;
+    int asm_i, sg_i;
 } SE_t;   // skipped exon
 
 typedef struct {
     exon_t lon, shor, down;
+    int asm_i, sg_i;
 } A5SS_t; // alternative 3' splice site
 
 typedef struct {
     exon_t up, lon, shor;
+    int asm_i, sg_i;
 } A3SS_t; // alternative 3' splice site
 
 typedef struct {
     exon_t up, fir, sec, down;
+    int asm_i, sg_i;
 } MXE_t; // mutually exclusive exon
 
 typedef struct {
     exon_t up, down;
+    int asm_i, sg_i;
 } RI_t;  // retained intron
 
 typedef struct {

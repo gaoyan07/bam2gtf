@@ -218,11 +218,13 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
     char suf[3][10] = { ".ASM", ".JCNT", ".ECNT" };
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
     if (strlen(prefix) == 0) {
-        for (i = 0; i < out_n; ++i)
+        for (i = 0; i < out_n; ++i) {
             out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suf[i]);
+        }
     } else {
-        for (i = 0; i < out_n; ++i)
+        for (i = 0; i < out_n; ++i) {
             out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suf[i]);
+        }
     }
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
     for (i = 0; i < out_n; ++i)
@@ -234,21 +236,21 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
     fprintf(out_fp[2], "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
     
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
-        SGasm *sg_asm = asm_g->sg_asm[i];
-        int sg_i = sg_asm->SG_id; SG *sg = sg_g->SG[sg_i]; 
+        SGasm *a = asm_g->sg_asm[i];
+        int sg_i = a->SG_id; SG *sg = sg_g->SG[sg_i]; 
         SGnode *node = sg->node; SGsite *acc_site = sg->acc_site; SGsite *don_site = sg->don_site; SGedge *edge = sg->edge;
-        int start, end; uint32_t v_s = sg_asm->v_start, v_e = sg_asm->v_end;
+        int start, end; uint32_t v_s = a->v_start, v_e = a->v_end;
 
         if (node[v_s].node_e.start == 0) start = sg->start-100; else start = node[v_s].node_e.start;
         if (node[v_e].node_e.end == MAX_SITE) end = sg->end+100; else end = node[v_e].node_e.end;
 
-        fprintf(out_fp[0], "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[sg_asm->v_start].node_e.start, node[sg_asm->v_start].node_e.end, node[sg_asm->v_end].node_e.start, node[sg_asm->v_end].node_e.end, sg_asm->node_n, cname->chr_name[sg->tid], start, end);
-        for (j = 0; j < sg_asm->edge_n; ++j) {
-            uint32_t e_id = sg_asm->edge_id[j];
+        fprintf(out_fp[0], "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i+1, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[a->v_start].node_e.start, node[a->v_start].node_e.end, node[a->v_end].node_e.start, node[a->v_end].node_e.end, a->node_n, cname->chr_name[sg->tid], start, end);
+        for (j = 0; j < a->edge_n; ++j) {
+            uint32_t e_id = a->edge_id[j];
             fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], don_site[edge[e_id].don_site_id].site, acc_site[edge[e_id].acc_site_id].site,  edge[e_id].uniq_c, edge[e_id].multi_c);
         }
-        for (j = 0; j < sg_asm->node_n; ++j) {
-            uint32_t asm_n_id = sg_asm->node_id[j];
+        for (j = 0; j < a->node_n; ++j) {
+            uint32_t asm_n_id = a->node_id[j];
             fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i+1, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[asm_n_id].start, node[asm_n_id].end, node[asm_n_id].uniq_c, node[asm_n_id].multi_c);
         }
     }
@@ -301,36 +303,35 @@ int pred_asm(int argc, char *argv[])
                      return pred_asm_usage();
         }
     }
-    if (argc - optind != 2) return pred_asm_usage();
+    if (argc - optind != 3) return pred_asm_usage();
+
+    gzFile genome_fp = gzopen(argv[optind], "r");
+    if (genome_fp == NULL) err_fatal(__func__, "Can not open genome file. %s\n", argv[optind]);
 
     chr_name_t *cname = chr_name_init();
     // set cname if input is BAM
+    samFile *in; bam_hdr_t *h; bam1_t *b;
     if (BAM_format) {
-        samFile *in; bam_hdr_t *h;
-        if ((in = sam_open(argv[optind+1], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+1]);
-        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
+        if ((in = sam_open(argv[optind+2], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+2]);
+        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+2]);
         bam_set_cname(h, cname);
-        bam_hdr_destroy(h); sam_close(in);
     }
     // build splice-graph with GTF
     SG_group *sg_g;
-    FILE *gtf_fp = xopen(argv[optind], "r");
+    FILE *gtf_fp = xopen(argv[optind+1], "r");
     sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
     // get splice-junction
     int sj_n, sj_m; sj_t *sj_group;
     if (BAM_format) { // based on .bam file
-        samFile *in; bam_hdr_t *h; bam1_t *b;
-        if ((in = sam_open(argv[optind+1], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+1]);
-        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
         b = bam_init1(); 
         sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
         // FIXME bam2itv.tmp
-        sj_n = bam2sj_core(in, h, b, &sj_group, sj_m);
+        sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     } else  { // based on .sj file
-        FILE *sj_fp = xopen(argv[optind+1], "r");
+        FILE *sj_fp = xopen(argv[optind+2], "r");
         sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
         sj_n = read_sj_group(sj_fp, sg_g->cname, &sj_group, sj_m);
         err_fclose(sj_fp);
@@ -345,14 +346,15 @@ int pred_asm(int argc, char *argv[])
     // calculate number of reads falling into exon-body
     if (BAM_format) {
         samFile *in; bam_hdr_t *h; bam1_t *b;
-        in = sam_open(argv[optind+1], "rb"); h = sam_hdr_read(in); b = bam_init1(); 
+        in = sam_open(argv[optind+2], "rb"); h = sam_hdr_read(in); b = bam_init1(); 
         cal_asm_exon_cnt(sr_sg_g, in, h, b);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     }
 
     // output
-    asm_output(argv[optind+1], out_fn, sr_sg_g, asm_g);
+    asm_output(argv[optind+2], out_fn, sr_sg_g, asm_g);
     
     sg_free_group(sr_sg_g); sg_free_asm_group(asm_g); 
+    gzclose(genome_fp);
     return 0;
 }
