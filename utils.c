@@ -353,3 +353,15 @@ void get_cur_time(const char *prefix)
     err_printf("[%s] ", prefix);
     strftime(buf, sizeof(buf), "%Y-%m-%d-%s", &ts);
 }
+
+void print_format_time(FILE *out)
+{
+    time_t rawtime;
+    struct tm *info;
+    char buffer[80];
+
+    time(&rawtime);
+    info = localtime( &rawtime );
+    strftime(buffer,80,"%m-%d-%Y %X", info);
+    fprintf(out, "=== %s === ", buffer);
+}

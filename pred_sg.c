@@ -227,7 +227,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
 // sr_sg_g.SG_n == sg_g.SG_n
 SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, int no_novel_sj, int no_novel_com)
 {
-    err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG ...\n", __func__);
+    print_format_time(stderr); err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG ...\n", __func__);
     SG_group *sr_sg_g = sg_init_group(sg_g.SG_n);
 
     int i;
@@ -241,7 +241,7 @@ SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, int no_no
 
     predict_SpliceGraph_core(sg_g, sj_group, sj_n, sr_sg_g, no_novel_sj, no_novel_com);
     free(sj_group);
-    err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG done!\n", __func__);
+    print_format_time(stderr); err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG done!\n", __func__);
     return sr_sg_g;
 }
 /****************************************************************/

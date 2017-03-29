@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include "utils.h"
 #include "gtf.h"
 #include "build_sg.h"
 #include "pred_sg.h"
@@ -146,7 +147,7 @@ int sg_asm_group_add(SGasm_group *asm_g, SGasm *sg_asm)
 
 SGasm_group *gen_asm(SG_group *sg_g)
 {
-    err_printf("[%s] generating alternative-splice-module with predicted SJ-SG ...\n", __func__);
+    print_format_time(stderr); err_printf("[%s] generating alternative-splice-module with predicted SJ-SG ...\n", __func__);
     int entry_n, exit_n; uint32_t *entry, *exit;
     int sg_i;
     SGasm_group *asm_g = sg_init_asm_group();
@@ -177,13 +178,13 @@ SGasm_group *gen_asm(SG_group *sg_g)
         }
         END: free(entry); free(exit);
     }
-    err_printf("[%s] generating alternative-splice-module with predicted SJ-SG done!\n", __func__);
+    print_format_time(stderr); err_printf("[%s] generating alternative-splice-module with predicted SJ-SG done!\n", __func__);
     return asm_g;
 }
 
 int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
 {
-    err_printf("[%s] calculating read count for AS exons ...\n", __func__);
+    print_format_time(stderr); err_printf("[%s] calculating read count for AS exons ...\n", __func__);
     int i, j, last_sg_i = 0;
     while (sam_read1(in, h, b) >= 0) {
         int bam_start = b->core.pos+1;
@@ -209,7 +210,7 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
         }
         if (last_sg_i == sg_g->SG_n) break;
     }
-    err_printf("[%s] calculating read count for AS exons done!\n", __func__);
+    print_format_time(stderr); err_printf("[%s] calculating read count for AS exons done!\n", __func__);
     return 0;
 }
 
