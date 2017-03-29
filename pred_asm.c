@@ -297,7 +297,7 @@ const struct option asm_long_opt [] = {
 int pred_asm(int argc, char *argv[])
 {
     int c, no_novel_sj=1, no_novel_com=1, BAM_format=1; char out_fn[1024]="";
-	while ((c = getopt_long(argc, argv, "nso:", asm_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "nNso:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj=0, no_novel_com=0; break;
             case 'N': no_novel_com = 0; break;
