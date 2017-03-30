@@ -21,17 +21,15 @@ int pred_se_usage(void)
     err_printf("                                   with splice-junction input, the .cnt output will have no count information.\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT & ASE. [in.bam/sj]\n");
     err_printf("                                   prefix.ASM & prefix.J/ECNT & prefix.SE/A5SS/A3SS/MXE/RI\n");
-	err_printf("\n");
-	return 1;
+    err_printf("\n");
+    return 1;
 }
-
-#define exon_eq(a, b) (a.start == b.start && a.end == b.end)
 
 #define add_asm_se(ase, up_e, se_e, down_e, asm_i, sg_i) { \
     int _i, flag=0;                         \
     for (_i = ase->se_n-1; _i >= 0; --_i) { \
         if (ase->se[_i].sg_i != sg_i) break;  \
-        if (exon_eq(ase->se[_i].up, up_e) && exon_eq(ase->se[_i].se, se_e) && exon_eq(ase->se[_i].down, down_e)) {  \
+        if (ase->se[_i].up == up_e && ase->se[_i].se == se_e && ase->se[_i].down == down_e) {  \
             flag = 1; break;    \
         }   \
     }   \
@@ -66,10 +64,10 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
                 sg_bin_sch_edge(sg, pre_site_i, next_site_i, &hit);
 
                 if (hit == 1) {
-                    exon_ran_t up, se, down;
-                    up = (exon_ran_t){pre.start, pre.end};
-                    se = (exon_ran_t){cur_n.start, cur_n.end};
-                    down = (exon_ran_t){next.start, next.end};
+                    uint32_t up, se, down;
+                    up = pre.node_id;
+                    se = cur_n.node_id;
+                    down = next.node_id;
                     add_asm_se(ase, up, se, down, asm_i, sg_i)
                 }
             }
@@ -81,7 +79,7 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     int _i, flag=0;                           \
     for (_i = ase->a5ss_n-1; _i >= 0; --_i) { \
         if (ase->a5ss[_i].sg_i != sg_i) break;  \
-        if (exon_eq(ase->a5ss[_i].shor, short_e) && exon_eq(ase->a5ss[_i].lon, long_e) && exon_eq(ase->a5ss[_i].down, down_e)) {  \
+        if (ase->a5ss[_i].shor == short_e && ase->a5ss[_i].lon == long_e && ase->a5ss[_i].down == down_e) {  \
             flag = 1; break;    \
         }   \
     }   \
@@ -115,10 +113,10 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
                     next2_s = next2.start; next2_e = next2.end;
 
                     if (next1_e == next2_e && next1_s != next2_s) {
-                        exon_ran_t up, lon, shor;
-                        up = (exon_ran_t){cur_n.start, cur_n.end};
-                        lon = (exon_ran_t){next1.start, next1.end};
-                        shor = (exon_ran_t){next2.start, next2.end};
+                        uint32_t up, lon, shor;
+                        up = cur_n.node_id;
+                        lon = next1.node_id;
+                        shor = next2.node_id;
                         add_asm_a5ss(ase, shor, lon, up, asm_i, sg_i)
                     }
                 }
@@ -139,10 +137,10 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
                     pre2_s = pre2.start; pre2_e = pre2.end;
 
                     if (pre1_s == pre2_s && pre1_e != pre2_e) {
-                        exon_ran_t shor, lon, down;
-                        shor = (exon_ran_t){pre1.start, pre1.end};
-                        lon = (exon_ran_t){pre2.start, pre2.end};
-                        down = (exon_ran_t){cur_n.start, cur_n.end};
+                        uint32_t shor, lon, down;
+                        shor = pre1.node_id;
+                        lon = pre2.node_id;
+                        down = cur_n.node_id;
                         add_asm_a5ss(ase, shor, lon, down, asm_i, sg_i)
                     }
                 }
@@ -155,12 +153,12 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     int _i, flag=0;                           \
     for (_i = ase->a3ss_n-1; _i >= 0; --_i) { \
         if (ase->a3ss[_i].sg_i != sg_i) break;  \
-        if (exon_eq(ase->a3ss[_i].shor, short_e) && exon_eq(ase->a3ss[_i].lon, long_e) && exon_eq(ase->a3ss[_i].up, up_e)) {   \
+        if (ase->a3ss[_i].shor == short_e && ase->a3ss[_i].lon == long_e && ase->a3ss[_i].up == up_e) {   \
             flag = 1; break;    \
         }   \
     }   \
     if (flag == 0) { \
-    if (ase->a3ss_n == ase->a3ss_m) _realloc(ase->a3ss, ase->a3ss_m, A3SS_t)  \
+        if (ase->a3ss_n == ase->a3ss_m) _realloc(ase->a3ss, ase->a3ss_m, A3SS_t)  \
         ase->a3ss[ase->a3ss_n].up = up_e;        \
         ase->a3ss[ase->a3ss_n].lon = long_e;    \
         ase->a3ss[ase->a3ss_n].shor = short_e;  \
@@ -189,10 +187,10 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
                     pre2_s = pre2.start; pre2_e = pre2.end;
 
                     if (pre1_s == pre2_s && pre1_e != pre2_e) {
-                        exon_ran_t shor, lon, down;
-                        shor = (exon_ran_t){pre1.start, pre1.end};
-                        lon = (exon_ran_t){pre2.start, pre2.end};
-                        down = (exon_ran_t){cur_n.start, cur_n.end};
+                        uint32_t shor, lon, down;
+                        shor = pre1.node_id;
+                        lon = pre2.node_id;
+                        down = cur_n.node_id;
                         add_asm_a3ss(ase, down, lon, shor, asm_i, sg_i)
                     }
                 }
@@ -213,10 +211,10 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
                     next2_s = next2.start; next2_e = next2.end;
 
                     if (next1_e == next2_e && next1_s != next2_s) {
-                        exon_ran_t up, lon, shor;
-                        up = (exon_ran_t){cur_n.start, cur_n.end};
-                        lon = (exon_ran_t){next1.start, next1.end};
-                        shor = (exon_ran_t){next2.start, next2.end};
+                        uint32_t up, lon, shor;
+                        up = cur_n.node_id;
+                        lon = next1.node_id;
+                        shor = next2.node_id;
                         add_asm_a3ss(ase, up, lon, shor, asm_i, sg_i)
                     }
                 }
@@ -229,7 +227,7 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     int _i, flag=0;                           \
     for (_i = ase->mxe_n-1; _i >= 0; --_i) { \
         if (ase->mxe[_i].sg_i != sg_i) break;  \
-        if (exon_eq(ase->mxe[_i].up, up_e) && exon_eq(ase->mxe[_i].fir, fir_e) && exon_eq(ase->mxe[_i].sec, sec_e) && exon_eq(ase->mxe[_i].down, down_e)) {   \
+        if (ase->mxe[_i].up == up_e && ase->mxe[_i].fir == fir_e && ase->mxe[_i].sec == sec_e && ase->mxe[_i].down == down_e) {   \
             flag = 1; break;    \
         }   \
     }   \
@@ -266,11 +264,11 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
                                 if (mx2.next_id[l] == (uint32_t)sg->node_n-1) continue;
                                 if (mx1.next_id[n] == mx2.next_id[l]) {
                                     next = node[mx1.next_id[n]];
-                                    exon_ran_t up, fir, sec, down;
-                                    up = (exon_ran_t){pre.start, pre.end};
-                                    fir = (exon_ran_t){mx1.start, mx1.end};
-                                    sec = (exon_ran_t){mx2.start, mx2.end};
-                                    down = (exon_ran_t){next.start, next.end};
+                                    uint32_t up, fir, sec, down;
+                                    up = pre.node_id;
+                                    fir = mx1.node_id;
+                                    sec = mx2.node_id;
+                                    down = next.node_id;
                                     add_asm_mxe(ase, up, fir, sec, down, asm_i, sg_i)
                                 }
                             }
@@ -286,7 +284,7 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     int _i, flag=0;                           \
     for (_i = ase->ri_n-1; _i >= 0; --_i) { \
         if (ase->ri[_i].sg_i != sg_i) break;  \
-        if (exon_eq(ase->ri[_i].down, down_e) && exon_eq(ase->ri[_i].up, up_e)) {   \
+        if (ase->ri[_i].down == down_e && ase->ri[_i].up == up_e) {   \
             flag = 1; break;    \
         }   \
     }   \
@@ -300,21 +298,21 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     }   \
 }
 
-    void asm2ri(SGnode *n, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
-    {
-        int i, j, k;
-        SGnode pre, ri, next;
-        for (i = 0; i < a->node_n-2; ++i) {
-            pre = n[a->node_id[i]];
+void asm2ri(SGnode *n, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
+{
+    int i, j, k;
+    SGnode pre, ri, next;
+    for (i = 0; i < a->node_n-2; ++i) {
+        pre = n[a->node_id[i]];
         for (j = i + 1; j < a->node_n-1; ++j) {
             ri = n[a->node_id[j]];
             if (pre.start == ri.start) {
                 for (k = j + 1; k < a->node_n; ++k) {
                     next = n[a->node_id[k]];
                     if (ri.end == next.end) {
-                        exon_ran_t up, down;
-                        up = (exon_ran_t){pre.start, pre.end};
-                        down = (exon_ran_t){next.start, next.end};
+                        uint32_t up, down;
+                        up = pre.node_id;
+                        down = next.node_id;
                         add_asm_ri(ase, up, down, asm_i, sg_i)
                     }
                 }
@@ -342,8 +340,9 @@ void ase_free(ASE_t *ase)
 
 void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase)
 {
-    int i, out_n=5;
-    char suf[5][10] = { ".SE", ".A5SS", ".A3SS", ".MXE", ".RI" };
+    int i, out_n=10;
+    char suf[10][10] = { ".SE", ".A5SS", ".A3SS", ".MXE", ".RI",
+                         ".SE_CNT", ".A5SS_CNT", ".A3SS_CNT", ".MXE_CNT", ".RI_CNT"};
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
     if (strlen(prefix) == 0) {
         for (i = 0; i < out_n; ++i) {
@@ -361,37 +360,56 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase)
     chr_name_t *cname = sg_g->cname;
     // head-line
     // SE/A5SS/A3SS/MXE/RI
-    fprintf(out_fp[0], "ASM_ID\tSG_ID\tSTRAND\tCHR\tSE_ES\tSE_EE\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
-    fprintf(out_fp[1], "ASM_ID\tSG_ID\tSTRAND\tCHR\tSHORT_ES\tSHORT_EE\tLONG_ES\tLONG_EE\tDOWN_ES\tDOWN_EE\n");
-    fprintf(out_fp[2], "ASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tLOND_ES\tLONG_EE\tSHORT_ES\tSHORT_EE\n");
-    fprintf(out_fp[3], "ASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tFIRST_ES\tFIRST_EE\tSECOND_ES\tSECOND_EE\tDOWN_ES\tDOWN_EE\n");
-    fprintf(out_fp[4], "ASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
+    fprintf(out_fp[0], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSE_ES\tSE_EE\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
+    fprintf(out_fp[1], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSHORT_ES\tSHORT_EE\tLONG_ES\tLONG_EE\tDOWN_ES\tDOWN_EE\n");
+    fprintf(out_fp[2], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tLOND_ES\tLONG_EE\tSHORT_ES\tSHORT_EE\n");
+    fprintf(out_fp[3], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tFIRST_ES\tFIRST_EE\tSECOND_ES\tSECOND_EE\tDOWN_ES\tDOWN_EE\n");
+    fprintf(out_fp[4], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
+    // SE/A5SS/A3SS/MXE/RI_CNT
+    fprintf(out_fp[5], "ID\tSTRAND\tCHR\tIJ1_UCNT\tIJ2_UCNT\tEJ_UCNT\tIJ1_MCNT\tIJ2_MCNT\tEJ_MCNT\n");
+    fprintf(out_fp[6], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\tLO_MCNT\tSH_MCNT\n");
+    fprintf(out_fp[7], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\tLO_MCNT\tSH_MCNT\n");
+    fprintf(out_fp[8], "ID\tSTRAND\tCHR\tFIR1_UCNT\tFIR2_UCNT\tSEC1_UCNT\tSEC2_UCNT\tFIR1_MCNT\tFIR2_MCNT\tSEC1_MCNT\tSEC2_MCNT\n");
+    fprintf(out_fp[9], "ID\tSTRAND\tCHR\tRE_UCNT\tSJ_UCNT\tRE_MCNT\tSJ_MCNT\n");
+
 
     for (i = 0; i < ase->se_n; ++i) {
         int sg_i = ase->se[i].sg_i, asm_i = ase->se[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; SE_t e=ase->se[i];
-        fprintf(out_fp[0], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.se.start, e.se.end, e.up.start, e.up.end, e.down.start, e.down.end);
+        SG *sg = sg_g->SG[sg_i]; SE_t e=ase->se[i]; SGnode *n = sg->node;
+        fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.se].start, n[e.se].end, n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
+        // TODO up -> se, se -> down
+        //      up -> down
+        //fprintf(out_fp[5], "%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], );
     }
     for (i = 0; i < ase->a5ss_n; ++i) {
         int sg_i = ase->a5ss[i].sg_i, asm_i = ase->a5ss[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; A5SS_t e = ase->a5ss[i];
-        fprintf(out_fp[1], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.shor.start, e.shor.end, e.lon.start, e.lon.end, e.down.start, e.down.end);
+        SG *sg = sg_g->SG[sg_i]; A5SS_t e = ase->a5ss[i]; SGnode *n = sg->node;
+        fprintf(out_fp[1], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.shor].start, n[e.shor].end, n[e.lon].start, n[e.lon].end, n[e.down].start, n[e.down].end);
+        // XXX strand
+        // TODO lon -> down
+        //      shor -> down
     }
     for (i = 0; i < ase->a3ss_n; ++i) {
         int sg_i = ase->a3ss[i].sg_i, asm_i = ase->a3ss[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; A3SS_t e = ase->a3ss[i];
-        fprintf(out_fp[2], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.up.start, e.up.end, e.lon.start, e.lon.end, e.shor.start, e.shor.end);
+        SG *sg = sg_g->SG[sg_i]; A3SS_t e = ase->a3ss[i]; SGnode *n = sg->node;
+        fprintf(out_fp[2], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.lon].start, n[e.lon].end, n[e.shor].start, n[e.shor].end);
+        // XXX strand
+        // TODO lon -> down
+        //      shor -> down
     }
     for (i = 0; i < ase->mxe_n; ++i) {
         int sg_i = ase->mxe[i].sg_i, asm_i = ase->mxe[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; MXE_t e = ase->mxe[i];
-        fprintf(out_fp[3], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.up.start, e.up.end, e.fir.start, e.fir.end, e.sec.start, e.sec.end, e.down.start, e.down.end);
+        SG *sg = sg_g->SG[sg_i]; MXE_t e = ase->mxe[i]; SGnode *n = sg->node;
+        fprintf(out_fp[3], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.fir].start, n[e.fir].end, n[e.sec].start, n[e.sec].end, n[e.down].start, n[e.down].end);
+        // TODO up -> fir, fir -> down
+        //      up -> sec, sec -> down
     }
-
     for (i = 0; i < ase->ri_n; ++i) {
         int sg_i = ase->ri[i].sg_i, asm_i = ase->ri[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; RI_t e = ase->ri[i];
-        fprintf(out_fp[4], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.up.start, e.up.end, e.down.start, e.down.end);
+        SG *sg = sg_g->SG[sg_i]; RI_t e = ase->ri[i]; SGnode *n = sg->node;
+        fprintf(out_fp[4], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
+        // TODO exon_cnt
+        //      up -> down
     }
 
     for (i = 0; i < out_n; ++i) {
