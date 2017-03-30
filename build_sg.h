@@ -75,7 +75,7 @@ typedef struct {
 } MXE_t; // mutually exclusive exon
 
 typedef struct {
-    uint32_t up, down;
+    uint32_t up, down, in;
     int asm_i, sg_i;
 } RI_t;  // retained intron
 
@@ -88,7 +88,7 @@ typedef struct {
 } ASE_t;
 
 typedef struct {
-    uint32_t node_id; // unique id in corresponding gene-locus
+    uint32_t node_id, s_site_id, e_site_id; // unique id in corresponding gene-locus
     int32_t start, end; /* real exon */ exon_t node_e;    // node in splice-graph
     uint8_t is_init, is_termi;
     uint8_t is_asm; uint32_t uniq_c, multi_c;
@@ -152,8 +152,14 @@ int sg_update_node(SG *sg, exon_t e, int32_t start, int32_t end);
 int sg_update_site(SG *sg, int32_t site, uint8_t type);
 
 int sg_bin_sch_node(SG *sg, exon_t e, int *hit);
+int err_sg_bin_sch_node(const char *func, const int line, SG *sg, exon_t e, int *hit);
+#define _err_sg_bin_sch_node(sg, e, hit) err_sg_bin_sch_node(__func__, __LINE__, sg, e, hit)
 int sg_bin_sch_site(SGsite *site, int32_t site_n, int32_t s, int *hit);
+int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int32_t site_n, int32_t s, int *hit);
+#define _err_sg_bin_sch_site(site, site_n, s, hit) err_sg_bin_sch_site(__func__, __LINE__, site, site_n, s, hit)
 int sg_bin_sch_edge(SG *sg, uint32_t don_site_id, uint32_t acc_site_id, int *hit);
+int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, uint32_t don_site_id, uint32_t acc_site_id, int *hit);
+#define _err_sg_bin_sch_edge(sg, don_site_id, acc_site_id, hit) err_sg_bin_sch_edge(__func__, __LINE__, sg, don_site_id, acc_site_id, hit)
 
 void cal_pre_domn(SG *sg);
 void cal_post_domn(SG *sg);

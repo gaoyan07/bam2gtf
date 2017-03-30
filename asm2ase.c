@@ -53,14 +53,11 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
         for (j = 0; j < cur_n.pre_n; ++j) {
             if (cur_n.pre_id[j] == 0) continue;
             pre = n[cur_n.pre_id[j]];
-            pre_site_i = sg_bin_sch_site(sg->don_site, sg->don_site_n, pre.end+1, &hit); 
-            if (hit == 0) 
-                err_fatal_simple("Can not hit site. (1)\n");
+            pre_site_i = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, pre.end+1, &hit); 
             for (k = 0; k < cur_n.next_n; ++k) {
                 if (cur_n.next_id[k] == (uint32_t)sg->node_n-1) continue;
                 next = n[cur_n.next_id[k]];
-                next_site_i = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, next.start-1, &hit);
-                if (hit == 0) err_fatal_simple("Can not hit site. (2)\n");
+                next_site_i = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, next.start-1, &hit);
                 sg_bin_sch_edge(sg, pre_site_i, next_site_i, &hit);
 
                 if (hit == 1) {
@@ -280,11 +277,11 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     }
 }
 
-#define add_asm_ri(ase, up_e, down_e, asm_i, sg_i) {  \
+#define add_asm_ri(ase, up_e, down_e, in_e, asm_i, sg_i) {  \
     int _i, flag=0;                           \
     for (_i = ase->ri_n-1; _i >= 0; --_i) { \
         if (ase->ri[_i].sg_i != sg_i) break;  \
-        if (ase->ri[_i].down == down_e && ase->ri[_i].up == up_e) {   \
+        if (ase->ri[_i].down == down_e && ase->ri[_i].up == up_e && ase->ri[_i].in == in_e) {   \
             flag = 1; break;    \
         }   \
     }   \
@@ -292,6 +289,7 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
         if (ase->ri_n == ase->ri_m) _realloc(ase->ri, ase->ri_m, RI_t)  \
         ase->ri[ase->ri_n].up = up_e;     \
         ase->ri[ase->ri_n].down = down_e; \
+        ase->ri[ase->ri_n].in = in_e; \
         ase->ri[ase->ri_n].asm_i = asm_i; \
         ase->ri[ase->ri_n].sg_i = sg_i; \
         ase->ri_n++;    \
@@ -307,13 +305,14 @@ void asm2ri(SGnode *n, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
         for (j = i + 1; j < a->node_n-1; ++j) {
             ri = n[a->node_id[j]];
             if (pre.start == ri.start) {
-                for (k = j + 1; k < a->node_n; ++k) {
-                    next = n[a->node_id[k]];
+                for (k = 0; k < pre.next_n; ++k) {
+                    next = n[pre.next_id[k]];
                     if (ri.end == next.end) {
-                        uint32_t up, down;
+                        uint32_t up, down, in;
                         up = pre.node_id;
                         down = next.node_id;
-                        add_asm_ri(ase, up, down, asm_i, sg_i)
+                        in = ri.node_id;
+                        add_asm_ri(ase, up, down, in, asm_i, sg_i)
                     }
                 }
             }
@@ -373,49 +372,71 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase)
     fprintf(out_fp[9], "ID\tSTRAND\tCHR\tRE_UCNT\tSJ_UCNT\tRE_MCNT\tSJ_MCNT\n");
 
 
+    int hit;
     for (i = 0; i < ase->se_n; ++i) {
         int sg_i = ase->se[i].sg_i, asm_i = ase->se[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; SE_t e=ase->se[i]; SGnode *n = sg->node;
+        SG *sg = sg_g->SG[sg_i]; SE_t e=ase->se[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
         fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.se].start, n[e.se].end, n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
-        // TODO up -> se, se -> down
-        //      up -> down
-        //fprintf(out_fp[5], "%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], );
+        // up->se, se->down, up->down
+        uint32_t ij1_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.se].s_site_id, &hit);
+        uint32_t ij2_id = _err_sg_bin_sch_edge(sg, n[e.se].e_site_id, n[e.down].s_site_id, &hit);
+        uint32_t ej_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.down].s_site_id, &hit);
+        fprintf(out_fp[5], "%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[ij1_id].uniq_c, ed[ij2_id].uniq_c, ed[ej_id].uniq_c, ed[ij1_id].multi_c, ed[ij2_id].multi_c, ed[ej_id].multi_c);
     }
     for (i = 0; i < ase->a5ss_n; ++i) {
         int sg_i = ase->a5ss[i].sg_i, asm_i = ase->a5ss[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; A5SS_t e = ase->a5ss[i]; SGnode *n = sg->node;
-        fprintf(out_fp[1], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.shor].start, n[e.shor].end, n[e.lon].start, n[e.lon].end, n[e.down].start, n[e.down].end);
-        // XXX strand
-        // TODO lon -> down
-        //      shor -> down
+        SG *sg = sg_g->SG[sg_i]; A5SS_t e = ase->a5ss[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
+        fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.shor].start, n[e.shor].end, n[e.lon].start, n[e.lon].end, n[e.down].start, n[e.down].end);
+        // lon -> down, shor -> down
+        uint32_t lon_id, shor_id;
+        if (sg->is_rev == 0) { // forward
+            lon_id = _err_sg_bin_sch_edge(sg, n[e.lon].e_site_id, n[e.down].s_site_id, &hit); 
+            shor_id = _err_sg_bin_sch_edge(sg, n[e.shor].e_site_id, n[e.down].s_site_id, &hit); 
+        } else { // reverse
+            lon_id = _err_sg_bin_sch_edge(sg, n[e.down].e_site_id, n[e.lon].s_site_id, &hit); 
+            shor_id = _err_sg_bin_sch_edge(sg, n[e.down].e_site_id, n[e.shor].s_site_id, &hit); 
+        }
+        fprintf(out_fp[6], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[lon_id].uniq_c, ed[shor_id].uniq_c, ed[lon_id].multi_c, ed[shor_id].multi_c);
     }
     for (i = 0; i < ase->a3ss_n; ++i) {
         int sg_i = ase->a3ss[i].sg_i, asm_i = ase->a3ss[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; A3SS_t e = ase->a3ss[i]; SGnode *n = sg->node;
-        fprintf(out_fp[2], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.lon].start, n[e.lon].end, n[e.shor].start, n[e.shor].end);
-        // XXX strand
-        // TODO lon -> down
-        //      shor -> down
+        SG *sg = sg_g->SG[sg_i]; A3SS_t e = ase->a3ss[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
+        fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.lon].start, n[e.lon].end, n[e.shor].start, n[e.shor].end);
+        // up -> lon, up -> shor
+        uint32_t lon_id, shor_id;
+        if (sg->is_rev == 0) { // forward
+            lon_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.lon].s_site_id, &hit); 
+            shor_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.shor].s_site_id, &hit); 
+        } else { // reverse
+            lon_id = _err_sg_bin_sch_edge(sg, n[e.lon].e_site_id, n[e.up].s_site_id, &hit); 
+            shor_id = _err_sg_bin_sch_edge(sg, n[e.shor].e_site_id, n[e.up].s_site_id, &hit); 
+        }
+        fprintf(out_fp[7], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[lon_id].uniq_c, ed[shor_id].uniq_c, ed[lon_id].multi_c, ed[shor_id].multi_c);
     }
     for (i = 0; i < ase->mxe_n; ++i) {
         int sg_i = ase->mxe[i].sg_i, asm_i = ase->mxe[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; MXE_t e = ase->mxe[i]; SGnode *n = sg->node;
-        fprintf(out_fp[3], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.fir].start, n[e.fir].end, n[e.sec].start, n[e.sec].end, n[e.down].start, n[e.down].end);
-        // TODO up -> fir, fir -> down
-        //      up -> sec, sec -> down
+        SG *sg = sg_g->SG[sg_i]; MXE_t e = ase->mxe[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
+        fprintf(out_fp[3], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.fir].start, n[e.fir].end, n[e.sec].start, n[e.sec].end, n[e.down].start, n[e.down].end);
+        // up -> fir, fir -> down
+        // up -> sec, sec -> down
+        uint32_t fir1_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.fir].s_site_id, &hit);
+        uint32_t fir2_id = _err_sg_bin_sch_edge(sg, n[e.fir].e_site_id, n[e.down].s_site_id, &hit);
+        uint32_t sec1_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.sec].s_site_id, &hit);
+        uint32_t sec2_id = _err_sg_bin_sch_edge(sg, n[e.sec].e_site_id, n[e.down].s_site_id, &hit);
+        fprintf(out_fp[8], "%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[fir1_id].uniq_c, ed[fir2_id].uniq_c, ed[sec1_id].uniq_c, ed[sec2_id].uniq_c, ed[fir1_id].multi_c, ed[fir2_id].multi_c, ed[sec1_id].multi_c, ed[sec2_id].multi_c);
     }
     for (i = 0; i < ase->ri_n; ++i) {
         int sg_i = ase->ri[i].sg_i, asm_i = ase->ri[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; RI_t e = ase->ri[i]; SGnode *n = sg->node;
-        fprintf(out_fp[4], "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
-        // TODO exon_cnt
-        //      up -> down
+        SG *sg = sg_g->SG[sg_i]; RI_t e = ase->ri[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
+        fprintf(out_fp[4], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
+        // exon_cnt, up -> down
+        uint32_t sj_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.down].s_site_id, &hit);
+        fprintf(out_fp[9], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.in].uniq_c-n[e.up].uniq_c-n[e.down].uniq_c, ed[sj_id].uniq_c, n[e.in].multi_c-n[e.up].multi_c-n[e.down].multi_c, ed[sj_id].multi_c);
     }
 
     for (i = 0; i < out_n; ++i) {
         free(out_fn[i]); err_fclose(out_fp[i]);
-    }
-    free(out_fn); free(out_fp);
+    } free(out_fn); free(out_fp);
 }
 
 int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase)

@@ -8,6 +8,7 @@
     3. update edge
         GTF(don, acc) ==> (node_don_id, node_acc_id), (site_don_id, site_acc_id)
         update_edge(site_don_id, site_acc_id)       // EDGE DONE
+        update_node_site(node_don_id, site_don_id) (node_acc_id, site_acc_id)
         update_node_pre/next(node_don_id, node_acc_id)  // NODE DONE
         update_site_exon(site_don/acc_id, node_don/acc_id)  // SITE DONE
 
@@ -40,11 +41,14 @@
         for (don_site_id.exon[]) {
             for (acc_site_id.exon[]) {
                 if (no_novel_sj) {
-                    if (GTF_node[don.exon[]].next == GTF_node[acc.exon[]])
+                    if (GTF_node[don.exon[]].next == GTF_node[acc.exon[]]) {
                         update_node_next(don.exon[], acc.exon[])
-                } else update_node_next(don.exon[], acc.exon[])    // NODE DONE
+                        update_node_site(don.exon[], don_site_id) (acc.exon[], acc_site_id)
+                    }
+                } else {
+                    update_node_next(don.exon[], acc.exon[])    // NODE DONE
+                    update_node_site(don.exon[], don_site_id) (acc.exon[], acc_site_id)
+                }
             }
         }
 
-OTHERS
-1. rewrite "can not hit"

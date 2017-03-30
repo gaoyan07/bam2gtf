@@ -24,7 +24,7 @@ SG *sg_init_node(SG *sg)
 {
     int i;
     for (i = 0; i < sg->node_n; ++i) {
-        sg->node[i].node_id = i;
+        sg->node[i].node_id = i; sg->node[i].s_site_id = sg->node[i].e_site_id = -1;
         sg->node[i].is_asm = 0; sg->node[i].uniq_c = 0; sg->node[i].multi_c = 0; sg->node[i].is_init = 0; sg->node[i].is_termi = 0;
         sg->node[i].next_n = 0; sg->node[i].next_m = 1;
         sg->node[i].next_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
@@ -148,6 +148,13 @@ int sg_bin_sch_node(SG *sg, exon_t e, int *hit)
     }
     return sg->node_n;
 }
+int err_sg_bin_sch_node(const char *func, const int line, SG *sg, exon_t e, int *hit)
+{
+    int id = sg_bin_sch_node(sg, e, hit);
+    char head[100]; sprintf(head, "%s:%d", func, line);
+    if (*hit == 0) _err_fatal_simple(head, "Can not hit node.\n");
+    return id;
+}
 
 int sg_update_node(SG *sg, exon_t e, int32_t start, int32_t end)
 {
@@ -191,6 +198,13 @@ int sg_bin_sch_site(SGsite *site, int site_n, int32_t s, int *hit)
         } else left = mid + 1;
     }
     return site_n;
+}
+int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int site_n, int32_t s, int *hit)
+{
+    int id = sg_bin_sch_site(site, site_n, s, hit);
+    char head[100]; sprintf(head, "%s:%d", func, line);
+    if (*hit == 0) _err_fatal_simple(head, "Can not hit site.\n");
+    return id;
 }
 
 int sg_update_site(SG *sg, int32_t site, uint8_t type)
@@ -246,7 +260,13 @@ int sg_bin_sch_edge(SG *sg, uint32_t don_site_id, uint32_t acc_site_id, int *hit
     }
     return sg->edge_n;
 }
-
+int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, uint32_t don_site_id, uint32_t acc_site_id, int *hit)
+{
+    int id = sg_bin_sch_edge(sg, don_site_id, acc_site_id, hit);
+    char head[100]; sprintf(head, "%s:%d", func, line);
+    if (*hit == 0) _err_fatal_simple(head, "Can not hit edge.\n");
+    return id;
+}
 // update edge of splicing-graph
 int sg_update_edge(SG *sg, uint32_t don_id, uint32_t acc_id, uint32_t don_site_id, uint32_t acc_site_id, uint8_t is_rev)
 {
@@ -361,13 +381,15 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
     sg_init_node(sg); sg_init_site(sg);
 
     // search node and generate edge 
-    if (gene.is_rev == 0) {
+    if (gene.is_rev == 0) { // forward strand
         for (i = 0; i < gene.trans_n; ++i) {
             if (gene.trans[i].exon_n == 1) continue;
             e = gene.trans[i].exon[0]; e.start = 0;
 
-            don_id = sg_bin_sch_node(sg, e, &hit); if (hit == 0) err_fatal_simple("Can not hit node.(1)\n");
-            don_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(1)\n");
+            don_id = _err_sg_bin_sch_node(sg, e, &hit);
+            don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit);
+            sg->node[don_id].s_site_id = -1;
+            sg->node[don_id].e_site_id = don_site_id;
 
             // set next_id of v_start
             _insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, uint32_t)
@@ -379,14 +401,19 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                 e = gene.trans[i].exon[j];
                 if (j == gene.trans[i].exon_n-1) e.end = MAX_SITE;
 
-                acc_id = sg_bin_sch_node(sg, e, &hit); if (hit == 0) err_fatal_simple("Can not hit node.(2)\n");
-                acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(2)\n");
+                acc_id = _err_sg_bin_sch_node(sg, e, &hit);
+                acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit);
+                sg->node[acc_id].s_site_id = acc_site_id;
 
                 sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
 
-                if (j == gene.trans[i].exon_n-1) break;
+                if (j == gene.trans[i].exon_n-1) {
+                    sg->node[acc_id].e_site_id = -1;
+                    break;
+                }
+                don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit);
+                sg->node[acc_id].e_site_id = don_site_id;
                 don_id = acc_id;
-                don_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(3)\n");
             }
             // set pre_id of v_end
             _insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, uint32_t)
@@ -394,14 +421,15 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
 
             sg->node[acc_id].is_termi = 1;
         }
-    } else {
+    } else { // reverse strand
         for (i = 0; i < gene.trans_n; ++i) {
             if (gene.trans[i].exon_n == 1) continue;
             e = gene.trans[i].exon[0]; e.end = MAX_SITE;
 
-            acc_id = sg_bin_sch_node(sg, e, &hit); if (hit == 0) err_fatal_simple("Can not hit node.(3)\n");
-            acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(4)\n");
-
+            acc_id = _err_sg_bin_sch_node(sg, e, &hit);
+            acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit);
+            sg->node[acc_id].e_site_id = -1;
+            sg->node[acc_id].s_site_id = acc_site_id;
             // set pre_id of v_end
             _insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, uint32_t)
             _insert((uint32_t)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, uint32_t)
@@ -412,14 +440,19 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                 e = gene.trans[i].exon[j]; 
                 if (j == gene.trans[i].exon_n-1) e.start = 0;
 
-                don_id = sg_bin_sch_node(sg, e, &hit); if (hit == 0) err_fatal_simple("Can not hit node.(4)\n");
-                don_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(5)\n");
+                don_id = _err_sg_bin_sch_node(sg, e, &hit);
+                don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit);
+                sg->node[don_id].e_site_id = don_site_id;
 
                 sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
 
-                if (j == gene.trans[i].exon_n-1) break;
+                if (j == gene.trans[i].exon_n-1) { 
+                    sg->node[don_id].s_site_id = -1;
+                    break;
+                }
+                acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit);
+                sg->node[don_id].s_site_id = acc_site_id;
                 acc_id = don_id;
-                acc_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit); if (hit == 0) err_fatal_simple("Can not hit site.(6)\n");
             }
             // set next_id of v_start
             _insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, uint32_t)

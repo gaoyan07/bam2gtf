@@ -93,10 +93,9 @@ void sg_update_asm_edge(SG *sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
 {
     int hit = 0;
     if (sg->node[pre_id].node_e.end == 0 || sg->node[cur_id].node_e.start == MAX_SITE) return;
-    uint32_t pre_site_id = sg_bin_sch_site(sg->don_site, sg->don_site_n, sg->node[pre_id].node_e.end+1, &hit); if (hit==0) err_fatal_core(__func__, "Can not hit site: (%d).(3)\n", sg->node[pre_id].node_e.end+1);
-    uint32_t cur_site_id = sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sg->node[cur_id].node_e.start-1, &hit); if (hit==0) err_fatal_simple("Can not hit sitnode_e.(3)\n");
-    uint32_t edge_i = sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); 
-    if (hit == 0) err_fatal_core(__func__, "Can not hit edgnode_e.(%d,%d) (3)\n", sg->node[pre_id].node_e.end, sg->node[cur_id].node_e.start);
+    uint32_t pre_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, sg->node[pre_id].node_e.end+1, &hit);
+    uint32_t cur_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sg->node[cur_id].node_e.start-1, &hit);
+    uint32_t edge_i = _err_sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); 
     _bin_insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, uint32_t)
 }
 

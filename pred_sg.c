@@ -147,8 +147,8 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 // 3.0. (don_site, acc_site) => (don_site_id, acc_site_id)
                 don_site_id = sg_bin_sch_site(don_site, don_n, sj_group[i].don, &hit); if (hit == 0) continue;
                 acc_site_id = sg_bin_sch_site(acc_site, acc_n, sj_group[i].acc, &hit); if (hit == 0) continue;
-                GTF_don_site_id = sg_bin_sch_site(sg_don, sg_don_n, sj_group[i].don, &hit);
-                GTF_acc_site_id = sg_bin_sch_site(sg_acc, sg_acc_n, sj_group[i].acc, &hit);
+                GTF_don_site_id = _err_sg_bin_sch_site(sg_don, sg_don_n, sj_group[i].don, &hit);
+                GTF_acc_site_id = _err_sg_bin_sch_site(sg_acc, sg_acc_n, sj_group[i].acc, &hit);
                 sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
                 // 3.1. update edge(sj_group[i])
                 sg_update_edge_pred(sr_sg, sj_group[i], don_site_id, acc_site_id);
@@ -157,7 +157,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                     uint32_t GTF_don_id = sg_don[GTF_don_site_id].exon_id[j];
                     if (node_map[sg_i][GTF_don_id] == 7) {
                         exon_t node_e = sg_node[GTF_don_id].node_e;
-                        uint32_t don_id = sg_bin_sch_node(sr_sg, node_e, &hit); if (hit == 0) err_fatal_simple("Can not hit node. (pred_sg 1)\n");
+                        uint32_t don_id = _err_sg_bin_sch_node(sr_sg, node_e, &hit);
                         _insert(don_id, don_site[don_site_id].exon_id, don_site[don_site_id].exon_n, don_site[don_site_id].exon_m, uint32_t)
                         // update v_start
                         if (sg_node[GTF_don_id].is_init == 1) {
@@ -171,7 +171,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                     uint32_t GTF_acc_id = sg_acc[GTF_acc_site_id].exon_id[j];
                     if (node_map[sg_i][GTF_acc_id] == 7) {
                         exon_t node_e = sg_node[GTF_acc_id].node_e;
-                        uint32_t acc_id = sg_bin_sch_node(sr_sg, node_e, &hit);
+                        uint32_t acc_id = _err_sg_bin_sch_node(sr_sg, node_e, &hit);
                         _insert(acc_id, acc_site[acc_site_id].exon_id, acc_site[acc_site_id].exon_n, acc_site[acc_site_id].exon_m, uint32_t)
                         // update v_end
                         if (sg_node[GTF_acc_id].is_termi == 1) {
@@ -184,11 +184,11 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 for (j = 0; j < don_site[don_site_id].exon_n; ++j) {
                     uint32_t don_id = don_site[don_site_id].exon_id[j];
                     exon_t don_e = node[don_id].node_e;
-                    uint32_t GTF_don_id = sg_bin_sch_node(sg, don_e, &hit);
+                    uint32_t GTF_don_id = _err_sg_bin_sch_node(sg, don_e, &hit);
                     for (k = 0; k < acc_site[acc_site_id].exon_n; ++k) {
                         uint32_t acc_id = acc_site[acc_site_id].exon_id[k];
                         exon_t acc_e = node[acc_id].node_e;
-                        uint32_t GTF_acc_id = sg_bin_sch_node(sg, acc_e, &hit);
+                        uint32_t GTF_acc_id = _err_sg_bin_sch_node(sg, acc_e, &hit);
                         // set next/pre
                         if (no_novel_com) {
                             // if (GTF_don_id.next == GTF_acc_id)
@@ -199,6 +199,8 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                                         node[don_id].next_id[node[don_id].next_n++] = acc_id;
                                     if (node[acc_id].pre_n == node[acc_id].pre_m) _realloc(node[acc_id].pre_id, node[acc_id].pre_m, uint32_t)
                                         node[acc_id].pre_id[node[acc_id].pre_n++] = don_id;
+                                    node[don_id].e_site_id = don_site_id;
+                                    node[acc_id].s_site_id = acc_site_id;
                                     break;
                                 }
                             }
@@ -207,6 +209,8 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                                 node[don_id].next_id[node[don_id].next_n++] = acc_id;
                             if (node[acc_id].pre_n == node[acc_id].pre_m) _realloc(node[acc_id].pre_id, node[acc_id].pre_m, uint32_t)
                                 node[acc_id].pre_id[node[acc_id].pre_n++] = don_id;
+                            node[don_id].e_site_id = don_site_id;
+                            node[acc_id].s_site_id = acc_site_id;
                         }
                     }
                 }
