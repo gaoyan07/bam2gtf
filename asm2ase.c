@@ -19,6 +19,7 @@ int pred_se_usage(void)
     err_printf("         -N --novel-com            allow novel combination of known exons in the ASM. [False]\n");
     err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [false]\n");
     err_printf("                                   with splice-junction input, the .cnt output will have no count information.\n");
+    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[false (uniq only)]\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT & ASE. [in.bam/sj]\n");
     err_printf("                                   prefix.ASM & prefix.J/ECNT & prefix.SE/A5SS/A3SS/MXE/RI\n");
     err_printf("\n");
@@ -461,6 +462,7 @@ const struct option se_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
     { "novel-com", 0, NULL, 'N' },
     { "sj-file", 0, NULL, 's' },
+    { "use-multi", 0, NULL, 'm' },
     { "output", 1, NULL, 'o' },
 
     { 0, 0, 0, 0 }
@@ -469,12 +471,13 @@ const struct option se_long_opt [] = {
 int pred_ase(int argc, char *argv[])
 {
     // same to pred_asm START
-    int c, no_novel_sj=1, no_novel_com=1, BAM_format=1; char out_fn[1024]="";
+    int c, no_novel_sj=1, no_novel_com=1, BAM_format=1, use_multi=0; char out_fn[1024]="";
     while ((c = getopt_long(argc, argv, "nNso:", se_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj=0, no_novel_com=0; break;
             case 'N': no_novel_com = 0; break;
             case 's': BAM_format = 0; break;
+            case 'm': use_multi = 1; break;
             case 'o': strcpy(out_fn, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return pred_se_usage();
@@ -503,7 +506,7 @@ int pred_ase(int argc, char *argv[])
     if (BAM_format) { // based on .bam file
         b = bam_init1(); 
         sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
-        sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m);
+        sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m, use_multi);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     } else  { // based on .sj file
         FILE *sj_fp = xopen(argv[optind+2], "r");

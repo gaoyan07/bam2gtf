@@ -27,6 +27,7 @@ int bam2sj_usage(void)
     err_printf("Note:    in.bam should be sorted in advance\n\n");
     err_printf("Options:\n\n");
     err_printf("         -g --gtf-anno    [INT]    GTF annotation file. [NULL]\n");
+    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[false (uniq only)]\n");
     //err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
 	err_printf("\n");
 	return 1;
@@ -34,6 +35,7 @@ int bam2sj_usage(void)
 
 const struct option bam2sj_long_opt [] = {
     { "gtf-anno", 1, NULL, 'g' },
+    { "use-multi", 0, NULL, 'm' },
 
     { 0, 0, 0, 0}
 };
@@ -79,7 +81,7 @@ uint8_t intr_deri_str(kseq_t *seq, int seq_n, int32_t tid, int32_t start, int32_
     return 0;
 }
 
-int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m)
+int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, int use_multi)
 {
     if (bam_unmap(b)) return 0;
     uint32_t n_cigar, *c;
@@ -89,6 +91,7 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m)
     int32_t tid = b->core.tid, end = b->core.pos;/*1-base*/
     uint8_t strand, motif_i, is_uniq; 
     is_uniq = bam_is_uniq_NH(b);
+    if (is_uniq == 0 && use_multi == 0) return 0;
     
     uint32_t i;
     int sj_n = 0;
@@ -192,13 +195,13 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
     return seq;
 }
 
-int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, gzFile genome_fp, sj_t **SJ_group, int SJ_m)
+int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, gzFile genome_fp, sj_t **SJ_group, int SJ_m, int use_multi)
 {
     int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
     int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
     while (sam_read1(in, h, b) >= 0) {
-        int sj_n = gen_sj(b, seq, seq_n, &sj, &sj_m);
+        int sj_n = gen_sj(b, seq, seq_n, &sj, &sj_m, use_multi);
         if (sj_n > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
     }
     free(sj);
@@ -224,12 +227,13 @@ void print_sj(sj_t *sj_group, int sj_n, FILE *out, char **cname)
 
 int bam2sj(int argc, char *argv[])
 {
-    int c;
+    int c, use_multi = 0;
     FILE *gtf_fp=NULL; // TODO gtf anno
 
 	while ((c = getopt_long(argc, argv, "g:", bam2sj_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'g': gtf_fp = xopen(optarg, "r");
+            case 'm': use_multi = 1;
             default: err_printf("Error: unknown option: %s.\n", optarg); 
                      return bam2sj_usage();
         }
@@ -247,7 +251,7 @@ int bam2sj(int argc, char *argv[])
 
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
 
-    int sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m);
+    int sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m, use_multi);
 
     print_sj(sj_group, sj_n, stdout, h->target_name);
 
