@@ -472,7 +472,7 @@ int pred_ase(int argc, char *argv[])
 {
     // same to pred_asm START
     int c, no_novel_sj=1, no_novel_com=1, BAM_format=1, use_multi=0; char out_fn[1024]="";
-    while ((c = getopt_long(argc, argv, "nNso:", se_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "nNmso:", se_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj=0, no_novel_com=0; break;
             case 'N': no_novel_com = 0; break;

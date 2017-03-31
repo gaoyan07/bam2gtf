@@ -264,7 +264,7 @@ int pred_sg(int argc, char *argv[])
 {
     int c;
     int no_novel_sj=1, no_novel_com=1, use_multi=0; char out_prefix[1024]="";
-    while ((c = getopt_long(argc, argv, "nNo:", pred_sg_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "nNmo:", pred_sg_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj=0, no_novel_com=0; break;
             case 'N': no_novel_com = 0; break;

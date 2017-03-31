@@ -230,7 +230,7 @@ int bam2sj(int argc, char *argv[])
     int c, use_multi = 0;
     FILE *gtf_fp=NULL; // TODO gtf anno
 
-	while ((c = getopt_long(argc, argv, "g:", bam2sj_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "mg:", bam2sj_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'g': gtf_fp = xopen(optarg, "r");
             case 'm': use_multi = 1;
