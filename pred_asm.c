@@ -16,9 +16,9 @@ int pred_asm_usage(void)
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel combination of known exons in the ASM. [False]\n");
-    err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [false]\n");
+    err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [False]\n");
     err_printf("                                   with splice-junction input, the .cnt output will have no count information.\n");
-    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[false (uniq only)]\n");
+    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT. [in.bam/sj]\n");
     err_printf("                                   prefix.ASM & prefix.JCNT & prefix.ECNT\n");
 	err_printf("\n");
@@ -334,7 +334,7 @@ int pred_asm(int argc, char *argv[])
         b = bam_init1(); 
         sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
         // FIXME bam2itv.tmp
-        sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m, use_multi);
+        sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     } else  { // based on .sj file
         FILE *sj_fp = xopen(argv[optind+2], "r");

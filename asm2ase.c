@@ -17,9 +17,9 @@ int pred_se_usage(void)
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel combination of known exons in the ASM. [False]\n");
-    err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [false]\n");
+    err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [False]\n");
     err_printf("                                   with splice-junction input, the .cnt output will have no count information.\n");
-    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[false (uniq only)]\n");
+    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT & ASE. [in.bam/sj]\n");
     err_printf("                                   prefix.ASM & prefix.J/ECNT & prefix.SE/A5SS/A3SS/MXE/RI\n");
     err_printf("\n");
@@ -45,28 +45,34 @@ int pred_se_usage(void)
     }   \
 }
 // XXX optimization
-void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
+void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi)
 {
-    int i, j, k, hit; uint32_t pre_site_i, next_site_i;
-    SGnode *n = sg->node, cur_n, pre, next;
+    int i, j, k, hit; uint32_t pre_don_site_i, next_acc_site_i;
+    SGnode *n = sg->node, cur, pre, next;
     for (i = 0; i < a->node_n; ++i) {
-        cur_n = n[a->node_id[i]];
-        for (j = 0; j < cur_n.pre_n; ++j) {
-            if (cur_n.pre_id[j] == 0) continue;
-            pre = n[cur_n.pre_id[j]];
-            pre_site_i = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, pre.end+1, &hit); 
-            for (k = 0; k < cur_n.next_n; ++k) {
-                if (cur_n.next_id[k] == (uint32_t)sg->node_n-1) continue;
-                next = n[cur_n.next_id[k]];
-                next_site_i = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, next.start-1, &hit);
-                sg_bin_sch_edge(sg, pre_site_i, next_site_i, &hit);
+        cur = n[a->node_id[i]];
+        for (j = 0; j < cur.pre_n; ++j) {
+            if (cur.pre_id[j] == 0) continue;
+            pre = n[cur.pre_id[j]];
+            //pre_site_i = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, pre.end+1, &hit); 
+            pre_don_site_i = pre.e_site_id;
+            for (k = 0; k < cur.next_n; ++k) {
+                if (cur.next_id[k] == (uint32_t)sg->node_n-1) continue;
+                next = n[cur.next_id[k]];
+                //next_site_i = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, next.start-1, &hit);
+                next_acc_site_i = next.s_site_id;
+                uint32_t ej_id = sg_bin_sch_edge(sg, pre_don_site_i, next_acc_site_i, &hit);
 
                 if (hit == 1) {
-                    uint32_t up, se, down;
-                    up = pre.node_id;
-                    se = cur_n.node_id;
-                    down = next.node_id;
-                    add_asm_se(ase, up, se, down, asm_i, sg_i)
+                    uint32_t ij1_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, cur.s_site_id, &hit);
+                    uint32_t ij2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next.s_site_id, &hit);
+                    if (use_multi == 1 || (sg->edge[ej_id].uniq_c > 0 && sg->edge[ij1_id].uniq_c > 0 && sg->edge[ij2_id].uniq_c > 0)) {
+                        uint32_t up, se, down;
+                        up = pre.node_id;
+                        se = cur.node_id;
+                        down = next.node_id;
+                        add_asm_se(ase, up, se, down, asm_i, sg_i)
+                    }
                 }
             }
         }
@@ -92,30 +98,34 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     }   \
 }
 
-void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
+void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi)
 {
-    int i, j, k; uint8_t is_rev = sg->is_rev; 
-    SGnode *n = sg->node, cur_n;
+    int i, j, k, hit; uint8_t is_rev = sg->is_rev; 
+    SGnode *n = sg->node, cur;
     if (is_rev) {
         SGnode next1, next2;
         int32_t next1_s, next1_e, next2_s, next2_e;
         for (i = 0; i < a->node_n; ++i) {
-            cur_n = n[a->node_id[i]];
-            for (j = 0; j < cur_n.next_n-1; ++j) {
-                if (cur_n.next_id[j] == (uint32_t)sg->node_n-1) continue;
-                next1 = n[cur_n.next_id[j]];
+            cur = n[a->node_id[i]];
+            for (j = 0; j < cur.next_n-1; ++j) {
+                if (cur.next_id[j] == (uint32_t)sg->node_n-1) continue;
+                next1 = n[cur.next_id[j]];
                 next1_s = next1.start; next1_e = next1.end;
-                for (k = j+1; k < cur_n.next_n; ++k) {
-                    if (cur_n.next_id[k] == (uint32_t)sg->node_n-1) continue;
-                    next2 = n[cur_n.next_id[k]];
+                for (k = j+1; k < cur.next_n; ++k) {
+                    if (cur.next_id[k] == (uint32_t)sg->node_n-1) continue;
+                    next2 = n[cur.next_id[k]];
                     next2_s = next2.start; next2_e = next2.end;
 
                     if (next1_e == next2_e && next1_s != next2_s) {
-                        uint32_t up, lon, shor;
-                        up = cur_n.node_id;
-                        lon = next1.node_id;
-                        shor = next2.node_id;
-                        add_asm_a5ss(ase, shor, lon, up, asm_i, sg_i)
+                        uint32_t sj1_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next1.s_site_id, &hit);
+                        uint32_t sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id, &hit);
+                        if (use_multi == 1 || (sg->edge[sj1_id].uniq_c > 0 && sg->edge[sj2_id].uniq_c > 0) ){
+                                uint32_t up, lon, shor;
+                                up = cur.node_id;
+                                lon = next1.node_id;
+                                shor = next2.node_id;
+                                add_asm_a5ss(ase, shor, lon, up, asm_i, sg_i)
+                        }
                     }
                 }
             }
@@ -124,22 +134,26 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
         SGnode pre1, pre2;
         int32_t pre1_s, pre1_e, pre2_s, pre2_e;
         for (i = 0; i < a->node_n; ++i) {
-            cur_n = n[a->node_id[i]];
-            for (j = 0; j < cur_n.pre_n-1; ++j) {
-                if (cur_n.pre_id[j] == 0) continue;
-                pre1 = n[cur_n.pre_id[j]];
+            cur = n[a->node_id[i]];
+            for (j = 0; j < cur.pre_n-1; ++j) {
+                if (cur.pre_id[j] == 0) continue;
+                pre1 = n[cur.pre_id[j]];
                 pre1_s = pre1.start; pre1_e = pre1.end;
-                for (k = j+1; k < cur_n.pre_n; ++k) {
-                    if (cur_n.pre_id[k] == 0) continue;
-                    pre2 = n[cur_n.pre_id[k]];
+                for (k = j+1; k < cur.pre_n; ++k) {
+                    if (cur.pre_id[k] == 0) continue;
+                    pre2 = n[cur.pre_id[k]];
                     pre2_s = pre2.start; pre2_e = pre2.end;
 
                     if (pre1_s == pre2_s && pre1_e != pre2_e) {
-                        uint32_t shor, lon, down;
-                        shor = pre1.node_id;
-                        lon = pre2.node_id;
-                        down = cur_n.node_id;
-                        add_asm_a5ss(ase, shor, lon, down, asm_i, sg_i)
+                        uint32_t sj1_id = _err_sg_bin_sch_edge(sg, pre1.e_site_id, cur.s_site_id, &hit);
+                        uint32_t sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id, &hit);
+                        if (use_multi == 1 || (sg->edge[sj1_id].uniq_c > 0 && sg->edge[sj2_id].uniq_c > 0) ){
+                            uint32_t shor, lon, down;
+                            shor = pre1.node_id;
+                            lon = pre2.node_id;
+                            down = cur.node_id;
+                            add_asm_a5ss(ase, shor, lon, down, asm_i, sg_i)
+                        }
                     }
                 }
             }
@@ -166,30 +180,34 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     }   \
 }
 
-void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
+void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi)
 {
-    int i, j, k; uint8_t is_rev = sg->is_rev;
-    SGnode *n = sg->node, cur_n;
+    int i, j, k, hit; uint8_t is_rev = sg->is_rev;
+    SGnode *n = sg->node, cur;
     if (is_rev) {
         SGnode pre1, pre2;
         int32_t pre1_s, pre1_e, pre2_s, pre2_e;
         for (i = 0; i < a->node_n; ++i) {
-            cur_n = n[a->node_id[i]];
-            for (j = 0; j < cur_n.pre_n-1; ++j) {
-                if (cur_n.pre_id[j] == 0) continue;
-                pre1 = n[cur_n.pre_id[j]];
+            cur = n[a->node_id[i]];
+            for (j = 0; j < cur.pre_n-1; ++j) {
+                if (cur.pre_id[j] == 0) continue;
+                pre1 = n[cur.pre_id[j]];
                 pre1_s = pre1.start; pre1_e = pre1.end;
-                for (k = j+1; k < cur_n.pre_n; ++k) {
-                    if (cur_n.pre_id[k] == 0) continue;
-                    pre2 = n[cur_n.pre_id[k]];
+                for (k = j+1; k < cur.pre_n; ++k) {
+                    if (cur.pre_id[k] == 0) continue;
+                    pre2 = n[cur.pre_id[k]];
                     pre2_s = pre2.start; pre2_e = pre2.end;
 
                     if (pre1_s == pre2_s && pre1_e != pre2_e) {
-                        uint32_t shor, lon, down;
-                        shor = pre1.node_id;
-                        lon = pre2.node_id;
-                        down = cur_n.node_id;
-                        add_asm_a3ss(ase, down, lon, shor, asm_i, sg_i)
+                        uint32_t sj1_id = _err_sg_bin_sch_edge(sg, pre1.e_site_id, cur.s_site_id, &hit);
+                        uint32_t sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id, &hit);
+                        if (use_multi == 1 || (sg->edge[sj1_id].uniq_c > 0 && sg->edge[sj2_id].uniq_c > 0) ){
+                            uint32_t shor, lon, down;
+                            shor = pre1.node_id;
+                            lon = pre2.node_id;
+                            down = cur.node_id;
+                            add_asm_a3ss(ase, down, lon, shor, asm_i, sg_i)
+                        }
                     }
                 }
             }
@@ -198,22 +216,26 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
         SGnode next1, next2;
         int32_t next1_s, next1_e, next2_s, next2_e;
         for (i = 0; i < a->node_n; ++i) {
-            cur_n = n[a->node_id[i]];
-            for (j = 0; j < cur_n.next_n-1; ++j) {
-                if (cur_n.next_id[j] == (uint32_t)sg->node_n-1) continue;
-                next1 = n[cur_n.next_id[j]];
+            cur = n[a->node_id[i]];
+            for (j = 0; j < cur.next_n-1; ++j) {
+                if (cur.next_id[j] == (uint32_t)sg->node_n-1) continue;
+                next1 = n[cur.next_id[j]];
                 next1_s = next1.start; next1_e = next1.end;
-                for (k = j+1; k < cur_n.next_n; ++k) {
-                    if (cur_n.next_id[k] == (uint32_t)sg->node_n-1) continue;
-                    next2 = n[cur_n.next_id[k]];
+                for (k = j+1; k < cur.next_n; ++k) {
+                    if (cur.next_id[k] == (uint32_t)sg->node_n-1) continue;
+                    next2 = n[cur.next_id[k]];
                     next2_s = next2.start; next2_e = next2.end;
 
                     if (next1_e == next2_e && next1_s != next2_s) {
-                        uint32_t up, lon, shor;
-                        up = cur_n.node_id;
-                        lon = next1.node_id;
-                        shor = next2.node_id;
-                        add_asm_a3ss(ase, up, lon, shor, asm_i, sg_i)
+                        uint32_t sj1_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next1.s_site_id, &hit);
+                        uint32_t sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id, &hit);
+                        if (use_multi == 1 || (sg->edge[sj1_id].uniq_c > 0 && sg->edge[sj2_id].uniq_c > 0) ){
+                            uint32_t up, lon, shor;
+                            up = cur.node_id;
+                            lon = next1.node_id;
+                            shor = next2.node_id;
+                            add_asm_a3ss(ase, up, lon, shor, asm_i, sg_i)
+                        }
                     }
                 }
             }
@@ -241,9 +263,9 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     }   \
 }
 
-void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
+void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi)
 {
-    int i, j, k, m, n, l;
+    int i, j, k, m, n, l, hit;
     SGnode *node = sg->node, mx1, mx2, pre, next;
     for (i = 0; i < a->node_n-1; ++i) {
         mx1 = node[a->node_id[i]];
@@ -262,12 +284,20 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
                                 if (mx2.next_id[l] == (uint32_t)sg->node_n-1) continue;
                                 if (mx1.next_id[n] == mx2.next_id[l]) {
                                     next = node[mx1.next_id[n]];
-                                    uint32_t up, fir, sec, down;
-                                    up = pre.node_id;
-                                    fir = mx1.node_id;
-                                    sec = mx2.node_id;
-                                    down = next.node_id;
-                                    add_asm_mxe(ase, up, fir, sec, down, asm_i, sg_i)
+                                    uint32_t sj1_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, mx1.s_site_id, &hit);
+                                    uint32_t sj2_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, mx2.s_site_id, &hit);
+                                    uint32_t sj3_id = _err_sg_bin_sch_edge(sg, mx1.e_site_id, next.s_site_id, &hit);
+                                    uint32_t sj4_id = _err_sg_bin_sch_edge(sg, mx2.e_site_id, next.s_site_id, &hit);
+                                    if (use_multi == 1 || (sg->edge[sj1_id].uniq_c > 0 && sg->edge[sj2_id].uniq_c > 0 && sg->edge[sj3_id].uniq_c > 0 && sg->edge[sj4_id].uniq_c > 0) ){
+                                        if (use_multi == 1 || (sg->edge[sj1_id].uniq_c > 0 && sg->edge[sj2_id].uniq_c > 0) ){
+                                            uint32_t up, fir, sec, down;
+                                            up = pre.node_id;
+                                            fir = mx1.node_id;
+                                            sec = mx2.node_id;
+                                            down = next.node_id;
+                                            add_asm_mxe(ase, up, fir, sec, down, asm_i, sg_i)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -297,10 +327,10 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
     }   \
 }
 
-void asm2ri(SGnode *n, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
+void asm2ri(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi)
 {
-    int i, j, k;
-    SGnode pre, ri, next;
+    int i, j, k, hit;
+    SGnode *n = sg->node, pre, ri, next;
     for (i = 0; i < a->node_n-2; ++i) {
         pre = n[a->node_id[i]];
         for (j = i + 1; j < a->node_n-1; ++j) {
@@ -309,11 +339,14 @@ void asm2ri(SGnode *n, SGasm *a, ASE_t *ase, int asm_i, int sg_i)
                 for (k = 0; k < pre.next_n; ++k) {
                     next = n[pre.next_id[k]];
                     if (ri.end == next.end) {
+                        uint32_t sj1_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, next.s_site_id, &hit);
+                        if (use_multi == 1 || (sg->edge[sj1_id].uniq_c > 0)){
                         uint32_t up, down, in;
                         up = pre.node_id;
                         down = next.node_id;
                         in = ri.node_id;
                         add_asm_ri(ase, up, down, in, asm_i, sg_i)
+                        }
                     }
                 }
             }
@@ -342,7 +375,7 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase)
 {
     int i, out_n=10;
     char suf[10][10] = { ".SE", ".A5SS", ".A3SS", ".MXE", ".RI",
-                         ".SE_CNT", ".A5SS_CNT", ".A3SS_CNT", ".MXE_CNT", ".RI_CNT"};
+        ".SE_CNT", ".A5SS_CNT", ".A3SS_CNT", ".MXE_CNT", ".RI_CNT"};
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
     if (strlen(prefix) == 0) {
         for (i = 0; i < out_n; ++i) {
@@ -440,19 +473,18 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase)
     } free(out_fn); free(out_fp);
 }
 
-int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase)
+int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, int use_multi)
 {
     int i;
     print_format_time(stderr); err_printf("[%s] generating alternative splice-events from alternative splice-modules ...\n", __func__);
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         SGasm *sg_asm = asm_g->sg_asm[i];
         int sg_i = sg_asm->SG_id; SG *sg = sg_g->SG[sg_i]; 
-        SGnode *node = sg->node;
-        asm2se(sg, sg_asm, ase, i, sg_i);       // SE
-        asm2a5ss(sg, sg_asm, ase, i, sg_i);     // A5SS 
-        asm2a3ss(sg, sg_asm, ase, i, sg_i);     // A3SS
-        asm2mxe(sg, sg_asm, ase, i, sg_i);      // MXE
-        asm2ri(node, sg_asm, ase, i, sg_i);     // RI
+        asm2se(sg, sg_asm, ase, i, sg_i, use_multi);       // SE
+        asm2a5ss(sg, sg_asm, ase, i, sg_i, use_multi);     // A5SS 
+        asm2a3ss(sg, sg_asm, ase, i, sg_i, use_multi);     // A3SS
+        asm2mxe(sg, sg_asm, ase, i, sg_i, use_multi);      // MXE
+        asm2ri(sg, sg_asm, ase, i, sg_i, use_multi);     // RI
     }
     print_format_time(stderr); err_printf("[%s] generating alternative splice-events from alternative splice-modules done\n", __func__);
     return ase->se_n+ase->a5ss_n+ase->a3ss_n+ase->mxe_n+ase->ri_n;
@@ -506,7 +538,7 @@ int pred_ase(int argc, char *argv[])
     if (BAM_format) { // based on .bam file
         b = bam_init1(); 
         sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
-        sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m, use_multi);
+        sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
     } else  { // based on .sj file
         FILE *sj_fp = xopen(argv[optind+2], "r");
@@ -531,7 +563,7 @@ int pred_ase(int argc, char *argv[])
     // same to pred_asm END
 
     ASE_t *ase = ase_init();
-    asm2ase(sr_sg_g, asm_g, ase);
+    asm2ase(sr_sg_g, asm_g, ase, use_multi);
 
     // output
     asm_output(argv[optind+2], out_fn, sr_sg_g, asm_g);

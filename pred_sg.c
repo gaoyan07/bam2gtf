@@ -14,7 +14,7 @@ int pred_sg_usage(void)
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel splice-junction in the ASM. [False]\n");
-    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[false (uniq only)]\n");
+    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
     err_printf("         -o --out-prefix  [STR]    prefix of output splice-graph file. [in.sj]\n");
     err_printf("\n");
     return 1;
@@ -263,12 +263,11 @@ const struct option pred_sg_long_opt [] = {
 int pred_sg(int argc, char *argv[])
 {
     int c;
-    int no_novel_sj=1, no_novel_com=1, use_multi=0; char out_prefix[1024]="";
+    int no_novel_sj=1, no_novel_com=1; char out_prefix[1024]="";
     while ((c = getopt_long(argc, argv, "nNmo:", pred_sg_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': no_novel_sj=0, no_novel_com=0; break;
             case 'N': no_novel_com = 0; break;
-            case 'm': use_multi = 1; break;
             case 'o': strcpy(out_prefix, optarg); break;
             default: err_printf("Error: unknown optin: %s.\n", optarg);
                      return pred_sg_usage();
@@ -302,7 +301,7 @@ int pred_sg(int argc, char *argv[])
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+2]);
     b = bam_init1(); 
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
-    int sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m, use_multi); 
+    int sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m); 
     // predict splice-graph with GTF-based splice-graph and splice-junciton
     SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, no_novel_sj, no_novel_com);
 

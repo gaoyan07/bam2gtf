@@ -35,9 +35,9 @@ int update_gtf_usage(void)
     err_printf("         -d --distance    [INT]    consider same if distance between two splice site is not bigger than d. [%d]\n", SPLICE_DISTANCE);
     err_printf("         -l --full-length [INT]    level of strict criterion for considering full-length transcript. \n");
     err_printf("                                   (1->5, most strict->most relaxed) [%d]\n", 5);
-    err_printf("         -u --unclassified         output UNCLASSIFIED novel transcript. [false]\n");
+    err_printf("         -u --unclassified         output UNCLASSIFIED novel transcript. [False]\n");
     err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
-    err_printf("         -f --full-gtf    [STR]    use this option to output the full GTF information of SAM/BAM to file. [false].\n");
+    err_printf("         -f --full-gtf    [STR]    use this option to output the full GTF information of SAM/BAM to file. [False].\n");
 	err_printf("\n");
 	return 1;
 }

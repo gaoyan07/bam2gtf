@@ -12,8 +12,10 @@
         update_node_pre/next(node_don_id, node_acc_id)  // NODE DONE
         update_site_exon(site_don/acc_id, node_don/acc_id)  // SITE DONE
 
+2. GTF-drived ASM & ASE
+
     
-2. SR-SJ-SG
+3. SR-SJ-SG
     // update node & site
     1. sj(don, acc) ==> GTF_don/acc_site_id // known sj (AND novel sj)
         map[site[GTF_don/acc_id].exon[]] = 1
@@ -54,3 +56,4 @@
 
 TODO:
 use bam.idx
+
