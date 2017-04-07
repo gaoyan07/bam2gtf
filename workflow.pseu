@@ -1,11 +1,15 @@
-
     
 TODO:
 1. use bam.idx
-2. multi-sample and multi-replicate
 
 1. Usage: gtools asm <ref.fa> <in.gtf> <SAMPLE1.REP1,REP2,REP3 ...;SAMPLE2.REP1,REP2,REP3 ...>
             ":" separates samples, "," separates replicates
+   splice-junction considered: (K: known, n: novel, N: novel-com)
+       K:            only known
+       K + N:        known and novel-combination of known sites and known junction
+       K + n(N):     known and novel splice-junction of known splice-site
+       K + n(N) + l: known and novel splice-junction of known splcie-site, only output ASM/ASE with novel splice-junction
+
 2. Load ref.fa, ref.gtf
 
 3. Build GTF-SG
@@ -65,5 +69,4 @@ TODO:
                             }
                         }
                     }
-
 

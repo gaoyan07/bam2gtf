@@ -38,7 +38,7 @@ const struct option bam2sj_long_opt [] = {
     { 0, 0, 0, 0}
 };
 
-int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t acc, uint8_t strand, uint8_t motif_i, uint8_t is_uniq)
+int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t acc, uint8_t strand, uint8_t motif_i, uint8_t is_anno, uint8_t is_uniq)
 {
     if (*sj_n == *sj_m) _realloc(*sj, *sj_m, sj_t)
     (*sj)[*sj_n].tid = tid;
@@ -46,6 +46,7 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t ac
     (*sj)[*sj_n].acc = acc;
     (*sj)[*sj_n].strand = strand;
     (*sj)[*sj_n].motif = motif_i;
+    (*sj)[*sj_n].is_anno = is_anno;
     (*sj)[*sj_n].uniq_c = is_uniq; 
     (*sj)[*sj_n].multi_c = 1-is_uniq;
     (*sj_n)++;
@@ -99,7 +100,7 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m)
             case BAM_CREF_SKIP: // N(0 1)
                 if (l >= INTRON_MIN_LEN) {
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
-                    add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, is_uniq);
+                    add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq);
                 }
                 end += l;
                 break;
@@ -160,6 +161,7 @@ int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
             (*SJ_group)[sj_i].acc = sj[i].acc;
             (*SJ_group)[sj_i].strand = sj[i].strand;
             (*SJ_group)[sj_i].motif = sj[i].motif;
+            (*SJ_group)[sj_i].is_anno = sj[i].is_anno;
             (*SJ_group)[sj_i].uniq_c = sj[i].uniq_c; 
             (*SJ_group)[sj_i].multi_c = sj[i].multi_c;
         } else {

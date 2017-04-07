@@ -147,7 +147,7 @@ typedef struct {
     int BAM_input;  // .bam or .sj
     int sam_n, tol_rep_n, *rep_n;
     char **in_name;
-    int no_novel_sj, no_novel_com;
+    int no_novel_sj, no_novel_com, only_novel;
     int use_multi;
 } sg_para;
 

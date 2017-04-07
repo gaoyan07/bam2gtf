@@ -149,9 +149,30 @@ int sg_asm_group_add(SGasm_group *asm_g, SGasm *sg_asm)
     return asm_g->sg_asm_n;
 }
 
-SGasm_group *gen_asm(SG_group *sg_g)
+int check_novel_asm(SG *sg, SGasm *sg_asm)
+{
+    int i;
+    for (i = 0; i < sg_asm->edge_n; ++i) {
+        uint32_t eid = sg_asm->edge_id[i];
+        if (sg->edge[eid].is_anno == 0) return 1;
+    }
+    return 0;
+}
+
+int check_uniq_asm(SG *sg, SGasm *sg_asm)
+{
+    int i;
+    for (i = 0; i < sg_asm->edge_n; ++i) {
+        uint32_t eid = sg_asm->edge_id[i];
+        if (sg->edge[eid].uniq_c == 0) return 0;
+    }
+    return 1;
+}
+
+SGasm_group *gen_asm(SG_group *sg_g, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] generating alternative-splice-module with predicted SJ-SG ...\n", __func__);
+    int only_novel = sgp->only_novel, use_multi = sgp->use_multi;
     int entry_n, exit_n; uint32_t *entry, *exit;
     int sg_i;
     SGasm_group *asm_g = sg_init_asm_group();
@@ -173,7 +194,9 @@ SGasm_group *gen_asm(SG_group *sg_g)
                     int *node_visit = (int*)_err_calloc(sg->node_n, sizeof(int));
                     sub_splice_graph(sg, &node_visit, sg_asm, entry[i], exit[j]);
                     free(node_visit);
-                    sg_asm_group_add(asm_g, sg_asm);
+                    if ((only_novel == 0 || check_novel_asm(sg, sg_asm) == 1)
+                    && (use_multi == 1 || check_uniq_asm(sg, sg_asm) == 1))
+                        sg_asm_group_add(asm_g, sg_asm);
                     sg_free_asm(sg_asm);
                     hit = 1; break;
                 }
@@ -364,7 +387,7 @@ int pred_asm(int argc, char *argv[])
         sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
 
         // generate ASM with short-read splice-graph
-        asm_g = gen_asm(sr_sg_g);
+        asm_g = gen_asm(sr_sg_g, sgp);
 
         // calculate number of reads falling into exon-body
         if (sgp->BAM_input) {

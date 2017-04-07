@@ -27,7 +27,7 @@ sg_para *sg_init_para(void)
     sg_para *sgp = (sg_para*)_err_malloc(sizeof(sg_para));
     sgp->rep_n = NULL; sgp->in_name = NULL;
     sgp->sam_n = 0; sgp->tol_rep_n = 0; sgp->BAM_input=1; 
-    sgp->no_novel_sj=1; sgp->no_novel_com=1;
+    sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
     sgp->use_multi=0;
     return sgp;
 }
@@ -211,7 +211,10 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 acc_site_id = sg_bin_sch_site(acc_site, acc_n, sj_group[i].acc, &hit); if (hit == 0) continue;
                 GTF_don_site_id = _err_sg_bin_sch_site(sg_don, sg_don_n, sj_group[i].don, &hit);
                 GTF_acc_site_id = _err_sg_bin_sch_site(sg_acc, sg_acc_n, sj_group[i].acc, &hit);
-                sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
+                sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); 
+                if (hit == 0 && no_novel_sj == 1) continue;
+                else if (hit == 0) sj_group[i].is_anno = 0;
+
                 // 3.1. update edge(sj_group[i])
                 sg_update_edge_pred(sr_sg, sj_group[i], don_site_id, acc_site_id);
                 // 3.2. update node()
