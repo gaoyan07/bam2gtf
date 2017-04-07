@@ -14,6 +14,9 @@ int pred_se_usage(void)
 {
     err_printf("\n");
     err_printf("Usage:   %s ase [option] <ref.fa> <in.gtf> <in.bam/sj>\n\n", PROG);
+    err_printf("Note:    for multi-sample and multi-replicate should be this format: \n");
+    err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
+    err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel combination of known exons in the ASM. [False]\n");
@@ -503,14 +506,15 @@ const struct option se_long_opt [] = {
 int pred_ase(int argc, char *argv[])
 {
     // same to pred_asm START
-    int c, no_novel_sj=1, no_novel_com=1, BAM_format=1, use_multi=0; char out_fn[1024]="";
-    while ((c = getopt_long(argc, argv, "nNmso:", se_long_opt, NULL)) >= 0) {
+    int c; char out_fn[1024]=""; //XXX output name
+    sg_para *sgp = sg_init_para();
+	while ((c = getopt_long(argc, argv, "nNsmo:", se_long_opt, NULL)) >= 0) {
         switch (c) {
-            case 'n': no_novel_sj=0, no_novel_com=0; break;
-            case 'N': no_novel_com = 0; break;
-            case 's': BAM_format = 0; break;
-            case 'm': use_multi = 1; break;
-            case 'o': strcpy(out_fn, optarg); break;
+            case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
+            case 'N': sgp->no_novel_com = 0; break;
+            case 's': sgp->BAM_input= 0; break;
+            case 'm': sgp->use_multi = 1; break;
+            case 'o': strcpy(out_fn, optarg); break; //XXX
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return pred_se_usage();
         }
@@ -518,14 +522,20 @@ int pred_ase(int argc, char *argv[])
     if (argc - optind != 3) return pred_se_usage();
 
     gzFile genome_fp = gzopen(argv[optind], "r");
-    if (genome_fp == NULL) { err_fatal(__func__, "Can not open genome file. %s\n", argv[optind]); }
+    if (genome_fp == NULL) err_fatal(__func__, "Can not open genome file. %s\n", argv[optind]);
+    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
+
+    // parse input name
+    if (sg_par_input(sgp, argv[optind+2]) <= 0) return pred_se_usage();
+    
     chr_name_t *cname = chr_name_init();
     // set cname if input is BAM
     samFile *in; bam_hdr_t *h; bam1_t *b;
-    if (BAM_format) {
-        if ((in = sam_open(argv[optind+2], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+2]);
-        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+2]);
+    if (sgp->BAM_input) {
+        if ((in = sam_open(sgp->in_name[0], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", sgp->in_name[0]);
+        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
         bam_set_cname(h, cname);
+        bam_hdr_destroy(h); sam_close(in);
     }
     // build splice-graph with GTF
     SG_group *sg_g;
@@ -533,43 +543,59 @@ int pred_ase(int argc, char *argv[])
     sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
-    // get splice-junction
-    int sj_n, sj_m; sj_t *sj_group;
-    if (BAM_format) { // based on .bam file
-        b = bam_init1(); 
-        sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
-        sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m);
-        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
-    } else  { // based on .sj file
-        FILE *sj_fp = xopen(argv[optind+2], "r");
-        sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
-        sj_n = read_sj_group(sj_fp, sg_g->cname, &sj_group, sj_m);
-        err_fclose(sj_fp);
+    int i;
+    SG_group **sr_sg_g_rep = (SG_group**)_err_malloc(sgp->tol_rep_n * sizeof(SG_group*));
+    SGasm_group **asm_g_rep = (SGasm_group**)_err_malloc(sgp->tol_rep_n * sizeof(SGasm_group*));
+    ASE_t **ase_rep = (ASE_t**)_err_malloc(sgp->tol_rep_n * sizeof(ASE_t*));
+    for (i = 0; i < sgp->tol_rep_n; ++i) {
+        char *in_name = sgp->in_name[i];
+        // get splice-junction
+        int sj_n, sj_m; sj_t *sj_group;
+        if (sgp->BAM_input) { // based on .bam file
+            b = bam_init1(); 
+            if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
+            if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
+            sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
+            // FIXME bam2itv.tmp
+            sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m);
+            bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+        } else  { // based on .sj file
+            FILE *sj_fp = xopen(in_name, "r");
+            sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
+            sj_n = read_sj_group(sj_fp, sg_g->cname, &sj_group, sj_m);
+            err_fclose(sj_fp);
+        }
+        // predict splice-graph with GTF-based splice-graph and splice-junciton
+        SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
+
+        // generate ASM with short-read splice-graph
+        SGasm_group *asm_g = gen_asm(sr_sg_g);
+
+        // calculate number of reads falling into exon-body
+        if (sgp->BAM_input) {
+            samFile *in; bam_hdr_t *h; bam1_t *b;
+            in = sam_open(in_name, "rb"); h = sam_hdr_read(in); b = bam_init1(); 
+            cal_asm_exon_cnt(sr_sg_g, in, h, b);
+            bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+        }
+        // same to pred_asm END
+        ASE_t *ase = ase_init();
+        asm2ase(sr_sg_g, asm_g, ase, sgp->use_multi);
+        asm_output(in_name, out_fn, sr_sg_g, asm_g);
+        ase_output(in_name, out_fn, sr_sg_g, ase);
+        sr_sg_g_rep[i] = sr_sg_g; asm_g_rep[i] = asm_g; ase_rep[i] = ase;
     }
-    // predict splice-graph with GTF-based splice-graph and splice-junciton
-    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, no_novel_sj, no_novel_com);
+
     sg_free_group(sg_g);
+    for (i = 0; i < sgp->tol_rep_n; ++i) {
+        sg_free_group(sr_sg_g_rep[i]); sg_free_asm_group(asm_g_rep[i]); ase_free(ase_rep[i]);
+    } free(sr_sg_g_rep); free(asm_g_rep); free(ase_rep);
 
-    // generate ASM with short-read splice-graph
-    SGasm_group *asm_g = gen_asm(sr_sg_g);
+    // output to one file
+    gzclose(genome_fp); sg_free_para(sgp);
 
-    // calculate number of reads falling into exon-body
-    if (BAM_format) {
-        samFile *in; bam_hdr_t *h; bam1_t *b;
-        in = sam_open(argv[optind+2], "rb"); h = sam_hdr_read(in); b = bam_init1(); 
-        cal_asm_exon_cnt(sr_sg_g, in, h, b);
-        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
-    }
-    // same to pred_asm END
-
-    ASE_t *ase = ase_init();
-    asm2ase(sr_sg_g, asm_g, ase, use_multi);
-
-    // output
-    asm_output(argv[optind+2], out_fn, sr_sg_g, asm_g);
-    ase_output(argv[optind+2], out_fn, sr_sg_g, ase);
-
-    sg_free_group(sr_sg_g); sg_free_asm_group(asm_g);
-    gzclose(genome_fp); ase_free(ase);
+    for (i = 0; i < seq_n; ++i) {
+        free(seq[i].name.s); free(seq[i].seq.s);
+    } free(seq);
     return 0;
 }

@@ -192,9 +192,8 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
     return seq;
 }
 
-int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, gzFile genome_fp, sj_t **SJ_group, int SJ_m)
+int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m)
 {
-    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
     int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
     while (sam_read1(in, h, b) >= 0) {
@@ -203,10 +202,7 @@ int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, gzFile genome_fp, sj_t **S
     }
     free(sj);
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
-    int i;
-    for (i = 0; i < seq_n; ++i) {
-        free(seq[i].name.s); free(seq[i].seq.s);
-    } free(seq);
+    
     return SJ_n;
 }
 
@@ -247,12 +243,17 @@ int bam2sj(int argc, char *argv[])
 
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
 
-    int sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m);
+    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
+    int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m);
 
     print_sj(sj_group, sj_n, stdout, h->target_name);
 
     bam_destroy1(b); sam_close(in); bam_hdr_destroy(h); 
     free(sj_group); gzclose(genome_fp); 
+    int i;
+    for (i = 0; i < seq_n; ++i) {
+        free(seq[i].name.s); free(seq[i].seq.s);
+    } free(seq);
     if (gtf_fp != NULL) err_fclose(gtf_fp);
     return 0;
 }

@@ -143,6 +143,18 @@ typedef struct {
     chr_name_t *cname;
 } SG_group;
 
+typedef struct {
+    int BAM_input;  // .bam or .sj
+    int sam_n, tol_rep_n, *rep_n;
+    char **in_name;
+    int no_novel_sj, no_novel_com;
+    int use_multi;
+} sg_para;
+
+int sg_par_input(sg_para *sgp, char *in);
+sg_para *sg_init_para(void);
+void sg_free_para(sg_para *sgp);
+
 SG *sg_init_node(SG *sg);
 SG *sg_init_site(SG *sg);
 SG_group *sg_init_group(int g_n);

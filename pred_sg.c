@@ -5,6 +5,7 @@
 #include "gtf.h"
 #include "build_sg.h"
 #include "bam2sj.h"
+#include "kstring.h"
 
 extern const char PROG[20];
 int pred_sg_usage(void)
@@ -18,6 +19,65 @@ int pred_sg_usage(void)
     err_printf("         -o --out-prefix  [STR]    prefix of output splice-graph file. [in.sj]\n");
     err_printf("\n");
     return 1;
+}
+
+
+sg_para *sg_init_para(void)
+{
+    sg_para *sgp = (sg_para*)_err_malloc(sizeof(sg_para));
+    sgp->rep_n = NULL; sgp->in_name = NULL;
+    sgp->sam_n = 0; sgp->tol_rep_n = 0; sgp->BAM_input=1; 
+    sgp->no_novel_sj=1; sgp->no_novel_com=1;
+    sgp->use_multi=0;
+    return sgp;
+}
+
+// ':' separates samples, ',' separates replicates
+int sg_par_input(sg_para *sgp, char *in)
+{
+    ks_tokaux_t aux1, aux2; char *p1, *p2;
+    kstring_t *s1=(kstring_t*)_err_calloc(1, sizeof(kstring_t)),  *s2=(kstring_t*)_err_calloc(1, sizeof(kstring_t));
+    int sam_n = 0, rep_n = 0;
+    for (p1 = kstrtok(in, ":", &aux1); p1; p1 = kstrtok(0, 0, &aux1)) {
+        if (p1 != NULL) {
+            sam_n++;
+            kputsn(p1, aux1.p-p1, s1);
+            for (p2 = kstrtok(s1->s, ",", &aux2); p2; p2 = kstrtok(0, 0, &aux2))
+                rep_n++;
+            free(s1->s); ks_release(s1);
+        }
+    }
+    sgp->rep_n = (int*)_err_malloc(sam_n * sizeof(int));
+    sgp->in_name = (char**)_err_malloc(rep_n * sizeof(char*));
+    sgp->tol_rep_n = rep_n;
+    int i = 0;
+    for (p1 = kstrtok(in, ":", &aux1); p1; p1 = kstrtok(0, 0, &aux1)) {
+        if (p1 != NULL) {
+            kputsn(p1, aux1.p-p1, s1);
+            for (p2 = kstrtok(s1->s, ",", &aux2); p2; p2 = kstrtok(0, 0, &aux2)) {
+                kputsn(p2, aux2.p-p2, s2);
+                sgp->in_name[i++] = strdup(s2->s);
+                free(s2->s); ks_release(s2);
+                sgp->rep_n[sgp->sam_n]++;
+            }
+            free(s1->s); ks_release(s1);
+            sgp->sam_n++;
+        }
+    }
+    free(s1); free(s2);
+    return sgp->tol_rep_n;
+}
+
+void sg_free_para(sg_para *sgp)
+{
+    if (sgp->in_name != NULL) {
+        int i;
+        for (i = 0; i < sgp->tol_rep_n; ++i)
+            free(sgp->in_name[i]);
+        free(sgp->in_name);
+    }
+    if (sgp->rep_n != NULL) free(sgp->rep_n);
+    free(sgp);
 }
 
 /****************************************************************
@@ -54,8 +114,9 @@ int comp_sj_sg(sj_t sj, SG sg)
     }
 }
 
-int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *sr_sg_g, int no_novel_sj, int no_novel_com)
+int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *sr_sg_g, sg_para *sgp)
 {
+    int no_novel_sj = sgp->no_novel_sj, no_novel_com = sgp->no_novel_com;
     int i, j, k, hit; uint32_t don_site_id, acc_site_id;
     uint32_t GTF_don_site_id, GTF_acc_site_id;
     uint8_t **node_map = (uint8_t**)_err_malloc(sg_g.SG_n * sizeof(uint8_t*));
@@ -230,7 +291,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
 }
 
 // sr_sg_g.SG_n == sg_g.SG_n
-SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, int no_novel_sj, int no_novel_com)
+SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG ...\n", __func__);
     SG_group *sr_sg_g = sg_init_group(sg_g.SG_n);
@@ -244,7 +305,7 @@ SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, int no_no
     sr_sg_g->cname->chr_n = sg_g.cname->chr_n;
     for (i = 0; i < sr_sg_g->cname->chr_n; ++i) strcpy(sr_sg_g->cname->chr_name[i], sg_g.cname->chr_name[i]);
 
-    predict_SpliceGraph_core(sg_g, sj_group, sj_n, sr_sg_g, no_novel_sj, no_novel_com);
+    predict_SpliceGraph_core(sg_g, sj_group, sj_n, sr_sg_g, sgp);
     free(sj_group);
     print_format_time(stderr); err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG done!\n", __func__);
     return sr_sg_g;
@@ -263,11 +324,11 @@ const struct option pred_sg_long_opt [] = {
 int pred_sg(int argc, char *argv[])
 {
     int c;
-    int no_novel_sj=1, no_novel_com=1; char out_prefix[1024]="";
+    sg_para *sgp = sg_init_para(); char out_prefix[1024]="";
     while ((c = getopt_long(argc, argv, "nNmo:", pred_sg_long_opt, NULL)) >= 0) {
         switch (c) {
-            case 'n': no_novel_sj=0, no_novel_com=0; break;
-            case 'N': no_novel_com = 0; break;
+            case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
+            case 'N': sgp->no_novel_com = 0; break;
             case 'o': strcpy(out_prefix, optarg); break;
             default: err_printf("Error: unknown optin: %s.\n", optarg);
                      return pred_sg_usage();
@@ -301,13 +362,16 @@ int pred_sg(int argc, char *argv[])
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+2]);
     b = bam_init1(); 
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
-    int sj_n = bam2sj_core(in, h, b, genome_fp, &sj_group, sj_m); 
+    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
+    int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m); 
     // predict splice-graph with GTF-based splice-graph and splice-junciton
-    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, no_novel_sj, no_novel_com);
+    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
 
     // dump predicted splice-graph to file
     if (strlen(out_prefix) == 0) strcpy(out_prefix, argv[optind+2]);
-
-    sg_free_group(sg_g); sg_free_group(sr_sg_g); gzclose(genome_fp);
+    int i; for (i = 0; i < seq_n; ++i) {
+        free(seq[i].name.s); free(seq[i].seq.s);
+    } free(seq);
+    sg_free_group(sg_g); sg_free_group(sr_sg_g); gzclose(genome_fp); sg_free_para(sgp);
     return 0;
 }
