@@ -70,3 +70,18 @@ TODO:
                         }
                     }
 
+5. output multi-sample/replicates' ASE into one-file
+    merge sort all the ASE
+        init index for each rep
+        while (we have ASE left) {
+            min_ase = get_min(all rep) {
+            }
+            for (all rep) {
+                if (ase == min_ase) {
+                    output(ase)
+                    update_rep_index()
+                } else {
+                    output(0)
+                }
+            }
+        }

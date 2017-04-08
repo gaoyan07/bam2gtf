@@ -28,7 +28,8 @@ sg_para *sg_init_para(void)
     sgp->rep_n = NULL; sgp->in_name = NULL;
     sgp->sam_n = 0; sgp->tol_rep_n = 0; sgp->BAM_input=1; 
     sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
-    sgp->use_multi=0;
+    sgp->use_multi = 0;
+    sgp->merge_out = 0;
     return sgp;
 }
 

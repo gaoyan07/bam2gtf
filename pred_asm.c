@@ -241,20 +241,25 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
     return 0;
 }
 
-int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g)
+int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg_para *sgp)
 {
     int i, j, out_n=3;
     char suf[3][10] = { ".ASM", ".JCNT", ".ECNT" };
+    char suff[20] = "";
+    if (sgp->use_multi==1) strcat(suff, ".multi");
+    if (sgp->no_novel_sj==1) strcat(suff, ".anno");
+    if (sgp->only_novel==1) strcat(suff, ".novel");
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
     if (strlen(prefix) == 0) {
         for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suf[i]);
+            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
         }
     } else {
         for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suf[i]);
+            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
         }
     }
+
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
     for (i = 0; i < out_n; ++i)
         out_fp[i] = xopen(out_fn[i], "w");
@@ -324,7 +329,7 @@ const struct option asm_long_opt [] = {
 
 int pred_asm(int argc, char *argv[])
 {
-    int c; char out_fn[1024]=""; //XXX output name
+    int c; char out_fn[1024]="";
     sg_para *sgp = sg_init_para();
 	while ((c = getopt_long(argc, argv, "nNsmo:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
@@ -332,7 +337,7 @@ int pred_asm(int argc, char *argv[])
             case 'N': sgp->no_novel_com = 0; break;
             case 's': sgp->BAM_input= 0; break;
             case 'm': sgp->use_multi = 1; break;
-            case 'o': strcpy(out_fn, optarg); break; //XXX
+            case 'o': strcpy(out_fn, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return pred_asm_usage();
         }
@@ -396,7 +401,7 @@ int pred_asm(int argc, char *argv[])
             cal_asm_exon_cnt(sr_sg_g, in, h, b);
             bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
         }
-        asm_output(in_name, out_fn, sr_sg_g, asm_g);
+        asm_output(in_name, out_fn, sr_sg_g, asm_g, sgp);
     }
     sg_free_group(sg_g);
     for (i = 0; i < sgp->tol_rep_n; ++i) {

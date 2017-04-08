@@ -25,6 +25,7 @@ int pred_se_usage(void)
     err_printf("                                   with splice-junction input, the .cnt output will have no count information.\n");
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT & ASE. [in.bam/sj]\n");
+    err_printf("         -M --merge                merge multi-sample/replicate output\n");
     err_printf("                                   prefix.ASM & prefix.J/ECNT & prefix.SE/A5SS/A3SS/MXE/RI\n");
     err_printf("\n");
     return 1;
@@ -380,21 +381,27 @@ void ase_free(ASE_t *ase)
     free(ase);
 }
 
-void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase)
+void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para *sgp)
 {
     int i, out_n=10;
     char suf[10][10] = { ".SE", ".A5SS", ".A3SS", ".MXE", ".RI",
         ".SE_CNT", ".A5SS_CNT", ".A3SS_CNT", ".MXE_CNT", ".RI_CNT"};
+    char suff[20] = "";
+    if (sgp->use_multi==1) strcat(suff, ".multi");
+    if (sgp->no_novel_sj==1) strcat(suff, ".anno");
+    if (sgp->only_novel==1) strcat(suff, ".novel");
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
+
     if (strlen(prefix) == 0) {
         for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suf[i]);
+            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
         }
     } else {
         for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suf[i]);
+            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
         }
     }
+
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
     for (i = 0; i < out_n; ++i)
         out_fp[i] = xopen(out_fn[i], "w");
@@ -482,6 +489,33 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase)
     } free(out_fn); free(out_fp);
 }
 
+void ase_merge_output(char *prefix, SG_group *sg_g_rep, ASE_t *ase_rep, sg_para *sgp)
+{
+    int i, ii = (int*)_err_calloc(100, sizeof(int));
+    int out_n=10;
+    char suf[10][10] = { ".SE", ".A5SS", ".A3SS", ".MXE", ".RI",
+        ".SE_CNT", ".A5SS_CNT", ".A3SS_CNT", ".MXE_CNT", ".RI_CNT"};
+    char suff[20] = "";
+    if (sgp->use_multi==1) strcat(suff, ".multi");
+    if (sgp->no_novel_sj==1) strcat(suff, ".anno");
+    if (sgp->only_novel==1) strcat(suff, ".novel");
+    char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
+    for (i = 0; i < out_n; ++i) {
+        out_fn[i] = (char*)_err_malloc(strlen(in_fn)+30); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+    }
+
+    FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
+    for (i = 0; i < out_n; ++i)
+        out_fp[i] = xopen(out_fn[i], "w");
+
+    while (1) {
+        // get min-ase
+        for (i = 0; i < sgp->tol_rep_n; ++i) {
+            ;
+        }
+    }
+}
+
 int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] generating alternative splice-events from alternative splice-modules ...\n", __func__);
@@ -506,6 +540,7 @@ const struct option se_long_opt [] = {
     { "sj-file", 0, NULL, 's' },
     { "use-multi", 0, NULL, 'm' },
     { "output", 1, NULL, 'o' },
+    { "merge", 0, NULL, 'M' },
 
     { 0, 0, 0, 0 }
 };
@@ -513,16 +548,17 @@ const struct option se_long_opt [] = {
 int pred_ase(int argc, char *argv[])
 {
     // same to pred_asm START
-    int c; char out_fn[1024]=""; //XXX output name
+    int c; char out_fn[1024]="";
     sg_para *sgp = sg_init_para();
-	while ((c = getopt_long(argc, argv, "nNlsmo:", se_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "nNlsmM", se_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'N': sgp->no_novel_com = 0; break;
             case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 's': sgp->BAM_input= 0; break;
             case 'm': sgp->use_multi = 1; break;
-            case 'o': strcpy(out_fn, optarg); break; //XXX
+            case 'M': sgp->merge_out = 1; break;
+            case 'o': strcpy(out_fn, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return pred_se_usage();
         }
@@ -589,10 +625,12 @@ int pred_ase(int argc, char *argv[])
         // same to pred_asm END
         ASE_t *ase = ase_init();
         asm2ase(sr_sg_g, asm_g, ase, sgp);
-        asm_output(in_name, out_fn, sr_sg_g, asm_g);
-        ase_output(in_name, out_fn, sr_sg_g, ase);
+        asm_output(in_name, out_fn, sr_sg_g, asm_g, sgp);
+        if (sgp->merge_out == 0) ase_output(in_name, sr_sg_g, ase, sgp);
         sr_sg_g_rep[i] = sr_sg_g; asm_g_rep[i] = asm_g; ase_rep[i] = ase;
     }
+    if (sgp->merge_out == 1)
+        ase_merge_output(out_fn, sr_sg_g_rep, ase_rep, sgp);
 
     sg_free_group(sg_g);
     for (i = 0; i < sgp->tol_rep_n; ++i) {

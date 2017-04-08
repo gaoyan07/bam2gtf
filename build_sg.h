@@ -149,6 +149,7 @@ typedef struct {
     char **in_name;
     int no_novel_sj, no_novel_com, only_novel;
     int use_multi;
+    int merge_out;
 } sg_para;
 
 int sg_par_input(sg_para *sgp, char *in);
