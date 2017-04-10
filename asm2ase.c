@@ -403,8 +403,7 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
     }
 
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
-    for (i = 0; i < out_n; ++i)
-        out_fp[i] = xopen(out_fn[i], "w");
+    for (i = 0; i < out_n; ++i) out_fp[i] = xopen(out_fn[i], "w");
 
     chr_name_t *cname = sg_g->cname;
     // head-line
@@ -489,9 +488,9 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
     } free(out_fn); free(out_fp);
 }
 
-void ase_merge_output(char *prefix, SG_group *sg_g_rep, ASE_t *ase_rep, sg_para *sgp)
+void ase_merge_output(char *in_fn, char *prefix, SG_group *sg_g_rep, ASE_t *ase_rep, sg_para *sgp)
 {
-    int i, ii = (int*)_err_calloc(100, sizeof(int));
+    int i;
     int out_n=10;
     char suf[10][10] = { ".SE", ".A5SS", ".A3SS", ".MXE", ".RI",
         ".SE_CNT", ".A5SS_CNT", ".A3SS_CNT", ".MXE_CNT", ".RI_CNT"};
@@ -500,20 +499,65 @@ void ase_merge_output(char *prefix, SG_group *sg_g_rep, ASE_t *ase_rep, sg_para 
     if (sgp->no_novel_sj==1) strcat(suff, ".anno");
     if (sgp->only_novel==1) strcat(suff, ".novel");
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
-    for (i = 0; i < out_n; ++i) {
-        out_fn[i] = (char*)_err_malloc(strlen(in_fn)+30); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+
+    if (strlen(prefix) == 0) {
+        for (i = 0; i < out_n; ++i) {
+            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+        }
+    } else {
+        for (i = 0; i < out_n; ++i) {
+            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+        }
     }
 
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
-    for (i = 0; i < out_n; ++i)
-        out_fp[i] = xopen(out_fn[i], "w");
+    for (i = 0; i < out_n; ++i) out_fp[i] = xopen(out_fn[i], "w");
 
+    chr_name_t *cname = sg_g_rep[0].cname;
+    // head-line
+    // SE/A5SS/A3SS/MXE/RI
+    fprintf(out_fp[0], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSE_ES\tSE_EE\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
+    fprintf(out_fp[1], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSHORT_ES\tSHORT_EE\tLONG_ES\tLONG_EE\tDOWN_ES\tDOWN_EE\n");
+    fprintf(out_fp[2], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tLOND_ES\tLONG_EE\tSHORT_ES\tSHORT_EE\n");
+    fprintf(out_fp[3], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tFIRST_ES\tFIRST_EE\tSECOND_ES\tSECOND_EE\tDOWN_ES\tDOWN_EE\n");
+    fprintf(out_fp[4], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
+    // SE/A5SS/A3SS/MXE/RI_CNT
+    fprintf(out_fp[5], "ID\tSTRAND\tCHR\tIJ1_UCNT\tIJ2_UCNT\tEJ_UCNT\tIJ1_MCNT\tIJ2_MCNT\tEJ_MCNT\n");
+    fprintf(out_fp[6], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\tLO_MCNT\tSH_MCNT\n");
+    fprintf(out_fp[7], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\tLO_MCNT\tSH_MCNT\n");
+    fprintf(out_fp[8], "ID\tSTRAND\tCHR\tFIR1_UCNT\tFIR2_UCNT\tSEC1_UCNT\tSEC2_UCNT\tFIR1_MCNT\tFIR2_MCNT\tSEC1_MCNT\tSEC2_MCNT\n");
+    fprintf(out_fp[9], "ID\tSTRAND\tCHR\tRE_UCNT\tSJ_UCNT\tRE_MCNT\tSJ_MCNT\n");
+
+    // SE
+    int *cur_i = (int*)_err_calloc(sgp->tol_rep_n, sizeof(int));
+    int min_rep;
     while (1) {
         // get min-ase
-        for (i = 0; i < sgp->tol_rep_n; ++i) {
-            ;
+        if (min_rep = (get_min_se(ase_rep, sg_g_rep, sgp->tol_rep_n, cur_i)) >= 0) {
+            SE_t e = ase_rep[min_rep].se[cur_i[min_rep]];
+            int sg_i = e.sg_i, asm_i = e.asm_i;
+            SG *sg = sg_g_rep[min_rep].SG[sg_i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
+            // output SE
+            fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.se].start, n[e.se].end, n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
+            // output SE_CNT
         }
     }
+
+    for (i = 0; i < ase->se_n; ++i) {
+        int sg_i = ase->se[i].sg_i, asm_i = ase->se[i].asm_i;
+        SG *sg = sg_g->SG[sg_i]; SE_t e=ase->se[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
+        fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.se].start, n[e.se].end, n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
+        // up->se, se->down, up->down
+        uint32_t ij1_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.se].s_site_id, &hit);
+        uint32_t ij2_id = _err_sg_bin_sch_edge(sg, n[e.se].e_site_id, n[e.down].s_site_id, &hit);
+        uint32_t ej_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.down].s_site_id, &hit);
+        fprintf(out_fp[5], "%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[ij1_id].uniq_c, ed[ij2_id].uniq_c, ed[ej_id].uniq_c, ed[ij1_id].multi_c, ed[ij2_id].multi_c, ed[ej_id].multi_c);
+    }
+
+    free(cur_i);
+    for (i = 0; i < out_n; ++i) {
+        free(out_fn[i]); err_fclose(out_fp[i]);
+    } free(out_fn); free(out_fp);
 }
 
 int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, sg_para *sgp)
@@ -548,9 +592,9 @@ const struct option se_long_opt [] = {
 int pred_ase(int argc, char *argv[])
 {
     // same to pred_asm START
-    int c; char out_fn[1024]="";
+    int c; char out_pre[1024]="";
     sg_para *sgp = sg_init_para();
-	while ((c = getopt_long(argc, argv, "nNlsmM", se_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "nNlsmMo:", se_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'N': sgp->no_novel_com = 0; break;
@@ -558,7 +602,7 @@ int pred_ase(int argc, char *argv[])
             case 's': sgp->BAM_input= 0; break;
             case 'm': sgp->use_multi = 1; break;
             case 'M': sgp->merge_out = 1; break;
-            case 'o': strcpy(out_fn, optarg); break;
+            case 'o': strcpy(out_pre, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return pred_se_usage();
         }
@@ -625,12 +669,12 @@ int pred_ase(int argc, char *argv[])
         // same to pred_asm END
         ASE_t *ase = ase_init();
         asm2ase(sr_sg_g, asm_g, ase, sgp);
-        asm_output(in_name, out_fn, sr_sg_g, asm_g, sgp);
-        if (sgp->merge_out == 0) ase_output(in_name, sr_sg_g, ase, sgp);
+        asm_output(in_name, out_pre, sr_sg_g, asm_g, sgp);
+        if (sgp->merge_out == 0) ase_output(in_name, out_pre, sr_sg_g, ase, sgp);
         sr_sg_g_rep[i] = sr_sg_g; asm_g_rep[i] = asm_g; ase_rep[i] = ase;
     }
     if (sgp->merge_out == 1)
-        ase_merge_output(out_fn, sr_sg_g_rep, ase_rep, sgp);
+        ase_merge_output(out_fn, out_pre, sr_sg_g_rep, ase_rep, sgp);
 
     sg_free_group(sg_g);
     for (i = 0; i < sgp->tol_rep_n; ++i) {
