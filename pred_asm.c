@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include "pred_asm.h"
 #include "utils.h"
 #include "gtf.h"
 #include "build_sg.h"
@@ -20,8 +21,11 @@ int pred_asm_usage(void)
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel combination of known exons in the ASM. [False]\n");
-    err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [False]\n");
-    err_printf("                                   with splice-junction input, the .cnt output will have no count information.\n");
+    err_printf("         -t --read-type   [STR]    %s OR %s. -t %s will force filtering out reads mapped in improper pair. [%s].\n", PAIR, SING, PAIR, PAIR);
+    err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d].\n", ANCHOR_MIN_LEN);
+    err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
+    err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
+
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT. [in.bam/sj]\n");
     err_printf("                                   prefix.ASM & prefix.JCNT & prefix.ECNT\n");
@@ -29,9 +33,7 @@ int pred_asm_usage(void)
 	return 1;
 }
 
-/*****************************
- *       generate ASM        *
- *****************************/
+// init and free
 SGasm *sg_init_asm(uint32_t sg_id, uint32_t v_start, uint32_t v_end)
 {
     SGasm *sg_asm = (SGasm*)_err_malloc(sizeof(SGasm));
@@ -76,6 +78,9 @@ void sg_free_asm_group(SGasm_group *asm_g)
     free(asm_g);
 }
 
+/*****************************
+ *       generate ASM        *
+ *****************************/
 void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *exit_n)
 {
     int i, n1=0, n2=0;
@@ -252,11 +257,11 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
     if (strlen(prefix) == 0) {
         for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+30); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
         }
     } else {
         for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+            out_fn[i] = (char*)_err_malloc(strlen(prefix)+30); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
         }
     }
 
@@ -266,8 +271,8 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
 
     chr_name_t *cname = sg_g->cname;
     fprintf(out_fp[0], "ASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUCSC_POS\n");
-    fprintf(out_fp[1], "ASM_ID\tSG_ID\tSJ_ID\tSTRAND\tCHR\tINTRON_START\tINTRON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
-    fprintf(out_fp[2], "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\n");
+    fprintf(out_fp[1], "ASM_ID\tSG_ID\tSJ_ID\tSTRAND\tCHR\tINTRON_START\tINTRON_END\tUNIQ_READ_COUNT\n");
+    fprintf(out_fp[2], "ASM_ID\tSG_ID\tEXON_ID\tSTRAND\tCHR\tEXON_START\tEXON_END\tUNIQ_READ_COUNT\n");
     
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         SGasm *a = asm_g->sg_asm[i];
@@ -281,34 +286,14 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
         fprintf(out_fp[0], "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[a->v_start].node_e.start, node[a->v_start].node_e.end, node[a->v_end].node_e.start, node[a->v_end].node_e.end, a->node_n, cname->chr_name[sg->tid], start, end);
         for (j = 0; j < a->edge_n; ++j) {
             uint32_t e_id = a->edge_id[j];
-            fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], don_site[edge[e_id].don_site_id].site, acc_site[edge[e_id].acc_site_id].site,  edge[e_id].uniq_c, edge[e_id].multi_c);
+            fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\n", i, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], don_site[edge[e_id].don_site_id].site, acc_site[edge[e_id].acc_site_id].site,  edge[e_id].uniq_c);
         }
         for (j = 0; j < a->node_n; ++j) {
             uint32_t asm_n_id = a->node_id[j];
-            fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[asm_n_id].start, node[asm_n_id].end, node[asm_n_id].uniq_c, node[asm_n_id].multi_c);
+            fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\n", i, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[asm_n_id].start, node[asm_n_id].end, node[asm_n_id].uniq_c);
         }
     }
     
-    // for SE
-    /*for (i = 0; i < asm_g->sg_asm_n; ++i) {
-        if (asm_g->sg_asm[i]->node_n != 1) continue;
-        SGasm *sg_asm = asm_g->sg_asm[i];
-        sg_i = sg_asm->SG_id; SG *sg = sg_g->SG[sg_i]; 
-        SGnode *node = sg->node; SGsite *acc_site = sg->acc_site; SGsite *don_site = sg->don_site; SGedge *edge = sg->edge;
-        int start, end; uint32_t v_s = sg_asm->v_start, v_e = sg_asm->v_end;
-
-        if (node[v_s].node_e.start == 0) start = sg->start-100; else start = node[v_s].node_e.start;
-        if (node[v_e].node_e.end == MAX_SITE) end = sg->end+100; else end = node[v_e].node_e.end;
-
-        int ij_cnt, ej_cnt, e_cnt;
-        uint32_t i1_id = sg_asm->edge_id[0], i2_id = sg_asm->edge_id[1], ej_id = sg_asm->edge_id[2];
-        ij_cnt = edge[i1_id].uniq_c + edge[i2_id].uniq_c;
-        ej_cnt = edge[ej_id].uniq_c;
-        e_cnt = node[sg_asm->node_id[0]].uniq_c;
-
-        fprintf(jcnt_out, "%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[sg_asm->node_id[0]].start, node[sg_asm->node_id[0]].end,  ij_cnt+ej_cnt, e_cnt);
-    }*/
-    // END of SE
     for (i = 0; i < out_n; ++i) {
         free(out_fn[i]); err_fclose(out_fp[i]);
     }
@@ -320,7 +305,9 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
 const struct option asm_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
     { "novel-com", 0, NULL, 'N' },
-    { "sj-file", 0, NULL, 's' },
+    { "read-type", 1, NULL, 't' },
+    { "anchor-len", 1, NULL, 'a' },
+    { "intron-len", 1, NULL, 'i' },
     { "use-multi", 0, NULL, 'm' },
     { "output", 1, NULL, 'o' },
 
@@ -335,11 +322,16 @@ int pred_asm(int argc, char *argv[])
         switch (c) {
             case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'N': sgp->no_novel_com = 0; break;
-            case 's': sgp->BAM_input= 0; break;
             case 'm': sgp->use_multi = 1; break;
+            case 'M': sgp->merge_out = 1; break;
+            case 't': if (strcmp(optarg, "paired") == 0) sgp->read_type = 1;
+                      else if (strcmp(optarg, "single") == 0) sgp->read_type = 0;
+                      else return pred_asm_usage();
+                      break;
+            case 'a': sgp->anchor_len = atoi(optarg); break;
+            case 'i': sgp->intron_len = atoi(optarg); break;
             case 'o': strcpy(out_fn, optarg); break;
-            default: err_printf("Error: unknown option: %s.\n", optarg);
-                     return pred_asm_usage();
+            default: err_printf("Error: unknown option: %s.\n", optarg); return pred_asm_usage();
         }
     }
     if (argc - optind != 3) return pred_asm_usage();
@@ -354,12 +346,10 @@ int pred_asm(int argc, char *argv[])
     chr_name_t *cname = chr_name_init();
     // set cname if input is BAM
     samFile *in; bam_hdr_t *h; bam1_t *b;
-    if (sgp->BAM_input) {
-        if ((in = sam_open(sgp->in_name[0], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", sgp->in_name[0]);
-        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
-        bam_set_cname(h, cname);
-        bam_hdr_destroy(h); sam_close(in);
-    }
+    if ((in = sam_open(sgp->in_name[0], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", sgp->in_name[0]);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
+    bam_set_cname(h, cname);
+    bam_hdr_destroy(h); sam_close(in);
     // build splice-graph with GTF
     SG_group *sg_g;
     FILE *gtf_fp = xopen(argv[optind+1], "r");
@@ -374,33 +364,27 @@ int pred_asm(int argc, char *argv[])
         char *in_name = sgp->in_name[i];
         // get splice-junction
         int sj_n, sj_m; sj_t *sj_group;
-        if (sgp->BAM_input) { // based on .bam file
-            b = bam_init1(); 
-            if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
-            if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
-            sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
-            // FIXME bam2itv.tmp
-            sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m);
-            bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
-        } else  { // based on .sj file
-            FILE *sj_fp = xopen(in_name, "r");
-            sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
-            sj_n = read_sj_group(sj_fp, sg_g->cname, &sj_group, sj_m);
-            err_fclose(sj_fp);
-        }
+        b = bam_init1(); 
+        if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
+        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
+        sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
+        // FIXME bam2itv.tmp
+        sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
+        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+
         // predict splice-graph with GTF-based splice-graph and splice-junciton
         sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
+        free(sj_group);
 
         // generate ASM with short-read splice-graph
         asm_g = gen_asm(sr_sg_g, sgp);
 
         // calculate number of reads falling into exon-body
-        if (sgp->BAM_input) {
-            samFile *in; bam_hdr_t *h; bam1_t *b;
-            in = sam_open(in_name, "rb"); h = sam_hdr_read(in); b = bam_init1(); 
-            cal_asm_exon_cnt(sr_sg_g, in, h, b);
-            bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
-        }
+        samFile *in; bam_hdr_t *h; bam1_t *b;
+        in = sam_open(in_name, "rb"); h = sam_hdr_read(in); b = bam_init1(); 
+        cal_asm_exon_cnt(sr_sg_g, in, h, b);
+        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+        // output asm
         asm_output(in_name, out_fn, sr_sg_g, asm_g, sgp);
     }
     sg_free_group(sg_g);

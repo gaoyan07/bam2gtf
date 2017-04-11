@@ -10,7 +10,7 @@
 #include "bam2sj.h"
 
 extern const char PROG[20];
-int pred_se_usage(void)
+int asm2ase_usage(void)
 {
     err_printf("\n");
     err_printf("Usage:   %s ase [option] <ref.fa> <in.gtf> <in.bam/sj>\n\n", PROG);
@@ -20,9 +20,10 @@ int pred_se_usage(void)
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel combination of known sites with known junctions in the ASM. [False]\n");
+    err_printf("         -t --read-type   [STR]    %s OR %s. -t %s will force filtering out reads mapped in improper pair. [%s].\n", PAIR, SING, PAIR, PAIR);
+    err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d].\n", ANCHOR_MIN_LEN);
+    err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
     err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
-    err_printf("         -s --sj-file              input with splice-junction file instead of BAM file. [False]\n");
-    err_printf("                                   with splice-junction input, the .cnt output will have no count information.\n");
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT & ASE. [in.bam/sj]\n");
     err_printf("         -M --merge                merge multi-sample/replicate output\n");
@@ -394,11 +395,11 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
 
     if (strlen(prefix) == 0) {
         for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+30); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
         }
     } else {
         for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+            out_fn[i] = (char*)_err_malloc(strlen(prefix)+30); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
         }
     }
 
@@ -407,22 +408,23 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
 
     chr_name_t *cname = sg_g->cname;
     // head-line
-    // SE/A5SS/A3SS/MXE/RI
-    fprintf(out_fp[0], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSE_ES\tSE_EE\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
-    fprintf(out_fp[1], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSHORT_ES\tSHORT_EE\tLONG_ES\tLONG_EE\tDOWN_ES\tDOWN_EE\n");
-    fprintf(out_fp[2], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tLOND_ES\tLONG_EE\tSHORT_ES\tSHORT_EE\n");
-    fprintf(out_fp[3], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tFIRST_ES\tFIRST_EE\tSECOND_ES\tSECOND_EE\tDOWN_ES\tDOWN_EE\n");
-    fprintf(out_fp[4], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
-    // SE/A5SS/A3SS/MXE/RI_CNT
-    fprintf(out_fp[5], "ID\tSTRAND\tCHR\tIJ1_UCNT\tIJ2_UCNT\tEJ_UCNT\tIJ1_MCNT\tIJ2_MCNT\tEJ_MCNT\n");
-    fprintf(out_fp[6], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\tLO_MCNT\tSH_MCNT\n");
-    fprintf(out_fp[7], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\tLO_MCNT\tSH_MCNT\n");
-    fprintf(out_fp[8], "ID\tSTRAND\tCHR\tFIR1_UCNT\tFIR2_UCNT\tSEC1_UCNT\tSEC2_UCNT\tFIR1_MCNT\tFIR2_MCNT\tSEC1_MCNT\tSEC2_MCNT\n");
-    fprintf(out_fp[9], "ID\tSTRAND\tCHR\tRE_UCNT\tSJ_UCNT\tRE_MCNT\tSJ_MCNT\n");
-
+    {
+        // SE/A5SS/A3SS/MXE/RI
+        fprintf(out_fp[0], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSE_ES\tSE_EE\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
+        fprintf(out_fp[1], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSHORT_ES\tSHORT_EE\tLONG_ES\tLONG_EE\tDOWN_ES\tDOWN_EE\n");
+        fprintf(out_fp[2], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tLOND_ES\tLONG_EE\tSHORT_ES\tSHORT_EE\n");
+        fprintf(out_fp[3], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tFIRST_ES\tFIRST_EE\tSECOND_ES\tSECOND_EE\tDOWN_ES\tDOWN_EE\n");
+        fprintf(out_fp[4], "ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tUP_ES\tUP_EE\tDOWN_ES\tDOWN_EE\n");
+        // SE/A5SS/A3SS/MXE/RI_CNT
+        fprintf(out_fp[5], "ID\tSTRAND\tCHR\tIJ1_UCNT\tIJ2_UCNT\tEJ_UCNT\n");
+        fprintf(out_fp[6], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\n");
+        fprintf(out_fp[7], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\n");
+        fprintf(out_fp[8], "ID\tSTRAND\tCHR\tFIR1_UCNT\tFIR2_UCNT\tSEC1_UCNT\tSEC2_UCNT\n");
+        fprintf(out_fp[9], "ID\tSTRAND\tCHR\tRE_UCNT\tSJ_UCNT\n");
+    }
 
     int hit;
-    for (i = 0; i < ase->se_n; ++i) {
+    for (i = 0; i < ase->se_n; ++i) { // SE
         int sg_i = ase->se[i].sg_i, asm_i = ase->se[i].asm_i;
         SG *sg = sg_g->SG[sg_i]; SE_t e=ase->se[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
         fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.se].start, n[e.se].end, n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
@@ -430,39 +432,53 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
         uint32_t ij1_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.se].s_site_id, &hit);
         uint32_t ij2_id = _err_sg_bin_sch_edge(sg, n[e.se].e_site_id, n[e.down].s_site_id, &hit);
         uint32_t ej_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.down].s_site_id, &hit);
-        fprintf(out_fp[5], "%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[ij1_id].uniq_c, ed[ij2_id].uniq_c, ed[ej_id].uniq_c, ed[ij1_id].multi_c, ed[ij2_id].multi_c, ed[ej_id].multi_c);
+        int uniq_c1 = 0, uniq_c2 = 0, uniq_c = 0, j; 
+        for (j = 0; j < ed[ij1_id].uniq_c; ++j) if (ed[ij1_id].left_anc_len[j] <= (n[e.up].end-n[e.up].start+1) && ed[ij1_id].right_anc_len[j] <= (n[e.se].end-n[e.se].start+1)) uniq_c1++;
+        for (j = 0; j < ed[ij2_id].uniq_c; ++j) if (ed[ij2_id].left_anc_len[j] <= (n[e.se].end-n[e.se].start+1) && ed[ij2_id].right_anc_len[j] <= (n[e.down].end-n[e.down].start+1)) uniq_c2++;
+        for (j = 0; j < ed[ej_id].uniq_c; ++j) if (ed[ej_id].left_anc_len[j] <= (n[e.up].end-n[e.up].start+1) && ed[ej_id].right_anc_len[j] <= (n[e.down].end-n[e.down].start+1)) uniq_c++;
+        fprintf(out_fp[5], "%d\t%c\t%s\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], uniq_c1, uniq_c2, uniq_c);
     }
-    for (i = 0; i < ase->a5ss_n; ++i) {
+    for (i = 0; i < ase->a5ss_n; ++i) { // A5SS
         int sg_i = ase->a5ss[i].sg_i, asm_i = ase->a5ss[i].asm_i;
         SG *sg = sg_g->SG[sg_i]; A5SS_t e = ase->a5ss[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
         fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.shor].start, n[e.shor].end, n[e.lon].start, n[e.lon].end, n[e.down].start, n[e.down].end);
         // lon -> down, shor -> down
         uint32_t lon_id, shor_id;
+        int lon_uniq_c=0, shor_uniq_c=0, j;
         if (sg->is_rev == 0) { // forward
             lon_id = _err_sg_bin_sch_edge(sg, n[e.lon].e_site_id, n[e.down].s_site_id, &hit); 
             shor_id = _err_sg_bin_sch_edge(sg, n[e.shor].e_site_id, n[e.down].s_site_id, &hit); 
+            for (j = 0; j < ed[lon_id].uniq_c; ++j) if (ed[lon_id].left_anc_len[j] <= (n[e.lon].end-n[e.lon].start+1) && ed[lon_id].right_anc_len[j] <= (n[e.down].end-n[e.down].start+1)) lon_uniq_c++;
+            for (j = 0; j < ed[shor_id].uniq_c; ++j) if (ed[shor_id].left_anc_len[j] <= (n[e.shor].end-n[e.shor].start+1) && ed[shor_id].right_anc_len[j] <= (n[e.down].end-n[e.down].start+1)) shor_uniq_c++;
         } else { // reverse
             lon_id = _err_sg_bin_sch_edge(sg, n[e.down].e_site_id, n[e.lon].s_site_id, &hit); 
             shor_id = _err_sg_bin_sch_edge(sg, n[e.down].e_site_id, n[e.shor].s_site_id, &hit); 
+            for (j = 0; j < ed[lon_id].uniq_c; ++j) if (ed[lon_id].left_anc_len[j] <= (n[e.down].end-n[e.down].start+1) && ed[lon_id].right_anc_len[j] <= (n[e.lon].end-n[e.lon].start+1)) lon_uniq_c++;
+            for (j = 0; j < ed[shor_id].uniq_c; ++j) if (ed[shor_id].left_anc_len[j] <= (n[e.down].end-n[e.down].start+1) && ed[shor_id].right_anc_len[j] <= (n[e.shor].end-n[e.shor].start+1)) shor_uniq_c++;
         }
-        fprintf(out_fp[6], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[lon_id].uniq_c, ed[shor_id].uniq_c, ed[lon_id].multi_c, ed[shor_id].multi_c);
+        fprintf(out_fp[6], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], lon_uniq_c, shor_uniq_c);
     }
-    for (i = 0; i < ase->a3ss_n; ++i) {
+    for (i = 0; i < ase->a3ss_n; ++i) { // A3SS
         int sg_i = ase->a3ss[i].sg_i, asm_i = ase->a3ss[i].asm_i;
         SG *sg = sg_g->SG[sg_i]; A3SS_t e = ase->a3ss[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
         fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.lon].start, n[e.lon].end, n[e.shor].start, n[e.shor].end);
         // up -> lon, up -> shor
         uint32_t lon_id, shor_id;
+        int lon_uniq_c=0, shor_uniq_c=0, j;
         if (sg->is_rev == 0) { // forward
             lon_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.lon].s_site_id, &hit); 
             shor_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.shor].s_site_id, &hit); 
+            for (j = 0; j < ed[lon_id].uniq_c; ++j) if (ed[lon_id].left_anc_len[j] <= (n[e.up].end-n[e.up].start+1) && ed[lon_id].right_anc_len[j] <= (n[e.lon].end-n[e.lon].start+1)) lon_uniq_c++;
+            for (j = 0; j < ed[shor_id].uniq_c; ++j) if (ed[shor_id].left_anc_len[j] <= (n[e.up].end-n[e.up].start+1) && ed[shor_id].right_anc_len[j] <= (n[e.shor].end-n[e.shor].start+1)) shor_uniq_c++;
         } else { // reverse
             lon_id = _err_sg_bin_sch_edge(sg, n[e.lon].e_site_id, n[e.up].s_site_id, &hit); 
             shor_id = _err_sg_bin_sch_edge(sg, n[e.shor].e_site_id, n[e.up].s_site_id, &hit); 
+            for (j = 0; j < ed[lon_id].uniq_c; ++j) if (ed[lon_id].left_anc_len[j] <= (n[e.lon].end-n[e.lon].start+1) && ed[lon_id].right_anc_len[j] <= (n[e.up].end-n[e.up].start+1)) lon_uniq_c++;
+            for (j = 0; j < ed[shor_id].uniq_c; ++j) if (ed[shor_id].left_anc_len[j] <= (n[e.shor].end-n[e.shor].start+1) && ed[shor_id].right_anc_len[j] <= (n[e.up].end-n[e.up].start+1)) shor_uniq_c++;
         }
-        fprintf(out_fp[7], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[lon_id].uniq_c, ed[shor_id].uniq_c, ed[lon_id].multi_c, ed[shor_id].multi_c);
+        fprintf(out_fp[7], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], lon_uniq_c, shor_uniq_c);
     }
-    for (i = 0; i < ase->mxe_n; ++i) {
+    for (i = 0; i < ase->mxe_n; ++i) { // MXE
         int sg_i = ase->mxe[i].sg_i, asm_i = ase->mxe[i].asm_i;
         SG *sg = sg_g->SG[sg_i]; MXE_t e = ase->mxe[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
         fprintf(out_fp[3], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.fir].start, n[e.fir].end, n[e.sec].start, n[e.sec].end, n[e.down].start, n[e.down].end);
@@ -472,15 +488,23 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
         uint32_t fir2_id = _err_sg_bin_sch_edge(sg, n[e.fir].e_site_id, n[e.down].s_site_id, &hit);
         uint32_t sec1_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.sec].s_site_id, &hit);
         uint32_t sec2_id = _err_sg_bin_sch_edge(sg, n[e.sec].e_site_id, n[e.down].s_site_id, &hit);
-        fprintf(out_fp[8], "%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], ed[fir1_id].uniq_c, ed[fir2_id].uniq_c, ed[sec1_id].uniq_c, ed[sec2_id].uniq_c, ed[fir1_id].multi_c, ed[fir2_id].multi_c, ed[sec1_id].multi_c, ed[sec2_id].multi_c);
+        int fir1_uniq_c=0, fir2_uniq_c=0, sec1_uniq_c=0, sec2_uniq_c=0, j;
+        for (j = 0; j < ed[fir1_id].uniq_c; ++j) if (ed[fir1_id].left_anc_len[j] <= (n[e.up].end-n[e.up].start+1) && ed[fir1_id].right_anc_len[j] <= (n[e.fir].end-n[e.fir].start+1)) fir1_uniq_c++;
+        for (j = 0; j < ed[fir2_id].uniq_c; ++j) if (ed[fir2_id].left_anc_len[j] <= (n[e.fir].end-n[e.fir].start+1) && ed[fir2_id].right_anc_len[j] <= (n[e.fir].end-n[e.fir].start+1)) fir2_uniq_c++;
+        for (j = 0; j < ed[sec1_id].uniq_c; ++j) if (ed[sec1_id].left_anc_len[j] <= (n[e.up].end-n[e.up].start+1) && ed[sec1_id].right_anc_len[j] <= (n[e.sec].end-n[e.sec].start+1)) sec1_uniq_c++;
+        for (j = 0; j < ed[sec2_id].uniq_c; ++j) if (ed[sec2_id].left_anc_len[j] <= (n[e.sec].end-n[e.sec].start+1) && ed[sec2_id].right_anc_len[j] <= (n[e.down].end-n[e.down].start+1)) sec2_uniq_c++;
+
+        fprintf(out_fp[8], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], fir1_uniq_c, fir2_uniq_c, sec1_uniq_c, sec2_uniq_c);
     }
-    for (i = 0; i < ase->ri_n; ++i) {
+    for (i = 0; i < ase->ri_n; ++i) { // RI
         int sg_i = ase->ri[i].sg_i, asm_i = ase->ri[i].asm_i;
         SG *sg = sg_g->SG[sg_i]; RI_t e = ase->ri[i]; SGnode *n = sg->node; SGedge *ed = sg->edge;
         fprintf(out_fp[4], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
         // exon_cnt, up -> down
         uint32_t sj_id = _err_sg_bin_sch_edge(sg, n[e.up].e_site_id, n[e.down].s_site_id, &hit);
-        fprintf(out_fp[9], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.in].uniq_c-n[e.up].uniq_c-n[e.down].uniq_c, ed[sj_id].uniq_c, n[e.in].multi_c-n[e.up].multi_c-n[e.down].multi_c, ed[sj_id].multi_c);
+        int uniq_c=0, j;
+        for (j = 0; j < ed[sj_id].uniq_c; ++j) if (ed[sj_id].left_anc_len[j] <= (n[e.up].end-n[e.up].start+1) && ed[sj_id].right_anc_len[j] <= (n[e.down].end-n[e.down].start+1)) uniq_c++;
+        fprintf(out_fp[9], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.in].uniq_c-n[e.up].uniq_c-n[e.down].uniq_c, uniq_c);
     }
 
     for (i = 0; i < out_n; ++i) {
@@ -488,7 +512,7 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
     } free(out_fn); free(out_fp);
 }
 
-void ase_merge_output(char *in_fn, char *prefix, SG_group *sg_g_rep, ASE_t *ase_rep, sg_para *sgp)
+/*void ase_merge_output(char *prefix, SG_group *sg_g_rep, ASE_t *ase_rep, sg_para *sgp)
 {
     int i;
     int out_n=10;
@@ -500,14 +524,8 @@ void ase_merge_output(char *in_fn, char *prefix, SG_group *sg_g_rep, ASE_t *ase_
     if (sgp->only_novel==1) strcat(suff, ".novel");
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
 
-    if (strlen(prefix) == 0) {
-        for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+10); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
-        }
-    } else {
-        for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
-        }
+    for (i = 0; i < out_n; ++i) {
+        out_fn[i] = (char*)_err_malloc(strlen(prefix)+10); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
     }
 
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
@@ -558,7 +576,7 @@ void ase_merge_output(char *in_fn, char *prefix, SG_group *sg_g_rep, ASE_t *ase_
     for (i = 0; i < out_n; ++i) {
         free(out_fn[i]); err_fclose(out_fp[i]);
     } free(out_fn); free(out_fp);
-}
+}*/
 
 int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, sg_para *sgp)
 {
@@ -580,8 +598,10 @@ int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, sg_para *sgp)
 const struct option se_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
     { "novel-com", 0, NULL, 'N' },
+    { "read-type", 1, NULL, 't' },
+    { "anchor-len", 1, NULL, 'a' },
+    { "intron-len", 1, NULL, 'i' },
     { "only-novel", 0, NULL, 'l' },
-    { "sj-file", 0, NULL, 's' },
     { "use-multi", 0, NULL, 'm' },
     { "output", 1, NULL, 'o' },
     { "merge", 0, NULL, 'M' },
@@ -594,37 +614,39 @@ int pred_ase(int argc, char *argv[])
     // same to pred_asm START
     int c; char out_pre[1024]="";
     sg_para *sgp = sg_init_para();
-	while ((c = getopt_long(argc, argv, "nNlsmMo:", se_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "nNlmMt:a:o:", se_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'N': sgp->no_novel_com = 0; break;
             case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
-            case 's': sgp->BAM_input= 0; break;
             case 'm': sgp->use_multi = 1; break;
             case 'M': sgp->merge_out = 1; break;
+            case 't': if (strcmp(optarg, "paired") == 0) sgp->read_type = 1;
+                      else if (strcmp(optarg, "single") == 0) sgp->read_type = 0;
+                      else return asm2ase_usage();
+                      break;
+            case 'a': sgp->anchor_len = atoi(optarg); break;
+            case 'i': sgp->intron_len = atoi(optarg); break;
             case 'o': strcpy(out_pre, optarg); break;
-            default: err_printf("Error: unknown option: %s.\n", optarg);
-                     return pred_se_usage();
+            default: err_printf("Error: unknown option: %s.\n", optarg); return asm2ase_usage();
         }
     }
-    if (argc - optind != 3) return pred_se_usage();
+    if (argc - optind != 3) return asm2ase_usage();
 
     gzFile genome_fp = gzopen(argv[optind], "r");
     if (genome_fp == NULL) err_fatal(__func__, "Can not open genome file. %s\n", argv[optind]);
     int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
 
     // parse input name
-    if (sg_par_input(sgp, argv[optind+2]) <= 0) return pred_se_usage();
+    if (sg_par_input(sgp, argv[optind+2]) <= 0) return asm2ase_usage();
     
     chr_name_t *cname = chr_name_init();
-    // set cname if input is BAM
+    // set cname
     samFile *in; bam_hdr_t *h; bam1_t *b;
-    if (sgp->BAM_input) {
-        if ((in = sam_open(sgp->in_name[0], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", sgp->in_name[0]);
-        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
-        bam_set_cname(h, cname);
-        bam_hdr_destroy(h); sam_close(in);
-    }
+    if ((in = sam_open(sgp->in_name[0], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", sgp->in_name[0]);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
+    bam_set_cname(h, cname);
+    bam_hdr_destroy(h); sam_close(in);
     // build splice-graph with GTF
     SG_group *sg_g;
     FILE *gtf_fp = xopen(argv[optind+1], "r");
@@ -639,42 +661,35 @@ int pred_ase(int argc, char *argv[])
         char *in_name = sgp->in_name[i];
         // get splice-junction
         int sj_n, sj_m; sj_t *sj_group;
-        if (sgp->BAM_input) { // based on .bam file
-            b = bam_init1(); 
-            if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
-            if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
-            sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
-            // FIXME bam2itv.tmp
-            sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m);
-            bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
-        } else  { // based on .sj file
-            FILE *sj_fp = xopen(in_name, "r");
-            sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
-            sj_n = read_sj_group(sj_fp, sg_g->cname, &sj_group, sj_m);
-            err_fclose(sj_fp);
-        }
+        // based on .bam file
+        b = bam_init1(); 
+        if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
+        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
+        sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
+        // FIXME bam2itv.tmp
+        sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
+        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
         // predict splice-graph with GTF-based splice-graph and splice-junciton
         SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
+        int j; for (j = 0; j < sj_n; ++j) free((sj_group+j)->left_anc_len), free((sj_group+j)->right_anc_len); free(sj_group);
 
         // generate ASM with short-read splice-graph
         SGasm_group *asm_g = gen_asm(sr_sg_g, sgp);
 
         // calculate number of reads falling into exon-body
-        if (sgp->BAM_input) {
-            samFile *in; bam_hdr_t *h; bam1_t *b;
-            in = sam_open(in_name, "rb"); h = sam_hdr_read(in); b = bam_init1(); 
-            cal_asm_exon_cnt(sr_sg_g, in, h, b);
-            bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
-        }
+        samFile *in; bam_hdr_t *h; bam1_t *b;
+        in = sam_open(in_name, "rb"); h = sam_hdr_read(in); b = bam_init1(); 
+        cal_asm_exon_cnt(sr_sg_g, in, h, b);
+        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+        // output asm
+        asm_output(in_name, out_pre, sr_sg_g, asm_g, sgp);
         // same to pred_asm END
         ASE_t *ase = ase_init();
         asm2ase(sr_sg_g, asm_g, ase, sgp);
-        asm_output(in_name, out_pre, sr_sg_g, asm_g, sgp);
         if (sgp->merge_out == 0) ase_output(in_name, out_pre, sr_sg_g, ase, sgp);
         sr_sg_g_rep[i] = sr_sg_g; asm_g_rep[i] = asm_g; ase_rep[i] = ase;
     }
-    if (sgp->merge_out == 1)
-        ase_merge_output(out_fn, out_pre, sr_sg_g_rep, ase_rep, sgp);
+    //if (sgp->merge_out == 1) ase_merge_output(out_pre, sr_sg_g_rep, ase_rep, sgp);
 
     sg_free_group(sg_g);
     for (i = 0; i < sgp->tol_rep_n; ++i) {

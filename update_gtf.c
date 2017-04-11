@@ -14,13 +14,11 @@
 #include "htslib/htslib/sam.h"
 #include "utils.h"
 #include "gtf.h"
+#include "bam2gtf.h"
 
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
 
 extern const char PROG[20];
-extern int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_trans_t *T);
-extern int read_intron_group(intron_group_t *I, FILE *fp);
-extern int read_anno_trans1(read_trans_t *T, FILE *fp);
 
 int update_gtf_usage(void)
 {
@@ -30,8 +28,9 @@ int update_gtf_usage(void)
     err_printf("Options:\n\n");
     err_printf("         -m --input-mode  [STR]    format of input file <in.bam/in.gtf>, BAM file(b) or GTF file(g). [b]\n");
     err_printf("         -b --bam         [STR]    for GTF input <in.gtf>, BAM file is needed to obtain BAM header information. [NULL]\n");
-    err_printf("         -i --intron      [STR]    intron information file output by STAR(*.out.tab). [NONE]\n");
+    err_printf("         -I --intron      [STR]    intron information file output by STAR(*.out.tab). [NONE]\n");
     err_printf("         -e --min-exon    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
+    err_printf("         -i --intron-len  [INT]    minimum length of intron. [%d]\n", INTRON_MIN_LEN);
     err_printf("         -d --distance    [INT]    consider same if distance between two splice site is not bigger than d. [%d]\n", SPLICE_DISTANCE);
     err_printf("         -l --full-length [INT]    level of strict criterion for considering full-length transcript. \n");
     err_printf("                                   (1->5, most strict->most relaxed) [%d]\n", 5);
@@ -514,8 +513,9 @@ int read_anno_trans(FILE *fp, bam_hdr_t *h, read_trans_t *T)
 const struct option update_long_opt [] = {
     { "input-mode", 1, NULL, 'm' },
     { "bam", 1, NULL, 'b' },
-    { "intron", 1, NULL, 'i' },
+    { "intron", 1, NULL, 'I' },
     { "min-exon", 1, NULL, 'e' },
+    { "intron-len", 1, NULL, 'i' },
     { "distance", 1, NULL, 'd' },
     { "unclassified", 0, NULL, 'u' },
     { "source", 1, NULL, 's' },
@@ -526,21 +526,22 @@ const struct option update_long_opt [] = {
 
 int update_gtf(int argc, char *argv[])
 {
-    int c; int mode=0, exon_min = INTER_EXON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[100]="NONE", bamfn[100]; FILE *new_gfp=stdout, *full_gfp=NULL, *intron_fp=NULL;
-	while ((c = getopt_long(argc, argv, "m:b:i:e:d:l:us:f:", update_long_opt, NULL)) >= 0) {
+    int c; int mode=0, exon_min = INTER_EXON_MIN_LEN, intron_len = INTRON_MIN_LEN, dis=SPLICE_DISTANCE, l=5, uncla = 0; char src[100]="NONE", bamfn[100]; FILE *new_gfp=stdout, *full_gfp=NULL, *intron_fp=NULL;
+	while ((c = getopt_long(argc, argv, "m:b:i:I:e:d:l:us:f:", update_long_opt, NULL)) >= 0) {
         switch(c)
         {
             case 'm': if (optarg[0] == 'b') mode=0; else if (optarg[0] == 'g') mode=1; else return update_gtf_usage();
             case 'b': strcpy(bamfn, optarg); break;
-            case 'i': if ((intron_fp = fopen(optarg, "r")) == NULL) {
+            case 'I': if ((intron_fp = fopen(optarg, "r")) == NULL) {
                           err_fatal(__func__, "Can not open intron file \"%s\"\n", optarg);
                           return update_gtf_usage();
                       } 
                       break;
             case 'e': exon_min = atoi(optarg); break;
+            case 'i': intron_len = atoi(optarg); break;
             case 'd': dis = atoi(optarg); break;
             case 'l': l = atoi(optarg); break;
-            case 'u': uncla = 1;
+            case 'u': uncla = 1; break;
             case 's': strcpy(src, optarg); break;
             case 'f': if ((full_gfp = fopen(optarg, "w")) == NULL) {
                           err_fatal(__func__, "Can not open full-gtf output file \"%s\"\n", optarg);
@@ -567,7 +568,7 @@ int update_gtf(int argc, char *argv[])
         if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
         if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
         b = bam_init1(); 
-        read_bam_trans(in, h, b, exon_min, bam_T);
+        read_bam_trans(in, h, b, exon_min, intron_len, bam_T);
         bam_destroy1(b);
     } else { // gtf input
         if ((in = sam_open(bamfn, "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", bamfn);

@@ -1,9 +1,7 @@
 /* bam2gtf.c
  *   generate junction information based on sam/bam file
  *   currently, only for single-end long read data
- * 
- * Author:  Yan Gao
- * Contact: yangao07@hit.edu.cn                             */
+ */
 
 #include <stdio.h>
 #include <unistd.h>
@@ -22,12 +20,13 @@ int bam2gtf_usage(void)
     err_printf("Usage:   %s bam2gtf [option] <in.bam> > out.gtf\n\n", PROG);
     err_printf("Options:\n\n");
     err_printf("         -e --exon-min    [INT]    minimum length of internal exon. [%d]\n", INTER_EXON_MIN_LEN);
+    err_printf("         -i --intron-len  [INT]    minimum length of intron. [%d]\n", INTRON_MIN_LEN);
     err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
 	err_printf("\n");
 	return 1;
 }
 
-int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar, int exon_min)
+int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar, int exon_min, int intron_len)
 {
     t->exon_n = 0;
     int32_t tid = b->core.tid; int32_t start = b->core.pos+1, end = start-1;/*1-base*/ uint8_t is_rev, *p;
@@ -40,7 +39,7 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar, int exon_min)
         int l = bam_cigar_oplen(c[i]);
         switch (bam_cigar_op(c[i])) {
             case BAM_CREF_SKIP:  // N(0 1)
-                if (l >= INTRON_MIN_LEN) {
+                if (l >= intron_len) {
                     if (t->exon_n == 0 || (end-start+1) >= exon_min)
                         add_exon(t, tid, start, end, is_rev);
                     start = end + l + 1;
@@ -71,21 +70,21 @@ int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, uint32_t n_cigar, int exon_min)
     return 0;
 }
 
-int gen_trans(bam1_t *b, trans_t *t, int exon_min)
+int gen_trans(bam1_t *b, trans_t *t, int exon_min, int intron_len)
 {
     if (bam_unmap(b)) return 0;
 
     uint32_t *c = bam_get_cigar(b), n_cigar = b->core.n_cigar;
-    gen_exon(t, b, c, n_cigar, exon_min);
+    gen_exon(t, b, c, n_cigar, exon_min, intron_len);
     return 1;
 }
 
-int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_trans_t *T)
+int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, int intron_len, read_trans_t *T)
 {
     trans_t *t = trans_init(1);
     int sam_ret = sam_read1(in, h, b) ;
     while (sam_ret >= 0) {
-        gen_trans(b, t, exon_min); set_trans(t, bam_get_qname(b));
+        gen_trans(b, t, exon_min, intron_len); set_trans(t, bam_get_qname(b));
         add_read_trans(T, *t); set_trans(T->t+T->trans_n-1, bam_get_qname(b));
         // for bam_trans
         T->t[T->trans_n-1].novel_exon_map = (uint8_t*)calloc(t->exon_n, sizeof(uint8_t));
@@ -101,6 +100,7 @@ int read_bam_trans(samFile *in, bam_hdr_t *h, bam1_t *b, int exon_min, read_tran
 
 const struct option bam2gtf_long_opt [] = {
     { "exon-min", 1, NULL, 'e' },
+    { "intron-len", 1, NULL, 'i' },
     { "source", 1, NULL, 's' },
 
     { 0, 0, 0, 0}
@@ -108,14 +108,15 @@ const struct option bam2gtf_long_opt [] = {
 
 int bam2gtf(int argc, char *argv[])
 {
-    int c, exon_min=INTER_EXON_MIN_LEN;
+    int c, exon_min=INTER_EXON_MIN_LEN, intron_len=INTRON_MIN_LEN;
     char src[100]="NONE";
-	while ((c = getopt_long(argc, argv, "s:e:", bam2gtf_long_opt, NULL)) >= 0)
+	while ((c = getopt_long(argc, argv, "s:e:i:", bam2gtf_long_opt, NULL)) >= 0)
     {
         switch(c)
         {
             case 'e': exon_min = atoi(optarg); break;
             case 's': strcpy(src, optarg); break;
+            case 'i': intron_len = atoi(optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg);
                      return bam2gtf_usage();
         }
@@ -133,7 +134,7 @@ int bam2gtf(int argc, char *argv[])
     trans_t *t = trans_init(1);
 
     while (sam_read1(in, h, b) >= 0) {
-        if (gen_trans(b, t, exon_min)) set_trans(t, bam_get_qname(b));
+        if (gen_trans(b, t, exon_min, intron_len)) set_trans(t, bam_get_qname(b));
         print_trans(*t, h, src, stdout);
     }
 

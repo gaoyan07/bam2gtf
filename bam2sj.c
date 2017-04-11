@@ -4,11 +4,12 @@
 #include <getopt.h>
 #include "htslib/htslib/sam.h"
 #include "bam2gtf.h"
+#include "bam2sj.h"
 #include "utils.h"
 #include "gtf.h"
 #include "kseq.h"
+#include "build_sg.h"
 
-KSEQ_INIT(gzFile, gzread)
 extern const char PROG[20];
 const int intron_motif_n = 6;
 const char intron_motif[6][10] = {
@@ -26,14 +27,20 @@ int bam2sj_usage(void)
     err_printf("Usage:   %s bam2sj [option] <genome.fa> <in.bam> > out.sj\n\n", PROG);
     err_printf("Note:    in.bam should be sorted in advance\n\n");
     err_printf("Options:\n\n");
-    err_printf("         -g --gtf-anno    [INT]    GTF annotation file. [NULL]\n");
+    err_printf("         -t --read-type   [STR]    %s OR %s. -t %s will force filtering out reads mapped in improper pair. [%s]\n", PAIR, SING, PAIR, PAIR);
+    err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d]\n", ANCHOR_MIN_LEN);
+    err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
+    //err_printf("         -g --gtf-anno    [INT]    GTF annotation file. [NULL]\n");
     //err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
 	err_printf("\n");
 	return 1;
 }
 
 const struct option bam2sj_long_opt [] = {
-    { "gtf-anno", 1, NULL, 'g' },
+    //{ "gtf-anno", 1, NULL, 'g' },
+    { "read-type", 1, NULL, 't' },
+    { "anchor-len", 1, NULL, 'a' },
+    { "intron-len", 1, NULL, 'i' },
 
     { 0, 0, 0, 0}
 };
@@ -53,16 +60,6 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t ac
     return 0;
 }
 
-uint8_t bam_is_uniq_NH(bam1_t *b)
-{
-    uint8_t *p = bam_aux_get(b, "NH");
-    if (p == 0) {
-        err_printf("No \"NH\" tag.\n");
-        return 0;
-    }
-    return (bam_aux2i(p) == 1);
-}
-
 uint8_t intr_deri_str(kseq_t *seq, int seq_n, int32_t tid, int32_t start, int32_t end, uint8_t *motif_i)
 {
     *motif_i = 0;
@@ -80,33 +77,34 @@ uint8_t intr_deri_str(kseq_t *seq, int seq_n, int32_t tid, int32_t start, int32_
     return 0;
 }
 
-int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m)
+int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
 {
     if (bam_unmap(b)) return 0;
-    uint32_t n_cigar, *c;
-    if ((n_cigar = b->core.n_cigar) < 3) return 0;
-    c = bam_get_cigar(b);
+    uint32_t n_cigar = b->core.n_cigar, *c = bam_get_cigar(b);
+    if (bam_is_sim(c, n_cigar) == 0) return 0; // XXX simple xMxNxM (1)
 
-    int32_t tid = b->core.tid, end = b->core.pos;/*1-base*/
-    uint8_t strand, motif_i, is_uniq; 
-    is_uniq = bam_is_uniq_NH(b);
+    int32_t tid = b->core.tid, start = b->core.pos+1, end = b->core.pos;/*1-base*/
+    uint8_t strand, motif_i, is_uniq, is_prop; 
+    if ((is_uniq = bam_is_uniq_NH(b)) == 0) return 0; // unique (2)
+    is_prop = bam_is_prop(b);    // prop-pair (3)
+    if (sgp->read_type == PAIR_T && is_prop == 0) return 0;
     
-    uint32_t i;
-    int sj_n = 0;
+    uint32_t i; int min_intr_len = sgp->intron_len; int sj_n = 0;
 
-    for (i = 0; i < n_cigar-1; ++i) {
+    for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
         switch (bam_cigar_op(c[i])) {
             case BAM_CREF_SKIP: // N(0 1)
-                if (l >= INTRON_MIN_LEN) {
+                if (l >= min_intr_len) {
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
                     add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq);
+                    if (sj_n > 1) sj[sj_n-2]->right_anc_len[0] = end-start+1;
+                    sj[sj_n-1]->left_anc_len[0] = end-start+1;
+                    start = end+l+1;
                 }
                 end += l;
                 break;
             case BAM_CDEL : // D(0 1)
-                end += l;
-                break;
             case BAM_CMATCH: // 1 1
             case BAM_CEQUAL:
             case BAM_CDIFF:
@@ -115,7 +113,6 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m)
             case BAM_CINS: // 1 0
             case BAM_CSOFT_CLIP:
             case BAM_CHARD_CLIP:
-                break;
             case BAM_CPAD: // 0 0
             case BAM_CBACK:
                 break;
@@ -124,6 +121,7 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m)
                 break;
         }
     }
+    if (sj_n > 0) sj[sj_n-1]->right_anc_len[0] = end-start+1;
 
     return sj_n;
 }
@@ -133,15 +131,22 @@ int sj_sch_group(sj_t *SJ, int SJ_n, sj_t sj, int *hit)
     *hit = 0;
     if (SJ_n == 0) return 0;
 
-    int i;
-    int32_t tid, don, acc;
+    int i; int32_t tid, don, acc;
     for (i = SJ_n-1; i >= 0; i--) {
         tid = SJ[i].tid, don = SJ[i].don, acc = SJ[i].acc;
         if (tid == sj.tid &&  don == sj.don && acc == sj.acc) { *hit = 1; return i; }
-        else if (tid < sj.tid || don < sj.don || (don == sj.don && acc < sj.acc)) // SJ[i] < sj
-            return i+1; 
+        else if (tid < sj.tid || don < sj.don || (don == sj.don && acc < sj.acc)) return i+1; // SJ[i] < sj
     }
     return 0;
+}
+
+void add_sj_anchor(sj_t *sj, int left_anc_len, int right_anc_len)
+{
+    if (sj->uniq_c > sj->anc_m) sj->anc_m <<= 1;
+    sj->left_anc_len = (int*)_err_realloc(sj->left_anc_len, sj->anc_m * sizeof(int));
+    sj->right_anc_len = (int*)_err_realloc(sj->right_anc_len, sj->anc_m * sizeof(int));
+    sj->left_anc_len[sj->uniq_c-1] = left_anc_len;
+    sj->right_anc_len[sj->uniq_c-1] = right_anc_len;
 }
 
 int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
@@ -162,13 +167,15 @@ int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
             (*SJ_group)[sj_i].strand = sj[i].strand;
             (*SJ_group)[sj_i].motif = sj[i].motif;
             (*SJ_group)[sj_i].is_anno = sj[i].is_anno;
-            (*SJ_group)[sj_i].uniq_c = sj[i].uniq_c; 
+            (*SJ_group)[sj_i].uniq_c = sj[i].uniq_c;
             (*SJ_group)[sj_i].multi_c = sj[i].multi_c;
+            (*SJ_group)[sj_i].anc_m = 10; (*SJ_group)[sj_i].left_anc_len = (int*)_err_malloc(sizeof(int)*10); (*SJ_group)[sj_i].right_anc_len = (int*)_err_malloc(sizeof(int)*10);
+            add_sj_anchor((*SJ_group)+sj_i, sj[i].left_anc_len[0], sj[i].right_anc_len[0]);
         } else {
             (*SJ_group)[sj_i].uniq_c += sj[i].uniq_c;
             (*SJ_group)[sj_i].multi_c += sj[i].multi_c;
-            if ((*SJ_group)[sj_i].strand != sj[i].strand)
-                (*SJ_group)[sj_i].strand = 0; // undifined
+            if ((*SJ_group)[sj_i].strand != sj[i].strand) (*SJ_group)[sj_i].strand = 0; // undefined
+            add_sj_anchor((*SJ_group)+sj_i, sj[i].left_anc_len[0], sj[i].right_anc_len[0]);
         }
     }
     return 0;
@@ -194,15 +201,19 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
     return seq;
 }
 
-int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m)
+int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
     int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
+    sj->left_anc_len = (int*)_err_malloc(sizeof(int));
+    sj->right_anc_len = (int*)_err_malloc(sizeof(int));
     while (sam_read1(in, h, b) >= 0) {
-        int sj_n = gen_sj(b, seq, seq_n, &sj, &sj_m);
+        int sj_n = gen_sj(b, seq, seq_n, &sj, &sj_m, sgp);
         if (sj_n > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
     }
-    free(sj);
+    int i; for (i = 0; i < sj_m; ++i) {
+        free(sj[i].left_anc_len); free(sj[i].right_anc_len);
+    } free(sj);
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
     
     return SJ_n;
@@ -223,13 +234,19 @@ void print_sj(sj_t *sj_group, int sj_n, FILE *out, char **cname)
 int bam2sj(int argc, char *argv[])
 {
     int c;
-    FILE *gtf_fp=NULL; // TODO gtf anno
+    sg_para *sgp = sg_init_para();
+    //FILE *gtf_fp=NULL; // TODO gtf anno
 
-	while ((c = getopt_long(argc, argv, "g:", bam2sj_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "t:a:i:", bam2sj_long_opt, NULL)) >= 0) {
         switch (c) {
-            case 'g': gtf_fp = xopen(optarg, "r");
-            default: err_printf("Error: unknown option: %s.\n", optarg); 
-                     return bam2sj_usage();
+            case 't': if (strcmp(optarg, PAIR) == 0) sgp->read_type = PAIR_T;
+                      else if (strcmp(optarg, SING) == 0) sgp->read_type = SING_T;
+                      else return bam2sj_usage();
+                      break;
+            case 'a': sgp->anchor_len = atoi(optarg); break;
+            case 'i': sgp->intron_len = atoi(optarg); break;
+
+            default: err_printf("Error: unknown option: %s.\n", optarg); return bam2sj_usage();
         }
     }
     if (argc - optind != 2) return bam2sj_usage();
@@ -246,16 +263,12 @@ int bam2sj(int argc, char *argv[])
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
 
     int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
-    int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m);
+    int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
 
     print_sj(sj_group, sj_n, stdout, h->target_name);
 
     bam_destroy1(b); sam_close(in); bam_hdr_destroy(h); 
-    free(sj_group); gzclose(genome_fp); 
-    int i;
-    for (i = 0; i < seq_n; ++i) {
-        free(seq[i].name.s); free(seq[i].seq.s);
-    } free(seq);
-    if (gtf_fp != NULL) err_fclose(gtf_fp);
+    sg_free_para(sgp); free(sj_group); gzclose(genome_fp); 
+    int i; for (i = 0; i < seq_n; ++i) { free(seq[i].name.s); free(seq[i].seq.s); } free(seq);
     return 0;
 }

@@ -108,7 +108,15 @@ void sg_free_site(SG *sg)
 
 void sg_free(SG *sg)
 {
-    sg_free_node(sg); sg_free_site(sg); free(sg->edge);
+    sg_free_node(sg); sg_free_site(sg); 
+    int i;
+    for (i = 0; i < sg->edge_n; ++i) {
+        if (sg->edge[i].uniq_c != 0) {
+            free(sg->edge[i].left_anc_len);
+            free(sg->edge[i].right_anc_len);
+        }
+    }
+    free(sg->edge);
     free(sg);
 }
 
@@ -118,7 +126,6 @@ void sg_free_group(SG_group *sg_g)
     free(sg_g->SG); chr_name_free(sg_g->cname);
     free(sg_g);
 }
-
 /***************************/
 
 /****************************************
@@ -280,6 +287,7 @@ int sg_update_edge(SG *sg, uint32_t don_id, uint32_t acc_id, uint32_t don_site_i
         // set edge
         sg->edge[e_i].don_site_id = don_site_id, sg->edge[e_i].acc_site_id = acc_site_id;
         sg->edge[e_i].is_rev = is_rev;
+        sg->edge[e_i].uniq_c = sg->edge[e_i].multi_c = 0;
     }
     // set next/pre
     _insert(acc_id, sg->node[don_id].next_id, sg->node[don_id].next_n, sg->node[don_id].next_m, uint32_t)
@@ -493,6 +501,7 @@ int trav_SpliceGraph()
     return 0;
 }
 
+#ifdef __BUILD_SG_MAIN__
 const struct option sg_long_opt [] = {
     {"prefix", 1, NULL, 'f' },
     {0, 0, 0, 0}
@@ -519,3 +528,4 @@ int build_sg(int argc, char *argv[])
     sg_free_group(sg_g); err_fclose(gtf_fp); chr_name_free(cname); 
     return 0;
 }
+#endif

@@ -1,5 +1,6 @@
-#ifndef _SPLICE_GRAPH_H
-#define _SPLICE_GRAPH_H
+#ifndef _BUILD_SG_H
+#define _BUILD_SG_H
+#include <stdlib.h>
 #include "gtf.h"
 #include "utils.h"
 
@@ -107,9 +108,9 @@ typedef struct {
 typedef struct {
     uint32_t don_site_id, acc_site_id;
     uint8_t is_rev;
-    int32_t cov;
     uint8_t motif, is_anno;
     int32_t uniq_c, multi_c, max_over;
+    int32_t *left_anc_len, *right_anc_len; // for each uniq-junction
 } SGedge; // edge of splicing-graph, splice junction
 
 typedef struct {
@@ -144,13 +145,17 @@ typedef struct {
 } SG_group;
 
 typedef struct {
-    int BAM_input;  // .bam or .sj
     int sam_n, tol_rep_n, *rep_n;
     char **in_name;
     int no_novel_sj, no_novel_com, only_novel;
-    int use_multi;
+    int use_multi, read_type, anchor_len, intron_len;
     int merge_out;
 } sg_para;
+
+#define PAIR "paried"
+#define SING "single"
+#define PAIR_T 1
+#define SING_T 0
 
 int sg_par_input(sg_para *sgp, char *in);
 sg_para *sg_init_para(void);

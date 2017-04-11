@@ -52,6 +52,7 @@ typedef struct {
     int32_t don, acc;
     uint8_t motif, is_anno;
     int32_t uniq_c, multi_c, max_over;
+    int *left_anc_len, *right_anc_len, anc_m; // for each uniq-junction
 } sj_t;
 
 
@@ -157,6 +158,7 @@ void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 #define INTER_EXON_MIN_LEN 6
 #define SPLICE_DISTANCE 0
 #define MIN_INTRON_NUM 0
+#define ANCHOR_MIN_LEN 1
 
 int check_iden(trans_t t1, trans_t t2, int dis);
 
