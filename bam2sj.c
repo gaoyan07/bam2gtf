@@ -47,10 +47,12 @@ const struct option bam2sj_long_opt [] = {
 
 int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t acc, uint8_t strand, uint8_t motif_i, uint8_t is_anno, uint8_t is_uniq)
 {
-    if (*sj_n == *sj_m) _realloc(*sj, *sj_m, sj_t)
-    int i; for (i = *sj_n; i < *sj_m; ++i) {
-        sj[i]->left_anc_len = (int*)_err_malloc(sizeof(int));
-        sj[i]->right_anc_len = (int*)_err_malloc(sizeof(int));
+    if (*sj_n == *sj_m) {
+        _realloc(*sj, *sj_m, sj_t)
+        int i; for (i = *sj_n; i < *sj_m; ++i) {
+            ((*sj)+i)->left_anc_len = (int*)_err_malloc(sizeof(int));
+            ((*sj)+i)->right_anc_len = (int*)_err_malloc(sizeof(int));
+        }
     }
     (*sj)[*sj_n].tid = tid;
     (*sj)[*sj_n].don = don;
@@ -101,8 +103,8 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp
                 if (l >= min_intr_len) {
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
                     add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq);
-                    if (sj_n > 1) sj[sj_n-2]->right_anc_len[0] = end-start+1;
-                    sj[sj_n-1]->left_anc_len[0] = end-start+1;
+                    if (sj_n > 1) (*sj)[sj_n-2].right_anc_len[0] = end-start+1;
+                    (*sj)[sj_n-1].left_anc_len[0] = end-start+1;
                     start = end+l+1;
                 }
                 end += l;
@@ -126,7 +128,7 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp
                 break;
         }
     }
-    if (sj_n > 0) sj[sj_n-1]->right_anc_len[0] = end-start+1;
+    if (sj_n > 0) (*sj)[sj_n-1].right_anc_len[0] = end-start+1;
 
     return sj_n;
 }
