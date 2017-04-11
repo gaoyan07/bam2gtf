@@ -48,6 +48,10 @@ const struct option bam2sj_long_opt [] = {
 int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t acc, uint8_t strand, uint8_t motif_i, uint8_t is_anno, uint8_t is_uniq)
 {
     if (*sj_n == *sj_m) _realloc(*sj, *sj_m, sj_t)
+    int i; for (i = *sj_n; i < *sj_m; ++i) {
+        sj[i]->left_anc_len = (int*)_err_malloc(sizeof(int));
+        sj[i]->right_anc_len = (int*)_err_malloc(sizeof(int));
+    }
     (*sj)[*sj_n].tid = tid;
     (*sj)[*sj_n].don = don;
     (*sj)[*sj_n].acc = acc;
@@ -81,7 +85,6 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp
 {
     if (bam_unmap(b)) return 0;
     uint32_t n_cigar = b->core.n_cigar, *c = bam_get_cigar(b);
-    if (bam_is_sim(c, n_cigar) == 0) return 0; // XXX simple xMxNxM (1)
 
     int32_t tid = b->core.tid, start = b->core.pos+1, end = b->core.pos;/*1-base*/
     uint8_t strand, motif_i, is_uniq, is_prop; 
@@ -104,18 +107,20 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp
                 }
                 end += l;
                 break;
-            case BAM_CDEL : // D(0 1)
             case BAM_CMATCH: // 1 1
             case BAM_CEQUAL:
             case BAM_CDIFF:
                 end += l;
                 break;
+            case BAM_CDEL : // D(0 1)
+                //end += l;
+                return 0; break; // XXX only M&N allowed
             case BAM_CINS: // 1 0
             case BAM_CSOFT_CLIP:
             case BAM_CHARD_CLIP:
             case BAM_CPAD: // 0 0
             case BAM_CBACK:
-                break;
+                return 0; break; // XXX only M&N allowed
             default:
                 err_printf("Error: unknown cigar type: %d.\n", bam_cigar_op(c[i]));
                 break;
