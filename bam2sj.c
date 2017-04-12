@@ -50,9 +50,10 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t ac
     if (*sj_n == *sj_m) {
         _realloc(*sj, *sj_m, sj_t)
         int i; for (i = *sj_n; i < *sj_m; ++i) {
-            ((*sj)+i)->left_anc_len = (int*)_err_malloc(sizeof(int));
-            ((*sj)+i)->right_anc_len = (int*)_err_malloc(sizeof(int));
+            ((*sj)+i)->anc = (anc_t*)_err_calloc(1, sizeof(anc_t));
+            ((*sj)+i)->anc_m = 1;
         }
+
     }
     (*sj)[*sj_n].tid = tid;
     (*sj)[*sj_n].don = don;
@@ -83,7 +84,7 @@ uint8_t intr_deri_str(kseq_t *seq, int seq_n, int32_t tid, int32_t start, int32_
     return 0;
 }
 
-int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
+int gen_sj(bam1_t *b, uint64_t bid, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
 {
     if (bam_unmap(b)) return 0;
     uint32_t n_cigar = b->core.n_cigar, *c = bam_get_cigar(b);
@@ -103,8 +104,14 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp
                 if (l >= min_intr_len) {
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
                     add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq);
-                    if (sj_n > 1) (*sj)[sj_n-2].right_anc_len[0] = end-start+1;
-                    (*sj)[sj_n-1].left_anc_len[0] = end-start+1;
+                    (*sj)[sj_n-1].anc[0].left_anc_len = end-start+1;
+                    (*sj)[sj_n-1].anc[0].bid = bid;
+                    (*sj)[sj_n-1].anc[0].left_hard = 0, (*sj)[sj_n-1].anc[0].right_hard = 0;
+                    if (sj_n > 1) {
+                        (*sj)[sj_n-1].anc[0].left_hard = 1;
+                        (*sj)[sj_n-2].anc[0].right_anc_len = end-start+1;
+                        (*sj)[sj_n-2].anc[0].right_hard = 1;
+                    }
                     start = end+l+1;
                 }
                 end += l;
@@ -128,7 +135,7 @@ int gen_sj(bam1_t *b, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp
                 break;
         }
     }
-    if (sj_n > 0) (*sj)[sj_n-1].right_anc_len[0] = end-start+1;
+    if (sj_n > 0) (*sj)[sj_n-1].anc[0].right_anc_len = end-start+1;
 
     return sj_n;
 }
@@ -147,13 +154,17 @@ int sj_sch_group(sj_t *SJ, int SJ_n, sj_t sj, int *hit)
     return 0;
 }
 
-void add_sj_anchor(sj_t *sj, int left_anc_len, int right_anc_len)
+void add_sj_anchor(sj_t *sj, anc_t anc)
 {
-    if (sj->uniq_c > sj->anc_m) sj->anc_m <<= 1;
-    sj->left_anc_len = (int*)_err_realloc(sj->left_anc_len, sj->anc_m * sizeof(int));
-    sj->right_anc_len = (int*)_err_realloc(sj->right_anc_len, sj->anc_m * sizeof(int));
-    sj->left_anc_len[sj->uniq_c-1] = left_anc_len;
-    sj->right_anc_len[sj->uniq_c-1] = right_anc_len;
+    if (sj->uniq_c > sj->anc_m) {
+        sj->anc_m <<= 1;
+        sj->anc = (anc_t*)_err_realloc(sj->anc, sj->anc_m * sizeof(anc_t));
+    }
+    sj->anc[sj->uniq_c-1].bid = anc.bid;
+    sj->anc[sj->uniq_c-1].left_anc_len = anc.left_anc_len;
+    sj->anc[sj->uniq_c-1].right_anc_len = anc.right_anc_len;
+    sj->anc[sj->uniq_c-1].left_hard = anc.left_hard;
+    sj->anc[sj->uniq_c-1].right_hard = anc.right_hard;
 }
 
 int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
@@ -176,13 +187,13 @@ int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
             (*SJ_group)[sj_i].is_anno = sj[i].is_anno;
             (*SJ_group)[sj_i].uniq_c = sj[i].uniq_c;
             (*SJ_group)[sj_i].multi_c = sj[i].multi_c;
-            (*SJ_group)[sj_i].anc_m = 10; (*SJ_group)[sj_i].left_anc_len = (int*)_err_malloc(sizeof(int)*10); (*SJ_group)[sj_i].right_anc_len = (int*)_err_malloc(sizeof(int)*10);
-            add_sj_anchor((*SJ_group)+sj_i, sj[i].left_anc_len[0], sj[i].right_anc_len[0]);
+            (*SJ_group)[sj_i].anc_m = 10; (*SJ_group)[sj_i].anc = (anc_t*)_err_calloc(10, sizeof(anc_t));
+            add_sj_anchor((*SJ_group)+sj_i, sj[i].anc[0]);
         } else {
             (*SJ_group)[sj_i].uniq_c += sj[i].uniq_c;
             (*SJ_group)[sj_i].multi_c += sj[i].multi_c;
             if ((*SJ_group)[sj_i].strand != sj[i].strand) (*SJ_group)[sj_i].strand = 0; // undefined
-            add_sj_anchor((*SJ_group)+sj_i, sj[i].left_anc_len[0], sj[i].right_anc_len[0]);
+            add_sj_anchor((*SJ_group)+sj_i, sj[i].anc[0]);
         }
     }
     return 0;
@@ -212,15 +223,14 @@ int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj
 {
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
     int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
-    sj->left_anc_len = (int*)_err_malloc(sizeof(int));
-    sj->right_anc_len = (int*)_err_malloc(sizeof(int));
+    sj->anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->anc_m = 1;
+    uint64_t bid=0;
     while (sam_read1(in, h, b) >= 0) {
-        int sj_n = gen_sj(b, seq, seq_n, &sj, &sj_m, sgp);
+        int sj_n = gen_sj(b, bid, seq, seq_n, &sj, &sj_m, sgp);
         if (sj_n > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
+        bid++;
     }
-    int i; for (i = 0; i < sj_m; ++i) {
-        free(sj[i].left_anc_len); free(sj[i].right_anc_len);
-    } free(sj);
+    int i; for (i = 0; i < sj_m; ++i) free(sj[i].anc); free(sj);
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
     
     return SJ_n;

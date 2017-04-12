@@ -5,14 +5,14 @@
 #include "utils.h"
 
 #define _insert(v, p, n, m, type) { \
-    int i, flag=0;                  \
-    for (i = 0; i < n; ++i) {       \
-        if (p[i] == v) {            \
-            flag = 1;               \
+    int _i, _flag=0;                  \
+    for (_i = 0; _i < n; ++_i) {       \
+        if (p[_i] == v) {            \
+            _flag = 1;               \
             break;                  \
         }                           \
     }                               \
-    if (flag == 0) {                \
+    if (_flag == 0) {                \
         if (n == m) {               \
             _realloc(p, m, type)    \
         }                           \
@@ -21,63 +21,92 @@
 }
 
 #define _bin_insert(v, p, n, m, type) { \
-    int flag=0,k_i=-1,left=0,right=n-1,mid;    \
-    type mid_v, tmp_v;                 \
-    if (right == -1) k_i = 0;   \
+    int _flag=0,_k_i=-1,_left=0,_right=n-1,_mid;    \
+    type _mid_v, _tmp_v;                 \
+    if (_right == -1) _k_i = 0;   \
     else {                      \
-        while (left <= right) { \
-            mid = (left+right) >> 1;    \
-            mid_v = p[mid];             \
-            if (mid_v == v) {           \
-                flag = 1; break;        \
-            } else if (mid_v > v) {     \
-                if (mid != 0) {         \
-                    tmp_v = p[mid-1];   \
+        while (_left <= _right) { \
+            _mid = (_left+_right) >> 1;    \
+            _mid_v = p[_mid];             \
+            if (_mid_v == v) {           \
+                _flag = 1; break;        \
+            } else if (_mid_v > v) {     \
+                if (_mid != 0) {         \
+                    _tmp_v = p[_mid-1];   \
                 }                       \
-                if (mid == 0 || v > tmp_v) { \
-                    k_i = mid;          \
+                if (_mid == 0 || v > _tmp_v) { \
+                    _k_i = _mid;          \
                     break;              \
                 }                       \
-                else right = mid-1;     \
-            } else left = mid+1;        \
+                else _right = _mid-1;     \
+            } else _left = _mid+1;        \
         }                               \
     }                                   \
-    if (k_i == -1) k_i = n;         \
+    if (_k_i == -1) _k_i = n;         \
                                     \
-    if (flag == 0) {                \
+    if (_flag == 0) {                \
         if (n == m) {               \
             _realloc(p, m, type)    \
         }                           \
-        if (k_i <= n-1)             \
-            memmove(p+k_i+1, p+k_i, (n-k_i)*sizeof(type));  \
-        (p)[k_i] = v;               \
+        if (_k_i <= n-1)             \
+            memmove(p+_k_i+1, p+_k_i, (n-_k_i)*sizeof(type));  \
+        (p)[_k_i] = v;               \
         (n)++;                      \
     }                               \
 }
 
+#define _bin_search(v, p, n, type, hit, i) { \
+    int _left =0,_right=n-1,_mid; \
+    type _mid_v;    \
+    hit = 0;               \
+    if (_right == -1) hit=0;   \
+    else {  \
+        while (_left <= _right) {   \
+            _mid = (_left+_right) >> 1; \
+            _mid_v = p[_mid];       \
+            if (_mid_v == v) {  \
+                i = _mid;   \
+                hit = 1;   \
+                break;      \
+            } else if (_mid_v > v) {   \
+                _right = _mid-1;    \
+            } else {    \
+                _left = _mid+1; \
+            }   \
+        }   \
+    }   \
+}
+
+#define _node_len(n, i) ((n)[i].end-(n)[i].start+1)
+
 typedef struct {
     uint32_t up, se, down;
     int asm_i, sg_i;
+    int up_c, down_c, both_c, skip_c;
 } SE_t;   // skipped exon
 
 typedef struct {
     uint32_t lon, shor, down;
     int asm_i, sg_i;
+    int lon_c, shor_c;
 } A5SS_t; // alternative 3' splice site
 
 typedef struct {
     uint32_t up, lon, shor;
     int asm_i, sg_i;
+    int lon_c, shor_c;
 } A3SS_t; // alternative 3' splice site
 
 typedef struct {
     uint32_t up, fir, sec, down;
     int asm_i, sg_i;
+    int fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c;
 } MXE_t; // mutually exclusive exon
 
 typedef struct {
     uint32_t up, down, in;
     int asm_i, sg_i;
+    int sj_c;
 } RI_t;  // retained intron
 
 typedef struct {
@@ -110,7 +139,7 @@ typedef struct {
     uint8_t is_rev;
     uint8_t motif, is_anno;
     int32_t uniq_c, multi_c, max_over;
-    int32_t *left_anc_len, *right_anc_len; // for each uniq-junction
+    anc_t *anc; // for each uniq-junction
 } SGedge; // edge of splicing-graph, splice junction
 
 typedef struct {

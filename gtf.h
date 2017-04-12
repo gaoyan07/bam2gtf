@@ -48,11 +48,17 @@ typedef struct {
 } exon_t;
 
 typedef struct {
+    uint64_t bid;   // id of junction read
+    int left_anc_len, right_anc_len; // anchor length
+    uint8_t left_hard, right_hard;   // hard anchor
+} anc_t;
+
+typedef struct {
     int32_t tid; uint8_t strand; // 0:undefined, 1:+, 2:-
     int32_t don, acc;
     uint8_t motif, is_anno;
     int32_t uniq_c, multi_c, max_over;
-    int *left_anc_len, *right_anc_len, anc_m; // for each uniq-junction
+    anc_t *anc; int anc_m; // for each uniq-junction
 } sj_t;
 
 
