@@ -32,15 +32,65 @@ int asm2ase_usage(void)
     return 1;
 }
 
+#define _count_sj_read(ed, cnt, left_l, right_l) { \
+    int _l, _left, _right; \
+    for (_l = 0; _l < ed.uniq_c; ++_l) {    \
+        _left = 0, _right=0;  \
+        anc_t _anc = ed.anc[_l];   \
+        if (_anc.left_hard) {    \
+            if (_anc.left_anc_len == left_l) _left=1; \
+        } else if (_anc.left_anc_len <= left_l) _left=1;  \
+        if (_anc.right_hard) {   \
+            if (_anc.right_anc_len == right_l) _right=1;  \
+        } else if (_anc.right_anc_len <= right_l) _right=1;   \
+        if (_left && _right) cnt++; \
+    }   \
+}
+
+#define _count_both_read(ed1, sj1_c, left1_l, right1_l, ed2, sj2_c, left2_l, right2_l, both_c) { \
+    int _l, _left, _right;  \
+    uint64_t *_bid_up = (uint64_t*)_err_calloc(2, sizeof(uint64_t)); int _bid_up_n=0, _bid_up_m=2, _hit, _hit_i;    \
+    for (_l = 0; _l < ed1.uniq_c; ++_l) { \
+        _left = 0, _right=0;    \
+        anc_t _anc = ed1.anc[_l];    \
+        if (_anc.left_hard) {    \
+            if (_anc.left_anc_len == left1_l) _left=1;   \
+        } else if (_anc.left_anc_len <= left1_l) _left=1;    \
+        if (_anc.right_hard) {   \
+            if (_anc.right_anc_len == right1_l) _right=1; \
+        } else if (_anc.right_anc_len <= right1_l) _right=1;  \
+        if (_left && _right) {  \
+            sj1_c++;    \
+            _bin_insert(_anc.bid, _bid_up, _bid_up_n, _bid_up_m, uint64_t)   \
+        }   \
+    }   \
+    for (_l = 0; _l < ed2.uniq_c; ++_l) {    \
+        _left = 0, _right=0;    \
+        anc_t _anc = ed2.anc[_l];    \
+        if (_anc.left_hard) {    \
+            if (_anc.left_anc_len == left2_l) _left=1;   \
+        } else if (_anc.left_anc_len <= left2_l) _left=1;    \
+        if (_anc.right_hard) {   \
+            if (_anc.right_anc_len == right2_l) _right=1;   \
+        } else if (_anc.right_anc_len <= right2_l) _right=1;    \
+        if (_left && _right) {    \
+            sj2_c++;   \
+            _bin_search(_anc.bid, _bid_up, _bid_up_n, uint64_t, _hit, _hit_i)  \
+            if (_hit) both_c++; \
+        }   \
+    }  \
+    free(_bid_up);  \
+}
+
 #define add_asm_se(ase, up_e, se_e, down_e, up_c, down_c, both_c, skip_c, asm_i, sg_i) { \
-    int _i, flag=0;                         \
+    int _i, _flag=0;                         \
     for (_i = ase->se_n-1; _i >= 0; --_i) { \
         if (ase->se[_i].sg_i != sg_i) break;  \
         if (ase->se[_i].up == up_e && ase->se[_i].se == se_e && ase->se[_i].down == down_e) {  \
-            flag = 1; break;    \
+            _flag = 1; break;    \
         }   \
     }   \
-    if (flag == 0) { \
+    if (_flag == 0) { \
         if (ase->se_n == ase->se_m) _realloc(ase->se, ase->se_m, SE_t)  \
         ase->se[ase->se_n].up = up_e;       \
         ase->se[ase->se_n].se = se_e;       \
@@ -80,52 +130,11 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
                         up = pre.node_id; se = cur.node_id; down = next.node_id;
 
 
-                        int l, up_c=0, down_c=0, both_c=0, skip_c=0, left, right;
+                        int up_c=0, down_c=0, both_c=0, skip_c=0;
                         int up_l=_node_len(n,up), se_l=_node_len(n,se), down_l=_node_len(n,down);
-                        uint64_t *bid_up = (uint64_t*)_err_calloc(2, sizeof(uint64_t)); int bid_up_n=0, bid_up_m=2, _hit, _hit_i;
 
-                        for (l = 0; l < ed[ij1_id].uniq_c; ++l) {
-                            left = 0, right=0;
-                            anc_t anc = ed[ij1_id].anc[l];
-                            if (anc.left_hard) {
-                                if (anc.left_anc_len == up_l) left=1;
-                            } else if (anc.left_anc_len <= up_l) left=1; 
-
-                            if (anc.right_hard) {
-                                if (anc.right_anc_len == se_l) right=1;
-                            } else if (anc.right_anc_len <= se_l) right=1; 
-                            if (left && right) {
-                                up_c++;
-                                _bin_insert(anc.bid, bid_up, bid_up_n, bid_up_m, uint64_t)
-                            }
-                        }
-                        for (l = 0; l < ed[ij2_id].uniq_c; ++l) {
-                            left = 0, right=0;
-                            anc_t anc = ed[ij2_id].anc[l];
-                            if (anc.left_hard) {
-                                if (anc.left_anc_len == se_l) left=1;
-                            } else if (anc.left_anc_len <= se_l) left=1; 
-                            if (anc.right_hard) {
-                                if (anc.right_anc_len == down_l) right=1;
-                            } else if (anc.right_anc_len <= down_l) right=1; 
-                            if (left && right) {
-                                down_c++;
-                                _bin_search(anc.bid, bid_up, bid_up_n, uint64_t, _hit, _hit_i)
-                                if (_hit) both_c++;
-                            }
-                        }
-                        free(bid_up);
-                        for (l = 0; l < ed[ej_id].uniq_c; ++l) {
-                            left = 0, right=0;
-                            anc_t anc = ed[ej_id].anc[l];
-                            if (anc.left_hard) {
-                                if (anc.left_anc_len == up_l) left=1;
-                            } else if (anc.left_anc_len <= up_l) left=1; 
-                            if (anc.right_hard) {
-                                if (anc.right_anc_len == down_l) right=1;
-                            } else if (anc.right_anc_len <= down_l) right=1; 
-                            if (left && right) skip_c++;
-                        }
+                        _count_both_read(ed[ij1_id], up_c, up_l, se_l, ed[ij2_id], down_c, se_l, down_l, both_c)
+                        _count_sj_read(ed[ej_id], skip_c, up_l, down_l)
                         add_asm_se(ase, up, se, down, up_c, down_c, both_c, skip_c, asm_i, sg_i)
                     }
                 }
@@ -135,14 +144,14 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
 }
 
 #define add_asm_a5ss(ase, shor_e, long_e, down_e, shor_c, lon_c, asm_i, sg_i) {  \
-    int _i, flag=0;                           \
+    int _i, _flag=0;                           \
     for (_i = ase->a5ss_n-1; _i >= 0; --_i) { \
         if (ase->a5ss[_i].sg_i != sg_i) break;  \
         if (ase->a5ss[_i].shor == shor_e && ase->a5ss[_i].lon == long_e && ase->a5ss[_i].down == down_e) {  \
-            flag = 1; break;    \
+            _flag = 1; break;    \
         }   \
     }   \
-    if (flag == 0) { \
+    if (_flag == 0) { \
         if (ase->a5ss_n == ase->a5ss_m) _realloc(ase->a5ss, ase->a5ss_m, A5SS_t)  \
         ase->a5ss[ase->a5ss_n].shor = shor_e;  \
         ase->a5ss[ase->a5ss_n].lon = long_e;    \
@@ -172,37 +181,15 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                     if (cur.next_id[k] == (uint32_t)sg->node_n-1) continue;
                     next2 = n[cur.next_id[k]];
                     next2_s = next2.start; next2_e = next2.end;
-
                     if (next1_e == next2_e && next1_s != next2_s) {
                         uint32_t sj1_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next1.s_site_id, &hit);
                         uint32_t sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id, &hit);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0)) 
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                                 uint32_t up = cur.node_id, lon = next1.node_id, shor = next2.node_id;
-                                int l, lon_c=0, shor_c=0, left, right;
-                                int up_l=_node_len(n, up), lon_l=_node_len(n, lon), shor_l=_node_len(n, shor);
-                                for (l = 0; l < ed[sj1_id].uniq_c; ++l) {
-                                    left = 0, right=0;
-                                    anc_t anc = ed[sj1_id].anc[l];
-                                    if (anc.left_hard) {
-                                        if (anc.left_anc_len == up_l) left=1;
-                                    } else if (anc.left_anc_len <= up_l) left=1; 
-                                    if (anc.right_hard) {
-                                        if (anc.right_anc_len == lon_l) right=1;
-                                    } else if (anc.right_anc_len <= lon_l) right=1; 
-                                    if (left && right) lon_c++;
-                                }
-                                for (l = 0; l < ed[sj2_id].uniq_c; ++l) {
-                                    left = 0, right=0;
-                                    anc_t anc = ed[sj2_id].anc[l];
-                                    if (anc.left_hard) {
-                                        if (anc.left_anc_len == up_l) left=1;
-                                    } else if (anc.left_anc_len <= up_l) left=1; 
-                                    if (anc.right_hard) {
-                                        if (anc.right_anc_len == shor_l) right=1;
-                                    } else if (anc.right_anc_len <= shor_l) right=1; 
-                                    if (left && right) shor_c++;
-                                }
+                                int lon_c=0, shor_c=0, up_l=_node_len(n, up), lon_l=_node_len(n, lon), shor_l=_node_len(n, shor);
+                                _count_sj_read(ed[sj1_id], lon_c, up_l, lon_l)
+                                _count_sj_read(ed[sj2_id], shor_c, up_l, shor_l)
                                 add_asm_a5ss(ase, shor, lon, up, shor_c, lon_c, asm_i, sg_i)
                         }
                     }
@@ -222,37 +209,15 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                     if (cur.pre_id[k] == 0) continue;
                     pre2 = n[cur.pre_id[k]];
                     pre2_s = pre2.start; pre2_e = pre2.end;
-
                     if (pre1_s == pre2_s && pre1_e != pre2_e) {
                         uint32_t sj1_id = _err_sg_bin_sch_edge(sg, pre1.e_site_id, cur.s_site_id, &hit);
                         uint32_t sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id, &hit);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                             uint32_t shor = pre1.node_id, lon = pre2.node_id, down = cur.node_id;
-                            int l, lon_c=0, shor_c=0, left, right;
-                            int down_l=_node_len(n, down), lon_l=_node_len(n, lon), shor_l=_node_len(n, shor);
-                            for (l = 0; l < ed[sj1_id].uniq_c; ++l) {
-                                left = 0, right=0;
-                                anc_t anc = ed[sj1_id].anc[l];
-                                if (anc.left_hard) {
-                                    if (anc.left_anc_len == shor_l) left=1;
-                                } else if (anc.left_anc_len <= shor_l) left=1; 
-                                if (anc.right_hard) {
-                                    if (anc.right_anc_len == down_l) right=1;
-                                } else if (anc.right_anc_len <= down_l) right=1; 
-                                if (left && right) shor_c++;
-                            }
-                            for (l = 0; l < ed[sj2_id].uniq_c; ++l) {
-                                left = 0, right=0;
-                                anc_t anc = ed[sj2_id].anc[l];
-                                if (anc.left_hard) {
-                                    if (anc.left_anc_len == lon_l) left=1;
-                                } else if (anc.left_anc_len <= lon_l) left=1; 
-                                if (anc.right_hard) {
-                                    if (anc.right_anc_len == down_l) right=1;
-                                } else if (anc.right_anc_len <= down_l) right=1; 
-                                if (left && right) lon_c++;
-                            }
+                            int lon_c=0, shor_c=0, down_l=_node_len(n, down), lon_l=_node_len(n, lon), shor_l=_node_len(n, shor);
+                            _count_sj_read(ed[sj1_id], shor_c, shor_l, down_l)
+                            _count_sj_read(ed[sj2_id], lon_c, lon_l, down_l)
                             add_asm_a5ss(ase, shor, lon, down, shor_c, lon_c, asm_i, sg_i)
                         }
                     }
@@ -263,14 +228,14 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
 }
 
 #define add_asm_a3ss(ase, up_e, long_e, shor_e, lon_c, shor_c, asm_i, sg_i) {  \
-    int _i, flag=0;                           \
+    int _i, _flag=0;                           \
     for (_i = ase->a3ss_n-1; _i >= 0; --_i) { \
         if (ase->a3ss[_i].sg_i != sg_i) break;  \
         if (ase->a3ss[_i].shor == shor_e && ase->a3ss[_i].lon == long_e && ase->a3ss[_i].up == up_e) {   \
-            flag = 1; break;    \
+            _flag = 1; break;    \
         }   \
     }   \
-    if (flag == 0) { \
+    if (_flag == 0) { \
         if (ase->a3ss_n == ase->a3ss_m) _realloc(ase->a3ss, ase->a3ss_m, A3SS_t)  \
         ase->a3ss[ase->a3ss_n].up = up_e;        \
         ase->a3ss[ase->a3ss_n].lon = long_e;    \
@@ -300,38 +265,15 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                     if (cur.pre_id[k] == 0) continue;
                     pre2 = n[cur.pre_id[k]];
                     pre2_s = pre2.start; pre2_e = pre2.end;
-
                     if (pre1_s == pre2_s && pre1_e != pre2_e) {
                         uint32_t sj1_id = _err_sg_bin_sch_edge(sg, pre1.e_site_id, cur.s_site_id, &hit);
                         uint32_t sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id, &hit);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                             uint32_t shor = pre1.node_id, lon = pre2.node_id, down = cur.node_id;
-
-                            int l, lon_c=0, shor_c=0, left, right;
-                            int down_l=_node_len(n, down), lon_l=_node_len(n, lon), shor_l=_node_len(n, shor);
-                            for (l = 0; l < ed[sj1_id].uniq_c; ++l) {
-                                left = 0, right=0;
-                                anc_t anc = ed[sj1_id].anc[l];
-                                if (anc.left_hard) {
-                                    if (anc.left_anc_len == shor_l) left=1;
-                                } else if (anc.left_anc_len <= shor_l) left=1; 
-                                if (anc.right_hard) {
-                                    if (anc.right_anc_len == down_l) right=1;
-                                } else if (anc.right_anc_len <= down_l) right=1; 
-                                if (left && right) shor_c++;
-                            }
-                            for (l = 0; l < ed[sj2_id].uniq_c; ++l) {
-                                left = 0, right=0;
-                                anc_t anc = ed[sj2_id].anc[l];
-                                if (anc.left_hard) {
-                                    if (anc.left_anc_len == lon_l) left=1;
-                                } else if (anc.left_anc_len <= lon_l) left=1; 
-                                if (anc.right_hard) {
-                                    if (anc.right_anc_len == down_l) right=1;
-                                } else if (anc.right_anc_len <= down_l) right=1; 
-                                if (left && right) lon_c++;
-                            }
+                            int lon_c=0, shor_c=0, down_l=_node_len(n, down), lon_l=_node_len(n, lon), shor_l=_node_len(n, shor);
+                            _count_sj_read(ed[sj1_id], shor_c, shor_l, down_l)
+                            _count_sj_read(ed[sj2_id], lon_c, lon_l, down_l)
                             add_asm_a3ss(ase, down, lon, shor, lon_c, shor_c, asm_i, sg_i)
                         }
                     }
@@ -351,37 +293,15 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                     if (cur.next_id[k] == (uint32_t)sg->node_n-1) continue;
                     next2 = n[cur.next_id[k]];
                     next2_s = next2.start; next2_e = next2.end;
-
                     if (next1_e == next2_e && next1_s != next2_s) {
                         uint32_t sj1_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next1.s_site_id, &hit);
                         uint32_t sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id, &hit);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                             uint32_t up = cur.node_id, lon = next1.node_id, shor = next2.node_id;
-                            int l, lon_c=0, shor_c=0, left, right;
-                            int up_l=_node_len(n, up), lon_l=_node_len(n, lon), shor_l=_node_len(n, shor);
-                            for (l = 0; l < ed[sj1_id].uniq_c; ++l) {
-                                left = 0, right=0;
-                                anc_t anc = ed[sj1_id].anc[l];
-                                if (anc.left_hard) {
-                                    if (anc.left_anc_len == up_l) left=1;
-                                } else if (anc.left_anc_len <= up_l) left=1; 
-                                if (anc.right_hard) {
-                                    if (anc.right_anc_len == lon_l) right=1;
-                                } else if (anc.right_anc_len <= lon_l) right=1; 
-                                if (left && right) lon_c++;
-                            }
-                            for (l = 0; l < ed[sj2_id].uniq_c; ++l) {
-                                left = 0, right=0;
-                                anc_t anc = ed[sj2_id].anc[l];
-                                if (anc.left_hard) {
-                                    if (anc.left_anc_len == up_l) left=1;
-                                } else if (anc.left_anc_len <= up_l) left=1; 
-                                if (anc.right_hard) {
-                                    if (anc.right_anc_len == shor_l) right=1;
-                                } else if (anc.right_anc_len <= shor_l) right=1; 
-                                if (left && right) shor_c++;
-                            }
+                            int lon_c=0, shor_c=0, up_l=_node_len(n, up), lon_l=_node_len(n, lon), shor_l=_node_len(n, shor);
+                            _count_sj_read(ed[sj1_id], lon_c, up_l, lon_l)
+                            _count_sj_read(ed[sj2_id], shor_c, up_l, shor_l)
                             add_asm_a3ss(ase, up, lon, shor, lon_c, shor_c, asm_i, sg_i)
                         }
                     }
@@ -392,14 +312,14 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
 }
 
 #define add_asm_mxe(ase, up_e, fir_e, sec_e, down_e, fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c, asm_i, sg_i) {  \
-    int _i, flag=0;                           \
+    int _i, _flag=0;                           \
     for (_i = ase->mxe_n-1; _i >= 0; --_i) { \
         if (ase->mxe[_i].sg_i != sg_i) break;  \
         if (ase->mxe[_i].up == up_e && ase->mxe[_i].fir == fir_e && ase->mxe[_i].sec == sec_e && ase->mxe[_i].down == down_e) {   \
-            flag = 1; break;    \
+            _flag = 1; break;    \
         }   \
     }   \
-    if (flag == 0) { \
+    if (_flag == 0) { \
         if (ase->mxe_n == ase->mxe_m) _realloc(ase->mxe, ase->mxe_m, MXE_t)  \
         ase->mxe[ase->mxe_n].up = up_e;     \
         ase->mxe[ase->mxe_n].fir = fir_e;   \
@@ -443,73 +363,12 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
                                     uint32_t sj3_id = _err_sg_bin_sch_edge(sg, mx1.e_site_id, next.s_site_id, &hit);
                                     uint32_t sj4_id = _err_sg_bin_sch_edge(sg, mx2.e_site_id, next.s_site_id, &hit);
                                     if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0 && ed[sj3_id].uniq_c > 0 && ed[sj4_id].uniq_c > 0))
-                                            && (only_novel == 0 ||  ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0 || ed[sj3_id].is_anno == 0 || ed[sj4_id].is_anno == 0)){
+                                    && (only_novel == 0 ||  ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0 || ed[sj3_id].is_anno == 0 || ed[sj4_id].is_anno == 0)){
                                         uint32_t up = pre.node_id, fir = mx1.node_id, sec = mx2.node_id, down = next.node_id;
-                                        
-                                        int p, fir_up_c=0,fir_down_c=0,fir_both_c=0,sec_up_c=0,sec_down_c=0,sec_both_c=0, left, right;
+                                        int fir_up_c=0,fir_down_c=0,fir_both_c=0,sec_up_c=0,sec_down_c=0,sec_both_c=0;
                                         int up_l=_node_len(node,up), fir_l=_node_len(node,fir), sec_l=_node_len(node,sec), down_l=_node_len(node,down);
-                                        uint64_t *bid_up=(uint64_t*)_err_calloc(2,sizeof(uint64_t)); int bid_up_n=0, bid_up_m=2, _hit,_hit_id;
-                                        for (p = 0; p < ed[sj1_id].uniq_c; ++p) {
-                                            left = 0, right=0;
-                                            anc_t anc = ed[sj1_id].anc[p];
-                                            if (anc.left_hard) {
-                                                if (anc.left_anc_len == up_l) left=1;
-                                            } else if (anc.left_anc_len <= up_l) left=1; 
-                                            if (anc.right_hard) {
-                                                if (anc.right_anc_len == fir_l) right=1;
-                                            } else if (anc.right_anc_len <= fir_l) right=1; 
-                                            if (left && right) {
-                                                fir_up_c++;
-                                                _bin_insert(anc.bid, bid_up, bid_up_n, bid_up_m, uint64_t)
-                                            }
-                                        }
-                                        for (p = 0; p < ed[sj3_id].uniq_c; ++p) {
-                                            left = 0, right=0;
-                                            anc_t anc = ed[sj3_id].anc[p];
-                                            if (anc.left_hard) {
-                                                if (anc.left_anc_len == fir_l) left=1;
-                                            } else if (anc.left_anc_len <= fir_l) left=1; 
-                                            if (anc.right_hard) {
-                                                if (anc.right_anc_len == down_l) right=1;
-                                            } else if (anc.right_anc_len <= down_l) right=1; 
-                                            if (left && right) {
-                                                fir_down_c++;
-                                                _bin_search(anc.bid, bid_up, bid_up_n, uint64_t, _hit, _hit_id)
-                                                if (_hit) fir_both_c++;
-                                            }
-                                        }
-                                        bid_up_n=0;
-                                        for (p = 0; p < ed[sj2_id].uniq_c; ++p) {
-                                            left = 0, right=0;
-                                            anc_t anc = ed[sj2_id].anc[p];
-                                            if (anc.left_hard) {
-                                                if (anc.left_anc_len == up_l) left=1;
-                                            } else if (anc.left_anc_len <= up_l) left=1; 
-                                            if (anc.right_hard) {
-                                                if (anc.right_anc_len == sec_l) right=1;
-                                            } else if (anc.right_anc_len <= sec_l) right=1; 
-                                            if (left && right) {
-                                                fir_up_c++;
-                                                _bin_insert(anc.bid, bid_up, bid_up_n, bid_up_m, uint64_t)
-                                            }
-                                        }
-                                        for (p = 0; p < ed[sj4_id].uniq_c; ++p) {
-                                            left = 0, right=0;
-                                            anc_t anc = ed[sj4_id].anc[p];
-                                            if (anc.left_hard) {
-                                                if (anc.left_anc_len == sec_l) left=1;
-                                            } else if (anc.left_anc_len <= sec_l) left=1; 
-                                            if (anc.right_hard) {
-                                                if (anc.right_anc_len == down_l) right=1;
-                                            } else if (anc.right_anc_len <= down_l) right=1; 
-                                            if (left && right) {
-                                                fir_down_c++;
-                                                _bin_search(anc.bid, bid_up, bid_up_n, uint64_t, _hit, _hit_id)
-                                                if (_hit) fir_both_c++;
-                                            }
-                                        }
-                                        free(bid_up);
-                                        
+                                        _count_both_read(ed[sj1_id], fir_up_c, up_l, fir_l, ed[sj3_id], fir_down_c, fir_l, down_l, fir_both_c)
+                                        _count_both_read(ed[sj2_id], sec_up_c, up_l, sec_l, ed[sj4_id], sec_down_c, sec_l, down_l, sec_both_c)
                                         add_asm_mxe(ase, up, fir, sec, down, fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c, asm_i, sg_i)
                                     }
                                 }
@@ -523,14 +382,14 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
 }
 
 #define add_asm_ri(ase, up_e, down_e, in_e, sj_c, asm_i, sg_i) {  \
-    int _i, flag=0;                           \
+    int _i, _flag=0;                           \
     for (_i = ase->ri_n-1; _i >= 0; --_i) { \
         if (ase->ri[_i].sg_i != sg_i) break;  \
         if (ase->ri[_i].down == down_e && ase->ri[_i].up == up_e && ase->ri[_i].in == in_e) {   \
-            flag = 1; break;    \
+            _flag = 1; break;    \
         }   \
     }   \
-    if (flag == 0) { \
+    if (_flag == 0) { \
         if (ase->ri_n == ase->ri_m) _realloc(ase->ri, ase->ri_m, RI_t)  \
         ase->ri[ase->ri_n].up = up_e;     \
         ase->ri[ase->ri_n].down = down_e; \
@@ -556,21 +415,10 @@ void asm2ri(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
                     if (ri.end == next.end) {
                         uint32_t sj_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, next.s_site_id, &hit);
                         if ((use_multi == 1 || (ed[sj_id].uniq_c > 0))
-                                && (only_novel == 0 || ed[sj_id].is_anno == 0)) {
+                        && (only_novel == 0 || ed[sj_id].is_anno == 0)) {
                             uint32_t up = pre.node_id, down = next.node_id, in = ri.node_id;
-                            int l, sj_c=0, left, right;
-                            int up_l=_node_len(n,up), down_l=_node_len(n, down);
-                            for (l = 0; l < ed[sj_id].uniq_c; ++l) {
-                                left = 0, right=0;
-                                anc_t anc = ed[sj_id].anc[l];
-                                if (anc.left_hard) {
-                                    if (anc.left_anc_len == up_l) left=1;
-                                } else if (anc.left_anc_len <= up_l) left=1; 
-                                if (anc.right_hard) {
-                                    if (anc.right_anc_len == down_l) right=1;
-                                } else if (anc.right_anc_len <= down_l) right=1; 
-                                if (left && right) sj_c++;
-                            }
+                            int sj_c=0, up_l=_node_len(n,up), down_l=_node_len(n, down);
+                            _count_sj_read(ed[sj_id], sj_c, up_l, down_l)
                             add_asm_ri(ase, up, down, in, sj_c, asm_i, sg_i)
                         }
                     }
@@ -638,41 +486,45 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
         fprintf(out_fp[9], "ID\tSTRAND\tCHR\tRE_UCNT\tSJ_UCNT\n");
     }
 
-    for (i = 0; i < ase->se_n; ++i) { // SE
-        int sg_i = ase->se[i].sg_i, asm_i = ase->se[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; SE_t e=ase->se[i]; SGnode *n = sg->node;
-        fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.se].start, n[e.se].end, n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
-        // up->se, se->down, up->down
-        fprintf(out_fp[5], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.up_c, e.down_c, e.both_c, e.skip_c);
+    { // SE
+        for (i = 0; i < ase->se_n; ++i) {
+            int sg_i = ase->se[i].sg_i, asm_i = ase->se[i].asm_i;
+            SG *sg = sg_g->SG[sg_i]; SE_t e=ase->se[i]; SGnode *n = sg->node;
+            fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.se].start, n[e.se].end, n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
+            fprintf(out_fp[5], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.up_c, e.down_c, e.both_c, e.skip_c);
+        }
     }
-    for (i = 0; i < ase->a5ss_n; ++i) { // A5SS
-        int sg_i = ase->a5ss[i].sg_i, asm_i = ase->a5ss[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; A5SS_t e = ase->a5ss[i]; SGnode *n = sg->node;
-        fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.shor].start, n[e.shor].end, n[e.lon].start, n[e.lon].end, n[e.down].start, n[e.down].end);
-        // lon -> down, shor -> down
-        fprintf(out_fp[6], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.lon_c, e.shor_c);
+    { // A5SS
+        for (i = 0; i < ase->a5ss_n; ++i) {
+            int sg_i = ase->a5ss[i].sg_i, asm_i = ase->a5ss[i].asm_i;
+            SG *sg = sg_g->SG[sg_i]; A5SS_t e = ase->a5ss[i]; SGnode *n = sg->node;
+            fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.shor].start, n[e.shor].end, n[e.lon].start, n[e.lon].end, n[e.down].start, n[e.down].end);
+            fprintf(out_fp[6], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.lon_c, e.shor_c);
+        }
     }
-    for (i = 0; i < ase->a3ss_n; ++i) { // A3SS
-        int sg_i = ase->a3ss[i].sg_i, asm_i = ase->a3ss[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; A3SS_t e = ase->a3ss[i]; SGnode *n = sg->node;
-        fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.lon].start, n[e.lon].end, n[e.shor].start, n[e.shor].end);
-        // up -> lon, up -> shor
-        fprintf(out_fp[7], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.lon_c, e.shor_c);
+    { // A3SS
+        for (i = 0; i < ase->a3ss_n; ++i) {
+            int sg_i = ase->a3ss[i].sg_i, asm_i = ase->a3ss[i].asm_i;
+            SG *sg = sg_g->SG[sg_i]; A3SS_t e = ase->a3ss[i]; SGnode *n = sg->node;
+            fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.lon].start, n[e.lon].end, n[e.shor].start, n[e.shor].end);
+            fprintf(out_fp[7], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.lon_c, e.shor_c);
+        }
     }
-    for (i = 0; i < ase->mxe_n; ++i) { // MXE
-        int sg_i = ase->mxe[i].sg_i, asm_i = ase->mxe[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; MXE_t e = ase->mxe[i]; SGnode *n = sg->node;
-        fprintf(out_fp[3], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.fir].start, n[e.fir].end, n[e.sec].start, n[e.sec].end, n[e.down].start, n[e.down].end);
-        // up -> fir, fir -> down
-        // up -> sec, sec -> down
-        fprintf(out_fp[8], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.fir_up_c, e.fir_down_c, e.sec_up_c, e.sec_down_c);
+    { // MXE
+        for (i = 0; i < ase->mxe_n; ++i) {
+            int sg_i = ase->mxe[i].sg_i, asm_i = ase->mxe[i].asm_i;
+            SG *sg = sg_g->SG[sg_i]; MXE_t e = ase->mxe[i]; SGnode *n = sg->node;
+            fprintf(out_fp[3], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.fir].start, n[e.fir].end, n[e.sec].start, n[e.sec].end, n[e.down].start, n[e.down].end);
+            fprintf(out_fp[8], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.fir_up_c, e.fir_down_c, e.sec_up_c, e.sec_down_c);
+        }
     }
-    for (i = 0; i < ase->ri_n; ++i) { // RI
-        int sg_i = ase->ri[i].sg_i, asm_i = ase->ri[i].asm_i;
-        SG *sg = sg_g->SG[sg_i]; RI_t e = ase->ri[i]; SGnode *n = sg->node;
-        fprintf(out_fp[4], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
-        // exon_cnt, up -> down
-        fprintf(out_fp[9], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.in].uniq_c-n[e.up].uniq_c-n[e.down].uniq_c, e.sj_c);
+    { // RI
+        for (i = 0; i < ase->ri_n; ++i) {
+            int sg_i = ase->ri[i].sg_i, asm_i = ase->ri[i].asm_i;
+            SG *sg = sg_g->SG[sg_i]; RI_t e = ase->ri[i]; SGnode *n = sg->node;
+            fprintf(out_fp[4], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
+            fprintf(out_fp[9], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.in].uniq_c-n[e.up].uniq_c-n[e.down].uniq_c, e.sj_c);
+        }
     }
 
     for (i = 0; i < out_n; ++i) {
