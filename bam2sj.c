@@ -95,7 +95,7 @@ int gen_sj(bam1_t *b, uint64_t bid, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m
     is_prop = bam_is_prop(b);    // prop-pair (3)
     if (sgp->read_type == PAIR_T && is_prop == 0) return 0;
     
-    uint32_t i; int min_intr_len = sgp->intron_len; int sj_n = 0;
+    uint32_t i; int min_intr_len = sgp->intron_len, sj_n = 0, last_sj_l;
 
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
@@ -109,10 +109,13 @@ int gen_sj(bam1_t *b, uint64_t bid, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m
                     (*sj)[sj_n-1].anc[0].left_hard = 0, (*sj)[sj_n-1].anc[0].right_hard = 0;
                     if (sj_n > 1) {
                         (*sj)[sj_n-1].anc[0].left_hard = 1;
+                        (*sj)[sj_n-1].anc[0].left_sj_len = last_sj_l;
                         (*sj)[sj_n-2].anc[0].right_anc_len = end-start+1;
                         (*sj)[sj_n-2].anc[0].right_hard = 1;
+                        (*sj)[sj_n-2].anc[0].right_sj_len = l;
                     }
                     start = end+l+1;
+                    last_sj_l = l;
                 }
                 end += l;
                 break;
@@ -163,6 +166,8 @@ void add_sj_anchor(sj_t *sj, anc_t anc)
     sj->anc[sj->uniq_c-1].bid = anc.bid;
     sj->anc[sj->uniq_c-1].left_anc_len = anc.left_anc_len;
     sj->anc[sj->uniq_c-1].right_anc_len = anc.right_anc_len;
+    sj->anc[sj->uniq_c-1].left_sj_len = anc.left_sj_len;
+    sj->anc[sj->uniq_c-1].right_sj_len = anc.right_sj_len;
     sj->anc[sj->uniq_c-1].left_hard = anc.left_hard;
     sj->anc[sj->uniq_c-1].right_hard = anc.right_hard;
 }

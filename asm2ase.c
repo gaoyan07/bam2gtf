@@ -13,9 +13,9 @@ extern const char PROG[20];
 int asm2ase_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s ase [option] <ref.fa> <in.gtf> <in.bam/sj>\n\n", PROG);
-    err_printf("Note:    for multi-sample and multi-replicate should be this format: \n");
-    err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
+    err_printf("Usage:   %s ase [option] <ref.fa> <in.gtf> <in.bam>\n\n", PROG);
+    err_printf("Note:    for multi-sample and multi-replicate, input bam should be in this format: \n");
+    err_printf("             \"SAM1-REP1,REP2,REP3:SAM2-REP1,REP2,REP3\"\n");
     err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
@@ -47,7 +47,9 @@ int asm2ase_usage(void)
     }   \
 }
 
-#define _count_both_read(ed1, sj1_c, left1_l, right1_l, ed2, sj2_c, left2_l, right2_l, both_c) { \
+// for sj1, if right_hard == 1, sj1 & sj2 should be in that read together
+// for sj2, if left_hard == 1, same to above
+#define _count_both_read(ed1, sj1_c, sj1_l, left1_l, right1_l, ed2, sj2_c, sj2_l, left2_l, right2_l, both_c) { \
     int _l, _left, _right;  \
     uint64_t *_bid_up = (uint64_t*)_err_calloc(2, sizeof(uint64_t)); int _bid_up_n=0, _bid_up_m=2, _hit, _hit_i;    \
     for (_l = 0; _l < ed1.uniq_c; ++_l) { \
@@ -57,7 +59,7 @@ int asm2ase_usage(void)
             if (_anc.left_anc_len == left1_l) _left=1;   \
         } else if (_anc.left_anc_len <= left1_l) _left=1;    \
         if (_anc.right_hard) {   \
-            if (_anc.right_anc_len == right1_l) _right=1; \
+            if (_anc.right_anc_len == right1_l && _anc.right_sj_len == sj2_l) _right=1; \
         } else if (_anc.right_anc_len <= right1_l) _right=1;  \
         if (_left && _right) {  \
             sj1_c++;    \
@@ -68,7 +70,7 @@ int asm2ase_usage(void)
         _left = 0, _right=0;    \
         anc_t _anc = ed2.anc[_l];    \
         if (_anc.left_hard) {    \
-            if (_anc.left_anc_len == left2_l) _left=1;   \
+            if (_anc.left_anc_len == left2_l && _anc.left_sj_len == sj1_l) _left=1;   \
         } else if (_anc.left_anc_len <= left2_l) _left=1;    \
         if (_anc.right_hard) {   \
             if (_anc.right_anc_len == right2_l) _right=1;   \
@@ -132,8 +134,9 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
 
                         int up_c=0, down_c=0, both_c=0, skip_c=0;
                         int up_l=_node_len(n,up), se_l=_node_len(n,se), down_l=_node_len(n,down);
+                        int sj1_l = n[se].start-n[up].end-1, sj2_l = n[down].start-n[se].end-1;
 
-                        _count_both_read(ed[ij1_id], up_c, up_l, se_l, ed[ij2_id], down_c, se_l, down_l, both_c)
+                        _count_both_read(ed[ij1_id], up_c, sj1_l, up_l, se_l, ed[ij2_id], down_c, sj2_l, se_l, down_l, both_c)
                         _count_sj_read(ed[ej_id], skip_c, up_l, down_l)
                         add_asm_se(ase, up, se, down, up_c, down_c, both_c, skip_c, asm_i, sg_i)
                     }
@@ -367,8 +370,10 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
                                         uint32_t up = pre.node_id, fir = mx1.node_id, sec = mx2.node_id, down = next.node_id;
                                         int fir_up_c=0,fir_down_c=0,fir_both_c=0,sec_up_c=0,sec_down_c=0,sec_both_c=0;
                                         int up_l=_node_len(node,up), fir_l=_node_len(node,fir), sec_l=_node_len(node,sec), down_l=_node_len(node,down);
-                                        _count_both_read(ed[sj1_id], fir_up_c, up_l, fir_l, ed[sj3_id], fir_down_c, fir_l, down_l, fir_both_c)
-                                        _count_both_read(ed[sj2_id], sec_up_c, up_l, sec_l, ed[sj4_id], sec_down_c, sec_l, down_l, sec_both_c)
+                                        int sj1_l = node[fir].start-node[up].end-1, sj3_l = node[down].start-node[fir].end-1;
+                                        int sj2_l = node[sec].start-node[up].end-1, sj4_l = node[down].start-node[sec].end-1;
+                                        _count_both_read(ed[sj1_id], fir_up_c, sj1_l, up_l, fir_l, ed[sj3_id], fir_down_c, sj3_l, fir_l, down_l, fir_both_c)
+                                        _count_both_read(ed[sj2_id], sec_up_c, sj2_l, up_l, sec_l, ed[sj4_id], sec_down_c, sj4_l, sec_l, down_l, sec_both_c)
                                         add_asm_mxe(ase, up, fir, sec, down, fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c, asm_i, sg_i)
                                     }
                                 }

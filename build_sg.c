@@ -284,6 +284,7 @@ int sg_update_edge(SG *sg, uint32_t don_id, uint32_t acc_id, uint32_t don_site_i
         // set edge
         sg->edge[e_i].don_site_id = don_site_id, sg->edge[e_i].acc_site_id = acc_site_id;
         sg->edge[e_i].is_rev = is_rev;
+        sg->edge[e_i].motif = 0; sg->edge[e_i].is_anno = 1;
         sg->edge[e_i].uniq_c = sg->edge[e_i].multi_c = 0;
     }
     // set next/pre
@@ -295,9 +296,7 @@ int sg_update_edge(SG *sg, uint32_t don_id, uint32_t acc_id, uint32_t don_site_i
     return 0;
 }
 
-// order:
-// 1: pre
-// 2: post
+// order: 1, pre; 2, post
 void intersect_domn(uint32_t **com, uint32_t *new_domn, int *com_n, int new_n, int order)
 {
     int i, j, domn_i=0;

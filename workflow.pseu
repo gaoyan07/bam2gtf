@@ -2,6 +2,7 @@
 TODO:
 1. use bam.idx
 
+Workflow 1:
 1. Usage: gtools asm <ref.fa> <in.gtf> <SAMPLE1.REP1,REP2,REP3 ...;SAMPLE2.REP1,REP2,REP3 ...>
             ":" separates samples, "," separates replicates
    splice-junction considered: (K: known, n: novel, N: novel-com)
@@ -26,9 +27,9 @@ TODO:
         update_node_pre/next(node_don_id, node_acc_id)  // NODE DONE
         update_site_exon(site_don/acc_id, node_don/acc_id)  // SITE DONE
 
-(3.1). GTF-drived ASM & ASE
-
 4. Load short-read junction info from BAM/SJ file
+
+5. Build SR-SJ-SG
     for (each rep)
         read_BAM/SJ_file
             3. SR-SJ-SG
@@ -70,7 +71,7 @@ TODO:
                         }
                     }
 
-5. output multi-sample/replicates' ASE into one-file
+6. output multi-sample/replicates' ASE into one-file
     merge sort all the ASE
         init index for each rep
         while (we have ASE left) {
@@ -85,3 +86,68 @@ TODO:
                 }
             }
         }
+
+Workflow 2:
+1. Usage: gtools asm <ref.fa> <in.gtf> <SAMPLE1.REP1,REP2,REP3 ...;SAMPLE2.REP1,REP2,REP3 ...>
+            ":" separates samples, "," separates replicates
+   splice-junction considered: (K: known, n: novel, N: novel-com)
+       K:            only known
+       K + N:        known and novel-combination of known sites and known junction
+       K + n(N):     known and novel splice-junction of known splice-site
+       K + n(N) + l: known and novel splice-junction of known splcie-site, only output ASM/ASE with novel splice-junction
+
+2. Load ref.fa(Optional), ref.gtf
+    use ref.fa to classify intron-motif
+
+3. Build GTF-SG
+    // update node & site
+    1.  update_node(exon)
+        update_site(exon.start/exon.end)
+    // init 
+    2. alloc for node & site
+        init_node/site({id, malloc(node[next/pre]/site[exon_id]}) 
+    3. update edge
+        GTF(don, acc) ==> (node_don_id, node_acc_id), (site_don_id, site_acc_id)
+        update_edge(site_don_id, site_acc_id)       // EDGE DONE
+        update_node_site(node_don_id, site_don_id) (node_acc_id, site_acc_id)
+        update_node_pre/next(node_don_id, node_acc_id)  // NODE DONE
+        update_site_exon(site_don/acc_id, node_don/acc_id)  // SITE DONE
+
+4. Load short-read junction from BAM file
+    for (each sam/rep)
+        load SJ into sj_group
+        write read and SJ into disk
+
+// XXX NO multi-sample/replicate
+5. Update weight of GTF-SG edges
+    (Optional) Add new edges to GTF-SG
+    (Optional) Add new nodes to GTF-SG // XXX
+    // XXX for (each rep)
+        for each sj
+           if (sj is annotated)
+             update edge weight
+           else if (novel is allowed)
+             add new edge
+             update edge weight
+
+6. SG => ASM
+7. ASM => ASE
+
+Workflow 3: // best workflow
+1. Build GTF-SG
+2. for each read-BAM-record
+    0-sj => update node count
+    1-sj => update weight/ add edge/ nothing(invalid)
+    m-sj => if (sj is invalid) 
+                discard the whole read-record   // XXX
+             OR discard the sj                  // => workflow 4
+3. SG => ASM
+4. ASM => ASE
+
+Workflow 4:
+1. Build GTF-SG
+2. Load sj into sj_group from BAM file
+3. for each sj
+       update weight/ add edge/ nothing(invalid)
+4. SG => ASM
+5. ASM => ASE

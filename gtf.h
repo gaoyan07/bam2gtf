@@ -50,6 +50,7 @@ typedef struct {
 typedef struct {
     uint64_t bid;   // id of junction read
     int left_anc_len, right_anc_len; // anchor length
+    int left_sj_len, right_sj_len;   // if hard==1, sj length of left/right side
     uint8_t left_hard, right_hard;   // hard anchor
 } anc_t;
 
