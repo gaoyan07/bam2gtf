@@ -459,8 +459,8 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             sg->node[don_id].is_init = 1;
         }
     }
-    // cal pre/post domn
-    cal_pre_domn(sg); cal_post_domn(sg); 
+    // XXX after update!!! cal pre/post domn
+    // cal_pre_domn(sg); cal_post_domn(sg); 
 }
 
 SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
@@ -497,7 +497,7 @@ const struct option sg_long_opt [] = {
     {0, 0, 0, 0}
 };
 
-int build_sg(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     int c;
     char prefix[1024] = "";

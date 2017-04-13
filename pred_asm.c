@@ -6,7 +6,7 @@
 #include "utils.h"
 #include "gtf.h"
 #include "build_sg.h"
-#include "pred_sg.h"
+#include "update_sg.h"
 #include "bam2sj.h"
 #include "kstring.h"
 
@@ -350,57 +350,60 @@ int pred_asm(int argc, char *argv[])
     // parse input name
     if (sg_par_input(sgp, argv[optind+1]) <= 0) return pred_asm_usage();
     
+    // set cname
     chr_name_t *cname = chr_name_init();
-    // set cname if input is BAM
     samFile *in; bam_hdr_t *h; bam1_t *b;
     if ((in = sam_open(sgp->in_name[0], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", sgp->in_name[0]);
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
     bam_set_cname(h, cname);
     bam_hdr_destroy(h); sam_close(in);
     // build splice-graph with GTF
-    SG_group *sg_g;
     FILE *gtf_fp = xopen(argv[optind], "r");
-    sg_g = construct_SpliceGraph(gtf_fp, cname);
+    SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
     int i;
-    SG_group **sr_sg_g_rep = (SG_group**)_err_malloc(sgp->tol_rep_n * sizeof(SG_group*));
     SGasm_group **asm_g_rep = (SGasm_group**)_err_malloc(sgp->tol_rep_n * sizeof(SGasm_group*));
     for (i = 0; i < sgp->tol_rep_n; ++i) {
-        SG_group *sr_sg_g = sr_sg_g_rep[i]; SGasm_group *asm_g = asm_g_rep[i];
         char *in_name = sgp->in_name[i];
         // get splice-junction
         int sj_n, sj_m; sj_t *sj_group;
         b = bam_init1(); 
         if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
         if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
-        sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); sj_m = 10000;
+        sj_m = 10000; sj_group = (sj_t*)_err_malloc(sj_m * sizeof(sj_t));
         // FIXME bam2itv.tmp
         sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
 
-        // predict splice-graph with GTF-based splice-graph and splice-junciton
-        sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
+        // XXX // predict splice-graph with GTF-based splice-graph and splice-junciton
+        //sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
+        // update edge weight and add novel edge for GTF-SG
+        update_SpliceGraph(sg_g, sj_group, sj_n, sgp);
         free(sj_group);
 
         // generate ASM with short-read splice-graph
-        asm_g = gen_asm(sr_sg_g, sgp);
+        SGasm_group *asm_g = gen_asm(sg_g, sgp);
 
         // calculate number of reads falling into exon-body
         samFile *in; bam_hdr_t *h; bam1_t *b;
         in = sam_open(in_name, "rb"); h = sam_hdr_read(in); b = bam_init1(); 
-        cal_asm_exon_cnt(sr_sg_g, in, h, b);
+        cal_asm_exon_cnt(sg_g, in, h, b);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
         // output asm
-        asm_output(in_name, out_fn, sr_sg_g, asm_g, sgp);
+        asm_output(in_name, out_fn, sg_g, asm_g, sgp);
+        asm_g_rep[i] = asm_g;
+
     }
-    sg_free_group(sg_g);
-    for (i = 0; i < sgp->tol_rep_n; ++i) {
-        sg_free_group(sr_sg_g_rep[i]); sg_free_asm_group(asm_g_rep[i]);
-    } free(sr_sg_g_rep); free(asm_g_rep);
+    for (i = 0; i < sgp->tol_rep_n; ++i) sg_free_asm_group(asm_g_rep[i]); 
+    free(asm_g_rep); sg_free_group(sg_g);
 
     // output to one file
     sg_free_para(sgp);
-    for (i = 0; i < seq_n; ++i) { free(seq[i].name.s); free(seq[i].seq.s); } free(seq);
+    if (seq_n > 0) {
+        for (i = 0; i < seq_n; ++i)  
+            free(seq[i].name.s), free(seq[i].seq.s);
+        free(seq);
+    }
     return 0;
 }

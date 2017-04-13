@@ -5,6 +5,13 @@
 #include "gtf.h"
 #include "utils.h"
 
+#define _sim_insert(v, p, n, m, type) { \
+    if (n == m) {               \
+        _realloc(p, m, type)    \
+    }                           \
+    p[n++] = v;                 \
+}
+
 #define _insert(v, p, n, m, type) { \
     int _i, _flag=0;                  \
     for (_i = 0; _i < n; ++_i) {       \
@@ -78,7 +85,7 @@
     }   \
 }
 
-#define _node_len(n, i) ((n)[i].end-(n)[i].start+1)
+#define _node_len(n) ((n).end-(n).start+1)
 
 typedef struct {
     int up, se, down;
