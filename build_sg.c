@@ -278,8 +278,8 @@ int sg_update_edge(SG *sg, int don_id, int acc_id, int don_site_id, int acc_site
     int hit = 0;
     int e_i = sg_bin_sch_edge(sg, don_site_id, acc_site_id, &hit);
     if (hit == 0) { // insert new edge
-        int motif=0, is_anno=1, uniq_c=0, multi_c=0, max_over=0;
-        sg_add_edge(sg->edge, e_i, (sg->edge_n), (sg->edge_m), don_site_id, acc_site_id, is_rev, motif, is_anno, uniq_c, multi_c, max_over)
+        uint8_t is_anno=1;
+        sg_add_edge(sg->edge, e_i, (sg->edge_n), (sg->edge_m), don_site_id, acc_site_id, is_rev, is_anno)
     }
     // set next/pre
     _insert(acc_id, sg->node[don_id].next_id, sg->node[don_id].next_n, sg->node[don_id].next_m, int)

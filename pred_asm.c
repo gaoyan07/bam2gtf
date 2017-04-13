@@ -14,7 +14,7 @@ extern const char PROG[20];
 int pred_asm_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s asm [option] <ref.fa> <in.gtf> <in.bam/sj>\n\n", PROG);
+    err_printf("Usage:   %s asm [option] <in.gtf> <in.bam/sj>\n\n", PROG);
     err_printf("Note:    for multi-sample and multi-replicate should be this format: \n");
     err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
     err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
@@ -24,6 +24,8 @@ int pred_asm_usage(void)
     err_printf("         -t --read-type   [STR]    %s OR %s. -t %s will force filtering out reads mapped in improper pair. [%s].\n", PAIR, SING, PAIR, PAIR);
     err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d].\n", ANCHOR_MIN_LEN);
     err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
+    err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
+    err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
     err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
 
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
@@ -308,6 +310,7 @@ const struct option asm_long_opt [] = {
     { "read-type", 1, NULL, 't' },
     { "anchor-len", 1, NULL, 'a' },
     { "intron-len", 1, NULL, 'i' },
+    { "genome-file", 1, NULL, 'g' },
     { "use-multi", 0, NULL, 'm' },
     { "output", 1, NULL, 'o' },
 
@@ -316,7 +319,7 @@ const struct option asm_long_opt [] = {
 
 int pred_asm(int argc, char *argv[])
 {
-    int c; char out_fn[1024]="";
+    int c; char out_fn[1024]="", ref_fn[1024]="";
     sg_para *sgp = sg_init_para();
 	while ((c = getopt_long(argc, argv, "nNsmo:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
@@ -330,18 +333,22 @@ int pred_asm(int argc, char *argv[])
                       break;
             case 'a': sgp->anchor_len = atoi(optarg); break;
             case 'i': sgp->intron_len = atoi(optarg); break;
+            case 'g': strcpy(ref_fn, optarg); break;
             case 'o': strcpy(out_fn, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg); return pred_asm_usage();
         }
     }
-    if (argc - optind != 3) return pred_asm_usage();
+    if (argc - optind != 2) return pred_asm_usage();
 
-    gzFile genome_fp = gzopen(argv[optind], "r");
-    if (genome_fp == NULL) err_fatal(__func__, "Can not open genome file. %s\n", argv[optind]);
-    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
-
+    int seq_n = 0, seq_m; kseq_t *seq;
+    if (strlen(ref_fn) != 0) {
+        gzFile genome_fp = gzopen(ref_fn, "r");
+        if (genome_fp == NULL) { err_fatal(__func__, "Can not open genome file. %s\n", ref_fn); }
+        seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
+        gzclose(genome_fp); 
+    }
     // parse input name
-    if (sg_par_input(sgp, argv[optind+2]) <= 0) return pred_asm_usage();
+    if (sg_par_input(sgp, argv[optind+1]) <= 0) return pred_asm_usage();
     
     chr_name_t *cname = chr_name_init();
     // set cname if input is BAM
@@ -352,7 +359,7 @@ int pred_asm(int argc, char *argv[])
     bam_hdr_destroy(h); sam_close(in);
     // build splice-graph with GTF
     SG_group *sg_g;
-    FILE *gtf_fp = xopen(argv[optind+1], "r");
+    FILE *gtf_fp = xopen(argv[optind], "r");
     sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
@@ -393,9 +400,7 @@ int pred_asm(int argc, char *argv[])
     } free(sr_sg_g_rep); free(asm_g_rep);
 
     // output to one file
-    gzclose(genome_fp); sg_free_para(sgp);
-    for (i = 0; i < seq_n; ++i) {
-        free(seq[i].name.s); free(seq[i].seq.s);
-    } free(seq);
+    sg_free_para(sgp);
+    for (i = 0; i < seq_n; ++i) { free(seq[i].name.s); free(seq[i].seq.s); } free(seq);
     return 0;
 }

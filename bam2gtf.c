@@ -26,7 +26,7 @@ int bam2gtf_usage(void)
 	return 1;
 }
 
-int gen_exon(trans_t *t, bam1_t *b, int *c, int n_cigar, int exon_min, int intron_len)
+int gen_exon(trans_t *t, bam1_t *b, uint32_t *c, int n_cigar, int exon_min, int intron_len)
 {
     t->exon_n = 0;
     int tid = b->core.tid; int start = b->core.pos+1, end = start-1;/*1-base*/ uint8_t is_rev, *p;
@@ -74,7 +74,7 @@ int gen_trans(bam1_t *b, trans_t *t, int exon_min, int intron_len)
 {
     if (bam_unmap(b)) return 0;
 
-    int *c = bam_get_cigar(b), n_cigar = b->core.n_cigar;
+    uint32_t *c = bam_get_cigar(b); int n_cigar = b->core.n_cigar;
     gen_exon(t, b, c, n_cigar, exon_min, intron_len);
     return 1;
 }

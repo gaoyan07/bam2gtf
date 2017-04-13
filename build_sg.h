@@ -135,7 +135,6 @@ typedef struct {
     int *exon_id; int exon_n, exon_m;
 } SGsite; // splice-site of splicing-graph
 
-
 typedef struct {
     int don_site_id, acc_site_id;
     uint8_t is_rev;
@@ -143,16 +142,6 @@ typedef struct {
     int uniq_c, multi_c, max_over;
     anc_t *anc; // for each uniq-junction
 } SGedge; // edge of splicing-graph, splice junction
-
-#define sg_add_edge(ed, ei, ed_n, ed_m, _don_site_id, _acc_site_id, _is_rev, _motif, _is_anno, _uniq_c, _multi_c, _max_over) { \
-    if (ed_n++ >= ed_m) _realloc(ed, ed_m, SGedge) \
-    /* copy edge */ \
-    if (ei <= ed_n-2) memmove(ed+ei+1, ed+ei, (ed_n-ei-1) * sizeof(SGedge)); \
-    /* set edge */ \
-    ed[ei].don_site_id = _don_site_id, ed[ei].acc_site_id = _acc_site_id,   \
-    ed[ei].is_rev = _is_rev, ed[ei].motif = _motif, ed[ei].is_anno = _is_anno,  \
-    ed[ei].uniq_c = _uniq_c; ed[ei].multi_c = _multi_c; ed[ei].max_over = _max_over; \
-}
 
 typedef struct {
     //SGnode v;  // virtual start and end node
@@ -194,6 +183,15 @@ typedef struct {
 } sg_para;
 
 int comp_sj_sg(sj_t sj, SG sg);
+
+#define sg_add_edge(ed, ei, ed_n, ed_m, _don_site_id, _acc_site_id, _is_rev, _is_anno) { \
+    if (ed_n++ >= ed_m) _realloc(ed, ed_m, SGedge) \
+    /* copy edge */ \
+    if (ei <= ed_n-2) memmove(ed+ei+1, ed+ei, (ed_n-ei-1) * sizeof(SGedge)); \
+    /* set edge */ \
+    ed[ei].don_site_id = _don_site_id, ed[ei].acc_site_id = _acc_site_id,   \
+    ed[ei].is_rev = _is_rev; ed[ei].is_anno = _is_anno;  \
+}
 
 #define PAIR "paried"
 #define SING "single"

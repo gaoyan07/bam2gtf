@@ -11,16 +11,17 @@ extern const char PROG[20];
 int pred_sg_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s pred_sg [option] <in.gtf> <in.sj>\n\n", PROG);
+    err_printf("Usage:   %s pred_sg [option] <in.gtf> <in.bam>\n\n", PROG);
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
-    err_printf("         -o --out-prefix  [STR]    prefix of output splice-graph file. [in.sj]\n");
+    err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
+    err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
+    err_printf("         -o --out-prefix  [STR]    prefix of output splice-graph file. [in.bam]\n");
     err_printf("\n");
     return 1;
 }
-
 
 sg_para *sg_init_para(void)
 {
@@ -333,6 +334,7 @@ const struct option pred_sg_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
     { "novel-com", 0, NULL, 'N' },
     { "use-multi", 0, NULL, 'm' },
+    { "genome-file", 1, NULL, 'g' },
     { "out-prefix", 1, NULL, 'o' },
 
     { 0, 0, 0, 0}
@@ -340,12 +342,15 @@ const struct option pred_sg_long_opt [] = {
 
 int pred_sg(int argc, char *argv[])
 {
-    int c;
-    sg_para *sgp = sg_init_para(); char out_prefix[1024]="";
-    while ((c = getopt_long(argc, argv, "nNmo:", pred_sg_long_opt, NULL)) >= 0) {
+    int c; char out_prefix[1024]="", ref_fn[1024];
+    sg_para *sgp = sg_init_para(); 
+
+    while ((c = getopt_long(argc, argv, "nNmg:o:", pred_sg_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'N': sgp->no_novel_com = 0; break;
+            case 'm': sgp->use_mulit = 1; break;
+            case 'g': strcpy(ref_fn, optarg); break;
             case 'o': strcpy(out_prefix, optarg); break;
             default: err_printf("Error: unknown optin: %s.\n", optarg);
                      return pred_sg_usage();
@@ -353,39 +358,34 @@ int pred_sg(int argc, char *argv[])
     }
     if (argc - optind != 2) return pred_sg_usage();
 
-    gzFile genome_fp = gzopen(argv[optind], "r");
-    if (genome_fp == NULL) err_fatal(__func__, "Can not open genome file. %s\n", argv[optind]);
+    int seq_n = 0, seq_m; kseq_t *seq;
+    if (strlen(ref_fn) != 0) {
+        gzFile genome_fp = gzopen(ref_fn, "r");
+        if (genome_fp == NULL) { err_fatal(__func__, "Can not open genome file. %s\n", ref_fn); }
+        seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
+        gzclose(genome_fp); 
+    }
 
     // build splice-graph with GTF
     SG_group *sg_g;
-    FILE *gtf_fp = xopen(argv[optind+1], "r");
+    FILE *gtf_fp = xopen(argv[optind], "r");
     chr_name_t *cname = chr_name_init();
     sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp);  chr_name_free(cname);
 
-    // get splice-junction
-    /* based on .sj file
-    FILE *sj_fp = xopen(argv[optind+2], "r");
-    sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t));
-    int sj_n, sj_m = 10000;
-    sj_n = read_sj_group(sj_fp, sg_g->cname, &sj_group, sj_m);
-
-    SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, no_novel_sj, no_novel_com);
-    err_fclose(sj_fp); sg_free_group(sg_g);
-    */
-    // based on .bam file
+    // get splice-junction based on .bam file
     samFile *in; bam_hdr_t *h; bam1_t *b;
-    if ((in = sam_open(argv[optind+2], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+2]);
-    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+2]);
+    if ((in = sam_open(argv[optind+1], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+1]);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
     b = bam_init1(); 
+
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
-    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
     int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp); 
     // predict splice-graph with GTF-based splice-graph and splice-junciton
     SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
 
-    // dump predicted splice-graph to file
-    if (strlen(out_prefix) == 0) strcpy(out_prefix, argv[optind+2]);
+    // output sg to file
+
     int i; for (i = 0; i < seq_n; ++i) {
         free(seq[i].name.s); free(seq[i].seq.s);
     } free(seq);

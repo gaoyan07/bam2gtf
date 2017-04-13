@@ -60,7 +60,7 @@ int rRNA_overlap(bam1_t *b, read_trans_t *r)
 int gtf_filter(bam1_t *b, int *score, int *intron_n, float cov_rate, float map_qual, read_trans_t *r)
 {
     if (bam_unmap(b)) return 1;
-    int *c = bam_get_cigar(b), n_c = b->core.n_cigar;
+    uint32_t *c = bam_get_cigar(b); int n_c = b->core.n_cigar;
     // intron number
     int i, del_len=0;
     *intron_n=0;

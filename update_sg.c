@@ -6,7 +6,6 @@
 
 #define sg_update_edge_wei(ed, sj) { \
     ed.motif = sj->motif; \
-    ed.is_anno = 1; /* no need to asign here, alread 1 */ \
     ed.uniq_c = sj->uniq_c; \
     ed.multi_c = sj->multi_c; \
     ed.max_over = sj->max_over; \
@@ -25,6 +24,7 @@
 
 int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 {
+    print_format_time(stderr); err_printf("[%s] updating splice-graph with splice-junctions ...\n", __func__);
     int no_novel_sj = sgp->no_novel_sj; //, no_novel_com = sgp->no_novel_com; // XXX no need for no_novel_com
     int hit;
     int sj_i = 0, last_sg_i = 0, sg_i;
@@ -48,12 +48,13 @@ int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
                 break;
             } else if (hit == 0 && no_novel_sj == 0) { // add new edge
                 int is_anno = 0, is_rev = sg->is_rev;
-                sg_add_edge(sg->edge, GTF_edge_id, (sg->edge_n), (sg->edge_m), GTF_don_site_id, GTF_acc_site_id, is_rev, sj->motif, is_anno, sj->uniq_c, sj->multi_c, sj->max_over)
+                sg_add_edge(sg->edge, GTF_edge_id, (sg->edge_n), (sg->edge_m), GTF_don_site_id, GTF_acc_site_id, is_rev, is_anno)
                 sg_update_edge_wei(sg->edge[GTF_edge_id], sj)
                 break;
             }
         }
         sj_i++;
     }
+    print_format_time(stderr); err_printf("[%s] updating splice-graph with splice-junctions done!\n", __func__);
     return 0;
 }

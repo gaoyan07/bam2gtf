@@ -74,7 +74,7 @@ typedef struct {
 typedef struct {
     exon_t *exon; int exon_n, exon_m;
     uint8_t *novel_exon_map, *novel_sj_map; // 3-bit map: l-iden | r-iden | both-iden
-    int tid; uint is_rev;
+    int tid; uint8_t is_rev;
     int start, end;
     char tname[100];
     char gname[100];

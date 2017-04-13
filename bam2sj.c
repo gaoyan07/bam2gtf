@@ -24,12 +24,14 @@ const int intron_motif_strand[6] = {
 int bam2sj_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s bam2sj [option] <genome.fa> <in.bam> > out.sj\n\n", PROG);
+    err_printf("Usage:   %s bam2sj [option] <in.bam> > out.sj\n\n", PROG);
     err_printf("Note:    in.bam should be sorted in advance\n\n");
     err_printf("Options:\n\n");
     err_printf("         -t --read-type   [STR]    %s OR %s. -t %s will force filtering out reads mapped in improper pair. [%s]\n", PAIR, SING, PAIR, PAIR);
     err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d]\n", ANCHOR_MIN_LEN);
     err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
+    err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
+    err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
     //err_printf("         -g --gtf-anno    [INT]    GTF annotation file. [NULL]\n");
     //err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
 	err_printf("\n");
@@ -38,6 +40,7 @@ int bam2sj_usage(void)
 
 const struct option bam2sj_long_opt [] = {
     //{ "gtf-anno", 1, NULL, 'g' },
+    { "genome-file", 1, NULL, 'g' },
     { "read-type", 1, NULL, 't' },
     { "anchor-len", 1, NULL, 'a' },
     { "intron-len", 1, NULL, 'i' },
@@ -70,6 +73,7 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int tid, int don, int acc, uint8_t s
 uint8_t intr_deri_str(kseq_t *seq, int seq_n, int tid, int start, int end, uint8_t *motif_i)
 {
     *motif_i = 0;
+    if (seq_n == 0) return 0;
     if (tid >= seq_n) err_fatal(__func__, "unknown tid: %d\n", tid); 
     char intron[10]="";
     strncpy(intron, seq[tid].seq.s+start-1, 2);
@@ -87,7 +91,7 @@ uint8_t intr_deri_str(kseq_t *seq, int seq_n, int tid, int start, int end, uint8
 int gen_sj(bam1_t *b, uint64_t bid, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
 {
     if (bam_unmap(b)) return 0;
-    int n_cigar = b->core.n_cigar, *c = bam_get_cigar(b);
+    int n_cigar = b->core.n_cigar; uint32_t *c = bam_get_cigar(b);
 
     int tid = b->core.tid, start = b->core.pos+1, end = b->core.pos;/*1-base*/
     uint8_t strand, motif_i, is_uniq, is_prop; 
@@ -255,12 +259,13 @@ void print_sj(sj_t *sj_group, int sj_n, FILE *out, char **cname)
 
 int bam2sj(int argc, char *argv[])
 {
-    int c;
+    int c; char ref_fn[1024]="";
     sg_para *sgp = sg_init_para();
     //FILE *gtf_fp=NULL; // TODO gtf anno
 
-	while ((c = getopt_long(argc, argv, "t:a:i:", bam2sj_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "g:t:a:i:", bam2sj_long_opt, NULL)) >= 0) {
         switch (c) {
+            case 'g': strcpy(ref_fn, optarg); break;
             case 't': if (strcmp(optarg, PAIR) == 0) sgp->read_type = PAIR_T;
                       else if (strcmp(optarg, SING) == 0) sgp->read_type = SING_T;
                       else return bam2sj_usage();
@@ -271,26 +276,28 @@ int bam2sj(int argc, char *argv[])
             default: err_printf("Error: unknown option: %s.\n", optarg); return bam2sj_usage();
         }
     }
-    if (argc - optind != 2) return bam2sj_usage();
+    if (argc - optind != 1) return bam2sj_usage();
 
-    gzFile genome_fp = gzopen(argv[optind], "r");
-    if (genome_fp == NULL) { err_fatal(__func__, "Can not open genome file. %s\n", argv[optind]); }
+    int seq_n = 0, seq_m; kseq_t *seq;
+    if (strlen(ref_fn) != 0) {
+        gzFile genome_fp = gzopen(ref_fn, "r");
+        if (genome_fp == NULL) { err_fatal(__func__, "Can not open genome file. %s\n", ref_fn); }
+        seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
+        gzclose(genome_fp); 
+    }
 
     samFile *in; bam_hdr_t *h; bam1_t *b;
-
-    if ((in = sam_open(argv[optind+1], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind+1]);
-    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind+1]);
+    if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", argv[optind]);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1(); 
 
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
-
-    int seq_n = 0, seq_m; kseq_t *seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
     int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
 
     print_sj(sj_group, sj_n, stdout, h->target_name);
 
     bam_destroy1(b); sam_close(in); bam_hdr_destroy(h); 
-    sg_free_para(sgp); free(sj_group); gzclose(genome_fp); 
+    sg_free_para(sgp); free(sj_group); 
     int i; for (i = 0; i < seq_n; ++i) { free(seq[i].name.s); free(seq[i].seq.s); } free(seq);
     return 0;
 }

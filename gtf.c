@@ -335,8 +335,9 @@ int get_chr_id(chr_name_t *cname, char *chr)
         if (strcmp(cname->chr_name[i], chr) == 0) return i;
     }
     if (cname->chr_n == cname->chr_m) {
-        cname->chr_name = (char**)_err_realloc(cname->chr_name, cname->chr_m<<1 * sizeof(char*));
-        for (i = cname->chr_m; i < cname->chr_m<<1; ++i)
+        cname->chr_m <<= 1;
+        cname->chr_name = (char**)_err_realloc(cname->chr_name, cname->chr_m * sizeof(char*));
+        for (i = cname->chr_m>>1; i < cname->chr_m; ++i)
             cname->chr_name[i] = (char*)_err_malloc(100 * sizeof(char));
     }
     strcpy(cname->chr_name[cname->chr_n], chr);
