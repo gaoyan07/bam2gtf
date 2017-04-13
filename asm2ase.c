@@ -603,7 +603,7 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
     } free(out_fn); free(out_fp);
 }*/
 
-int asm2ase(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, sg_para *sgp)
+int asm2ase_core(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] generating alternative splice-events from alternative splice-modules ...\n", __func__);
     int i, use_multi = sgp->use_multi, only_novel = sgp->only_novel;
@@ -711,7 +711,7 @@ int asm2ase(int argc, char *argv[])
         asm_output(in_name, out_pre, sg_g, asm_g, sgp);
         // same to pred_asm END
         ASE_t *ase = ase_init();
-        asm2ase(sg_g, asm_g, ase, sgp);
+        asm2ase_core(sg_g, asm_g, ase, sgp);
         if (sgp->merge_out == 0) ase_output(in_name, out_pre, sg_g, ase, sgp);
         asm_g_rep[i] = asm_g; ase_rep[i] = ase;
     }
