@@ -191,6 +191,8 @@ int comp_sj_sg(sj_t sj, SG sg);
     /* set edge */ \
     ed[ei].don_site_id = _don_site_id, ed[ei].acc_site_id = _acc_site_id,   \
     ed[ei].is_rev = _is_rev; ed[ei].is_anno = _is_anno;  \
+    ed[ei].motif=0; ed[ei].uniq_c=0; ed[ei].multi_c=0; ed[ei].max_over=0; \
+    ed[ei].anc=NULL; \
 }
 
 #define PAIR "paried"

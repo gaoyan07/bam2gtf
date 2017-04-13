@@ -732,6 +732,10 @@ int asm2ase(int argc, char *argv[])
 
     // output to one file
     sg_free_para(sgp);
-    for (i = 0; i < seq_n; ++i) { free(seq[i].name.s); free(seq[i].seq.s); } free(seq);
+    if (seq_n > 0) {
+        for (i = 0; i < seq_n; ++i) 
+            free(seq[i].name.s), free(seq[i].seq.s);
+        free(seq);
+    }
     return 0;
 }
