@@ -21,7 +21,6 @@
         ed.anc[_i].left_hard = sj->anc[_i].left_hard;   \
         ed.anc[_i].right_hard = sj->anc[_i].right_hard;   \
     }   \
-    return 0; \
 }
 
 int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
@@ -45,13 +44,16 @@ int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
             int GTF_edge_id = sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit);
             // 1. for valid sj
             if (hit == 1) { // update edge weight
-                sg_update_edge_wei(sg->edge[GTF_edge_id], sj);
+                sg_update_edge_wei(sg->edge[GTF_edge_id], sj)
+                break;
             } else if (hit == 0 && no_novel_sj == 0) { // add new edge
                 int is_anno = 0, is_rev = sg->is_rev;
                 sg_add_edge(sg->edge, GTF_edge_id, (sg->edge_n), (sg->edge_m), GTF_don_site_id, GTF_acc_site_id, is_rev, sj->motif, is_anno, sj->uniq_c, sj->multi_c, sj->max_over)
                 sg_update_edge_wei(sg->edge[GTF_edge_id], sj)
+                break;
             }
         }
+        sj_i++;
     }
     return 0;
 }

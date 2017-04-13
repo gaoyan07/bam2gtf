@@ -119,6 +119,8 @@ int sg_update_edge_pred(SG *sg, sj_t sj, int don_site_id, int acc_site_id)
             sg->edge[e_i].anc[i].right_anc_len = sj.anc[i].right_anc_len;
             sg->edge[e_i].anc[i].left_hard= sj.anc[i].left_hard;
             sg->edge[e_i].anc[i].right_hard = sj.anc[i].right_hard;
+            sg->edge[e_i].anc[i].left_sj_len = sj.anc[i].left_sj_len;
+            sg->edge[e_i].anc[i].right_sj_len = sj.anc[i].right_sj_len;
         }
     }
     return 0;
