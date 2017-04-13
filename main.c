@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "bam2gtf") == 0) return bam2gtf(argc-1, argv+1);
     else if (strcmp(argv[1], "bam2sj") == 0) return bam2sj(argc-1, argv+1);
     else if (strcmp(argv[1], "asm") == 0) return pred_asm(argc-1, argv+1);
-    else if (strcmp(argv[1], "ase") == 0) return pred_ase(argc-1, argv+1);
+    else if (strcmp(argv[1], "ase") == 0) return asm2ase(argc-1, argv+1);
 	else { fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]); return 1; }
     return 0;
 }

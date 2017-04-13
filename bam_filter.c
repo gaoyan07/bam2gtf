@@ -47,8 +47,8 @@ void add_pathid(bam1_t *b, int id)
 
 int rRNA_overlap(bam1_t *b, read_trans_t *r)
 {
-    int32_t pos = b->core.pos, tid = b->core.tid;
-    int32_t rlen = bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
+    int pos = b->core.pos, tid = b->core.tid;
+    int rlen = bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
     int i;
     for (i = 0; i < r->trans_n; ++i) {
         if (tid == r->t[i].tid && !(pos > r->t[i].end || r->t[i].start > pos+rlen-1)) return 1;
@@ -60,9 +60,9 @@ int rRNA_overlap(bam1_t *b, read_trans_t *r)
 int gtf_filter(bam1_t *b, int *score, int *intron_n, float cov_rate, float map_qual, read_trans_t *r)
 {
     if (bam_unmap(b)) return 1;
-    uint32_t *c = bam_get_cigar(b), n_c = b->core.n_cigar;
+    int *c = bam_get_cigar(b), n_c = b->core.n_cigar;
     // intron number
-    uint32_t i, del_len=0;
+    int i, del_len=0;
     *intron_n=0;
     for (i = 0; i < n_c; ++i) {
         if (bam_cigar_op(c[i]) == BAM_CREF_SKIP) (*intron_n)++;

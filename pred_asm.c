@@ -34,16 +34,16 @@ int pred_asm_usage(void)
 }
 
 // init and free
-SGasm *sg_init_asm(uint32_t sg_id, uint32_t v_start, uint32_t v_end)
+SGasm *sg_init_asm(int sg_id, int v_start, int v_end)
 {
     SGasm *sg_asm = (SGasm*)_err_malloc(sizeof(SGasm));
     sg_asm->SG_id = sg_id;
     sg_asm->v_start = v_start; sg_asm->v_end = v_end;
     sg_asm->start = MAX_SITE; sg_asm->end = 0;
     sg_asm->node_n = 0; sg_asm->node_m = 1;
-    sg_asm->node_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
+    sg_asm->node_id = (int*)_err_malloc(sizeof(int));
     sg_asm->edge_n = 0; sg_asm->edge_m = 1;
-    sg_asm->edge_id = (uint32_t*)_err_malloc(sizeof(uint32_t));
+    sg_asm->edge_id = (int*)_err_malloc(sizeof(int));
     return sg_asm;
 }
 
@@ -81,7 +81,7 @@ void sg_free_asm_group(SGasm_group *asm_g)
 /*****************************
  *       generate ASM        *
  *****************************/
-void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *exit_n)
+void cal_cand_node(SG sg, int **entry, int **exit, int *entry_n, int *exit_n)
 {
     int i, n1=0, n2=0;
     for (i = 0; i < sg.node_n; ++i) {
@@ -89,8 +89,8 @@ void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *
         if (sg.node[i].pre_n > 1) n2++;
     }
     *entry_n = n1, *exit_n = n2;
-    *entry = (uint32_t*)_err_malloc(n1 * sizeof(uint32_t));
-    *exit = (uint32_t*)_err_malloc(n2 * sizeof(uint32_t));
+    *entry = (int*)_err_malloc(n1 * sizeof(int));
+    *exit = (int*)_err_malloc(n2 * sizeof(int));
 
     n1 = 0, n2 = 0;
     for (i = 0; i < sg.node_n; ++i) {
@@ -99,26 +99,26 @@ void cal_cand_node(SG sg, uint32_t **entry, uint32_t **exit, int *entry_n, int *
     }
 }
 
-void sg_update_asm_edge(SG *sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
+void sg_update_asm_edge(SG *sg, SGasm *sg_asm, int pre_id, int cur_id)
 {
     int hit = 0;
     if (sg->node[pre_id].node_e.end == 0 || sg->node[cur_id].node_e.start == MAX_SITE) return;
-    uint32_t pre_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, sg->node[pre_id].node_e.end+1, &hit);
-    uint32_t cur_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sg->node[cur_id].node_e.start-1, &hit);
-    uint32_t edge_i = _err_sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); 
-    _bin_insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, uint32_t)
+    int pre_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, sg->node[pre_id].node_e.end+1, &hit);
+    int cur_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sg->node[cur_id].node_e.start-1, &hit);
+    int edge_i = _err_sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); 
+    _bin_insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, int)
 }
 
-void sg_update_asm(SG *sg, SGasm *sg_asm, uint32_t pre_id, uint32_t cur_id)
+void sg_update_asm(SG *sg, SGasm *sg_asm, int pre_id, int cur_id)
 {
-    _bin_insert(cur_id, sg_asm->node_id, sg_asm->node_n, sg_asm->node_m, uint32_t)
+    _bin_insert(cur_id, sg_asm->node_id, sg_asm->node_n, sg_asm->node_m, int)
     if (sg->node[cur_id].node_e.start < sg_asm->start) sg_asm->start = sg->node[cur_id].node_e.start;
     if (sg->node[cur_id].node_e.end > sg_asm->end) sg_asm->end = sg->node[cur_id].node_e.end;
     sg->node[cur_id].is_asm = 1;
     sg_update_asm_edge(sg, sg_asm, pre_id, cur_id);
 }
 
-void sub_splice_graph(SG *sg, int **node_visit, SGasm *sg_asm, uint32_t cur_id, uint32_t e_id)
+void sub_splice_graph(SG *sg, int **node_visit, SGasm *sg_asm, int cur_id, int e_id)
 {
     if ((*node_visit)[cur_id] == 1) return; else (*node_visit)[cur_id] = 1;
 
@@ -142,8 +142,8 @@ int sg_asm_group_add(SGasm_group *asm_g, SGasm *sg_asm)
 
     a->SG_id = sg_asm->SG_id;
     a->v_start = sg_asm->v_start; a->v_end = sg_asm->v_end;
-    if (sg_asm->node_n > a->node_m) a->node_id = (uint32_t*)_err_realloc(a->node_id, sg_asm->node_n * sizeof(uint32_t));
-    if (sg_asm->edge_n > a->edge_m) a->edge_id = (uint32_t*)_err_realloc(a->edge_id, sg_asm->edge_n * sizeof(uint32_t));
+    if (sg_asm->node_n > a->node_m) a->node_id = (int*)_err_realloc(a->node_id, sg_asm->node_n * sizeof(int));
+    if (sg_asm->edge_n > a->edge_m) a->edge_id = (int*)_err_realloc(a->edge_id, sg_asm->edge_n * sizeof(int));
     a->node_n = a->node_m = sg_asm->node_n; a->edge_n = a->edge_m = sg_asm->edge_n;
     int i;
     for (i = 0; i < sg_asm->node_n; ++i) a->node_id[i] = sg_asm->node_id[i];
@@ -158,7 +158,7 @@ int check_novel_asm(SG *sg, SGasm *sg_asm)
 {
     int i;
     for (i = 0; i < sg_asm->edge_n; ++i) {
-        uint32_t eid = sg_asm->edge_id[i];
+        int eid = sg_asm->edge_id[i];
         if (sg->edge[eid].is_anno == 0) return 1;
     }
     return 0;
@@ -168,7 +168,7 @@ int check_uniq_asm(SG *sg, SGasm *sg_asm)
 {
     int i;
     for (i = 0; i < sg_asm->edge_n; ++i) {
-        uint32_t eid = sg_asm->edge_id[i];
+        int eid = sg_asm->edge_id[i];
         if (sg->edge[eid].uniq_c == 0) return 0;
     }
     return 1;
@@ -178,7 +178,7 @@ SGasm_group *gen_asm(SG_group *sg_g, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] generating alternative-splice-module with predicted SJ-SG ...\n", __func__);
     int only_novel = sgp->only_novel, use_multi = sgp->use_multi;
-    int entry_n, exit_n; uint32_t *entry, *exit;
+    int entry_n, exit_n; int *entry, *exit;
     int sg_i;
     SGasm_group *asm_g = sg_init_asm_group();
     for (sg_i = 0; sg_i < sg_g->SG_n; ++sg_i) {
@@ -225,7 +225,7 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
 
         for (i = last_sg_i; i < sg_g->SG_n; ++i) {
             SG *sg = sg_g->SG[i];
-            int32_t tid = sg->tid, start = sg->start, end = sg->end;
+            int tid = sg->tid, start = sg->start, end = sg->end;
             if (start == MAX_SITE || end == 0 || tid < b->core.tid || (tid == b->core.tid && end <= bam_start)) {
                 if (i == last_sg_i) last_sg_i++; continue;
             } else if (tid > b->core.tid || (tid == b->core.tid && start >= bam_end)) break;
@@ -278,18 +278,18 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
         SGasm *a = asm_g->sg_asm[i];
         int sg_i = a->SG_id; SG *sg = sg_g->SG[sg_i]; 
         SGnode *node = sg->node; SGsite *acc_site = sg->acc_site; SGsite *don_site = sg->don_site; SGedge *edge = sg->edge;
-        int start, end; uint32_t v_s = a->v_start, v_e = a->v_end;
+        int start, end; int v_s = a->v_start, v_e = a->v_end;
 
         if (node[v_s].node_e.start == 0) start = sg->start-100; else start = node[v_s].node_e.start;
         if (node[v_e].node_e.end == MAX_SITE) end = sg->end+100; else end = node[v_e].node_e.end;
 
         fprintf(out_fp[0], "%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%s:%d-%d\n", i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[a->v_start].node_e.start, node[a->v_start].node_e.end, node[a->v_end].node_e.start, node[a->v_end].node_e.end, a->node_n, cname->chr_name[sg->tid], start, end);
         for (j = 0; j < a->edge_n; ++j) {
-            uint32_t e_id = a->edge_id[j];
+            int e_id = a->edge_id[j];
             fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\n", i, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], don_site[edge[e_id].don_site_id].site, acc_site[edge[e_id].acc_site_id].site,  edge[e_id].uniq_c);
         }
         for (j = 0; j < a->node_n; ++j) {
-            uint32_t asm_n_id = a->node_id[j];
+            int asm_n_id = a->node_id[j];
             fprintf(out_fp[2], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\n", i, sg_i, j, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[asm_n_id].start, node[asm_n_id].end, node[asm_n_id].uniq_c);
         }
     }

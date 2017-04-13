@@ -1,6 +1,7 @@
 #ifndef _BUILD_SG_H
 #define _BUILD_SG_H
 #include <stdlib.h>
+#include <string.h>
 #include "gtf.h"
 #include "utils.h"
 
@@ -80,86 +81,97 @@
 #define _node_len(n, i) ((n)[i].end-(n)[i].start+1)
 
 typedef struct {
-    uint32_t up, se, down;
+    int up, se, down;
     int asm_i, sg_i;
     int up_c, down_c, both_c, skip_c;
 } SE_t;   // skipped exon
 
 typedef struct {
-    uint32_t lon, shor, down;
+    int lon, shor, down;
     int asm_i, sg_i;
     int lon_c, shor_c;
 } A5SS_t; // alternative 3' splice site
 
 typedef struct {
-    uint32_t up, lon, shor;
+    int up, lon, shor;
     int asm_i, sg_i;
     int lon_c, shor_c;
 } A3SS_t; // alternative 3' splice site
 
 typedef struct {
-    uint32_t up, fir, sec, down;
+    int up, fir, sec, down;
     int asm_i, sg_i;
     int fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c;
 } MXE_t; // mutually exclusive exon
 
 typedef struct {
-    uint32_t up, down, in;
+    int up, down, in;
     int asm_i, sg_i;
     int sj_c;
 } RI_t;  // retained intron
 
 typedef struct {
-    SE_t *se; int32_t se_n, se_m;
-    A5SS_t *a5ss; int32_t a5ss_n, a5ss_m;
-    A3SS_t *a3ss; int32_t a3ss_n, a3ss_m;
-    MXE_t *mxe; int32_t mxe_n, mxe_m;
-    RI_t *ri; int32_t ri_n, ri_m;
+    SE_t *se; int se_n, se_m;
+    A5SS_t *a5ss; int a5ss_n, a5ss_m;
+    A3SS_t *a3ss; int a3ss_n, a3ss_m;
+    MXE_t *mxe; int mxe_n, mxe_m;
+    RI_t *ri; int ri_n, ri_m;
 } ASE_t;
 
 typedef struct {
-    uint32_t node_id, s_site_id, e_site_id; // unique id in corresponding gene-locus
-    int32_t start, end; /* real exon */ exon_t node_e;    // node in splice-graph
+    int node_id, s_site_id, e_site_id; // unique id in corresponding gene-locus
+    int start, end; /* real exon */ exon_t node_e;    // node in splice-graph
     uint8_t is_init, is_termi;
-    uint8_t is_asm; uint32_t uniq_c, multi_c;
-    uint32_t *next_id;  int32_t next_n, next_m;
-    uint32_t *pre_id;    int32_t pre_n, pre_m;
-    uint32_t *pre_domn;  int32_t pre_domn_n, pre_domn_m;
-    uint32_t *post_domn; int32_t post_domn_n, post_domn_m;
+    uint8_t is_asm; int uniq_c, multi_c;
+    int *next_id, next_n, next_m;
+    int *pre_id, pre_n, pre_m;
+    int *pre_domn, pre_domn_n, pre_domn_m;
+    int *post_domn, post_domn_n, post_domn_m;
 } SGnode; // node of splicing-graph
 
 typedef struct {
-    uint32_t site_id;
-    int32_t site;
-    uint32_t *exon_id; int32_t exon_n, exon_m;
+    int site_id;
+    int site;
+    int *exon_id; int exon_n, exon_m;
 } SGsite; // splice-site of splicing-graph
 
+
 typedef struct {
-    uint32_t don_site_id, acc_site_id;
+    int don_site_id, acc_site_id;
     uint8_t is_rev;
     uint8_t motif, is_anno;
-    int32_t uniq_c, multi_c, max_over;
+    int uniq_c, multi_c, max_over;
     anc_t *anc; // for each uniq-junction
 } SGedge; // edge of splicing-graph, splice junction
+
+#define sg_add_edge(ed, ei, ed_n, ed_m, _don_site_id, _acc_site_id, _is_rev, _motif, _is_anno, _uniq_c, _multi_c, _max_over) { \
+    if (ed_n++ >= ed_m) _realloc(ed, ed_m, SGedge) \
+    /* copy edge */ \
+    if (ei <= ed_n-2) memmove(ed+ei+1, ed+ei, (ed_n-ei-1) * sizeof(SGedge)); \
+    /* set edge */ \
+    ed[ei].don_site_id = _don_site_id, ed[ei].acc_site_id = _acc_site_id,   \
+    ed[ei].is_rev = _is_rev, ed[ei].motif = _motif, ed[ei].is_anno = _is_anno,  \
+    ed[ei].uniq_c = _uniq_c; ed[ei].multi_c = _multi_c; ed[ei].max_over = _max_over; \
+}
 
 typedef struct {
     //SGnode v;  // virtual start and end node
     // virtual_start: node[0]; virtual_end: node[node_n-1]
-    SGnode *node; int32_t node_n, node_m; // sort by e.start and e.end 
-    SGsite *don_site; int32_t don_site_n, don_site_m; // sort by site
-    SGsite *acc_site; int32_t acc_site_n, acc_site_m; // sort by site
-    SGedge *edge; int32_t edge_n, edge_m; // sort by don_id and acc_id
-    int32_t tid; uint8_t is_rev;
+    SGnode *node; int node_n, node_m; // sort by e.start and e.end 
+    SGsite *don_site; int don_site_n, don_site_m; // sort by site
+    SGsite *acc_site; int acc_site_n, acc_site_m; // sort by site
+    SGedge *edge; int edge_n, edge_m; // sort by don_id and acc_id
+    int tid; uint8_t is_rev;
     // boundaries of splice-sites
-    int32_t start, end; 
+    int start, end; 
 } SG;
 
 typedef struct {
-    uint32_t SG_id;
-    uint32_t v_start, v_end; // virtual start and end node
-    uint32_t *node_id; int32_t node_n, node_m;
-    uint32_t *edge_id; int32_t edge_n, edge_m;
-    int32_t start, end;
+    int SG_id;
+    int v_start, v_end; // virtual start and end node
+    int *node_id; int node_n, node_m;
+    int *edge_id; int edge_n, edge_m;
+    int start, end;
 } SGasm;
 
 typedef struct {
@@ -169,7 +181,7 @@ typedef struct {
  
 typedef struct {
     SG **SG;
-    int32_t SG_n, SG_m;
+    int SG_n, SG_m;
     chr_name_t *cname;
 } SG_group;
 
@@ -180,6 +192,8 @@ typedef struct {
     int use_multi, read_type, anchor_len, intron_len;
     int merge_out;
 } sg_para;
+
+int comp_sj_sg(sj_t sj, SG sg);
 
 #define PAIR "paried"
 #define SING "single"
@@ -195,17 +209,17 @@ SG *sg_init_site(SG *sg);
 SG_group *sg_init_group(int g_n);
 void sg_free_group(SG_group *sg_g);
 
-int sg_update_node(SG *sg, exon_t e, int32_t start, int32_t end);
-int sg_update_site(SG *sg, int32_t site, uint8_t type);
+int sg_update_node(SG *sg, exon_t e, int start, int end);
+int sg_update_site(SG *sg, int site, uint8_t type);
 
 int sg_bin_sch_node(SG *sg, exon_t e, int *hit);
 int err_sg_bin_sch_node(const char *func, const int line, SG *sg, exon_t e, int *hit);
 #define _err_sg_bin_sch_node(sg, e, hit) err_sg_bin_sch_node(__func__, __LINE__, sg, e, hit)
-int sg_bin_sch_site(SGsite *site, int32_t site_n, int32_t s, int *hit);
-int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int32_t site_n, int32_t s, int *hit);
+int sg_bin_sch_site(SGsite *site, int site_n, int s, int *hit);
+int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int site_n, int s, int *hit);
 #define _err_sg_bin_sch_site(site, site_n, s, hit) err_sg_bin_sch_site(__func__, __LINE__, site, site_n, s, hit)
-int sg_bin_sch_edge(SG *sg, uint32_t don_site_id, uint32_t acc_site_id, int *hit);
-int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, uint32_t don_site_id, uint32_t acc_site_id, int *hit);
+int sg_bin_sch_edge(SG *sg, int don_site_id, int acc_site_id, int *hit);
+int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_site_id, int acc_site_id, int *hit);
 #define _err_sg_bin_sch_edge(sg, don_site_id, acc_site_id, hit) err_sg_bin_sch_edge(__func__, __LINE__, sg, don_site_id, acc_site_id, hit)
 
 void cal_pre_domn(SG *sg);

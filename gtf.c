@@ -22,7 +22,7 @@ trans_t *trans_init(int n) {
     return t;
 }
 
-int add_exon(trans_t *t, int32_t tid, int32_t start, int32_t end, uint8_t is_rev)
+int add_exon(trans_t *t, int tid, int start, int end, uint8_t is_rev)
 {
     if (t->exon_n == t->exon_m) t = exon_realloc(t);
     t->exon[t->exon_n].tid = tid;

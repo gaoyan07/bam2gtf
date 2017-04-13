@@ -45,7 +45,7 @@ const struct option bam2sj_long_opt [] = {
     { 0, 0, 0, 0}
 };
 
-int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t acc, uint8_t strand, uint8_t motif_i, uint8_t is_anno, uint8_t is_uniq)
+int add_sj(sj_t **sj, int *sj_n, int *sj_m, int tid, int don, int acc, uint8_t strand, uint8_t motif_i, uint8_t is_anno, uint8_t is_uniq)
 {
     if (*sj_n == *sj_m) {
         _realloc(*sj, *sj_m, sj_t)
@@ -67,7 +67,7 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int32_t tid, int32_t don, int32_t ac
     return 0;
 }
 
-uint8_t intr_deri_str(kseq_t *seq, int seq_n, int32_t tid, int32_t start, int32_t end, uint8_t *motif_i)
+uint8_t intr_deri_str(kseq_t *seq, int seq_n, int tid, int start, int end, uint8_t *motif_i)
 {
     *motif_i = 0;
     if (tid >= seq_n) err_fatal(__func__, "unknown tid: %d\n", tid); 
@@ -87,15 +87,15 @@ uint8_t intr_deri_str(kseq_t *seq, int seq_n, int32_t tid, int32_t start, int32_
 int gen_sj(bam1_t *b, uint64_t bid, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
 {
     if (bam_unmap(b)) return 0;
-    uint32_t n_cigar = b->core.n_cigar, *c = bam_get_cigar(b);
+    int n_cigar = b->core.n_cigar, *c = bam_get_cigar(b);
 
-    int32_t tid = b->core.tid, start = b->core.pos+1, end = b->core.pos;/*1-base*/
+    int tid = b->core.tid, start = b->core.pos+1, end = b->core.pos;/*1-base*/
     uint8_t strand, motif_i, is_uniq, is_prop; 
     if ((is_uniq = bam_is_uniq_NH(b)) == 0) return 0; // unique (2)
     is_prop = bam_is_prop(b);    // prop-pair (3)
     if (sgp->read_type == PAIR_T && is_prop == 0) return 0;
     
-    uint32_t i; int min_intr_len = sgp->intron_len, sj_n = 0, last_sj_l;
+    int i; int min_intr_len = sgp->intron_len, sj_n = 0, last_sj_l;
 
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
@@ -148,7 +148,7 @@ int sj_sch_group(sj_t *SJ, int SJ_n, sj_t sj, int *hit)
     *hit = 0;
     if (SJ_n == 0) return 0;
 
-    int i; int32_t tid, don, acc;
+    int i; int tid, don, acc;
     for (i = SJ_n-1; i >= 0; i--) {
         tid = SJ[i].tid, don = SJ[i].don, acc = SJ[i].acc;
         if (tid == sj.tid &&  don == sj.don && acc == sj.acc) { *hit = 1; return i; }

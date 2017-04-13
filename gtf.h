@@ -41,8 +41,8 @@
 #define ACC_SITE_F 1
 
 typedef struct {
-    int32_t tid; uint8_t is_rev;
-    int32_t start, end; //1-based, ref
+    int tid; uint8_t is_rev;
+    int start, end; //1-based, ref
                         //0: start of init exon
                         //MAX: end of term exon
 } exon_t;
@@ -55,10 +55,10 @@ typedef struct {
 } anc_t;
 
 typedef struct {
-    int32_t tid; uint8_t strand; // 0:undefined, 1:+, 2:-
-    int32_t don, acc;
+    int tid; uint8_t strand; // 0:undefined, 1:+, 2:-
+    int don, acc;
     uint8_t motif, is_anno;
-    int32_t uniq_c, multi_c, max_over;
+    int uniq_c, multi_c, max_over;
     anc_t *anc; int anc_m; // for each uniq-junction
 } sj_t;
 
@@ -74,8 +74,8 @@ typedef struct {
 typedef struct {
     exon_t *exon; int exon_n, exon_m;
     uint8_t *novel_exon_map, *novel_sj_map; // 3-bit map: l-iden | r-iden | both-iden
-    int32_t tid; uint32_t is_rev;
-    int32_t start, end;
+    int tid; uint is_rev;
+    int start, end;
     char tname[100];
     char gname[100];
     int novel_gene_flag, cov;
@@ -84,10 +84,10 @@ typedef struct {
 } trans_t;
 
 typedef struct {
-    int32_t tid; uint8_t is_rev;
-    int32_t start, end; //1-based, ref
+    int tid; uint8_t is_rev;
+    int start, end; //1-based, ref
     uint8_t is_canon, is_anno;
-    int32_t uniq_c, multi_c;
+    int uniq_c, multi_c;
 } intron_t;
 
 typedef struct {
@@ -100,19 +100,19 @@ typedef struct {
 
 typedef struct {
     trans_t *trans; int trans_n, anno_tran_n, trans_m;
-    int32_t tid; uint8_t is_rev;
-    int32_t start, end;
+    int tid; uint8_t is_rev;
+    int start, end;
     char gname[100];
 } gene_t;
 
 typedef struct {
     gene_t *g; int gene_n, gene_m;
-    int32_t tid, start, end;
+    int tid, start, end;
 } gene_group_t;
 
 typedef struct {
     char **chr_name;
-    int32_t chr_n, chr_m;
+    int chr_n, chr_m;
 } chr_name_t;
 
 exon_t *exon_init(int n);
@@ -124,7 +124,7 @@ int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m);
 int bam_set_cname(bam_hdr_t *h, chr_name_t *cname);
 
 trans_t *trans_init(int n);
-int add_exon(trans_t *t, int32_t tid, int32_t start, int32_t end, uint8_t is_rev);
+int add_exon(trans_t *t, int tid, int start, int end, uint8_t is_rev);
 int set_trans(trans_t *t, char *qname);
 trans_t *exon_realloc(trans_t *t);
 void trans_free(trans_t *t);
