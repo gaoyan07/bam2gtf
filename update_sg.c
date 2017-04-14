@@ -45,7 +45,6 @@ int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
             // 1. for valid sj
             if (hit == 1) { // update edge weight
                 sg_update_edge_wei(sg->edge[GTF_edge_id], sj)
-                break;
             } else if (hit == 0 && no_novel_sj == 0) { // add new edge
                 int is_anno = 0, is_rev = sg->is_rev;
                 // XXX add edge between all candidate nodes
@@ -61,7 +60,6 @@ int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 
                 sg_add_edge(sg->edge, GTF_edge_id, (sg->edge_n), (sg->edge_m), GTF_don_site_id, GTF_acc_site_id, is_rev, is_anno)
                 sg_update_edge_wei(sg->edge[GTF_edge_id], sj)
-                break;
             }
         }
         // one sj could be used for multi gene
