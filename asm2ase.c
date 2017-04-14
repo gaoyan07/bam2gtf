@@ -41,13 +41,19 @@ int asm2ase_usage(void)
     for (_l = 0; _l < ed.uniq_c; ++_l) {    \
         _left = 0, _right=0;  \
         anc_t _anc = ed.anc[_l];   \
-        if (_anc.left_hard) {    \
-            if (_anc.left_anc_len == _left_l) _left=1; \
-        } else if (_anc.left_anc_len <= _left_l || _is_init) _left=1;  \
-        if (_anc.right_hard) {   \
-            if (_anc.right_anc_len == _right_l) _right=1;  \
-        } else if (_anc.right_anc_len <= _right_l || _is_termi) _right=1;   \
-        if (_left && _right) cnt++; \
+        if (_is_init) _left=1;  \
+        else {  \
+            if (_anc.left_hard) {    \
+                if (_anc.left_anc_len == _left_l) _left=1; \
+            } else if (_anc.left_anc_len <= _left_l) _left=1;  \
+        }   \
+        if (_is_termi) _right=1; \
+        else {  \
+            if (_anc.right_hard) {   \
+                if (_anc.right_anc_len == _right_l) _right=1;  \
+            } else if (_anc.right_anc_len <= _right_l) _right=1;   \
+                if (_left && _right) cnt++; \
+        }   \
     }   \
 }
 
@@ -63,9 +69,12 @@ int asm2ase_usage(void)
     for (_l = 0; _l < ed1.uniq_c; ++_l) { \
         _left = 0, _right=0;    \
         anc_t _anc = ed1.anc[_l];    \
-        if (_anc.left_hard) {    \
-            if (_anc.left_anc_len == _left1_l) _left=1;   \
-        } else if (_anc.left_anc_len <= _left1_l || _is_init1) _left=1;    \
+        if (_is_init1) _left=1;    \
+        else {  \
+            if (_anc.left_hard) {    \
+                if (_anc.left_anc_len == _left1_l) _left=1;   \
+            } else if (_anc.left_anc_len <= _left1_l) _left=1;    \
+        }   \
         if (_anc.right_hard) {   \
             if (_anc.right_anc_len == _right1_l && _anc.right_sj_len == _sj2_l) _right=1; \
         } else if (_anc.right_anc_len <= _right1_l) _right=1;  \
@@ -80,9 +89,12 @@ int asm2ase_usage(void)
         if (_anc.left_hard) {    \
             if (_anc.left_anc_len == _left2_l && _anc.left_sj_len == _sj1_l) _left=1;   \
         } else if (_anc.left_anc_len <= _left2_l) _left=1;    \
-        if (_anc.right_hard) {   \
-            if (_anc.right_anc_len == _right2_l) _right=1;   \
-        } else if (_anc.right_anc_len <= _right2_l || _is_termi2) _right=1;    \
+        if (_is_termi2) _right = 1; \
+        else {    \
+            if (_anc.right_hard) {   \
+                if (_anc.right_anc_len == _right2_l) _right=1;   \
+            } else if (_anc.right_anc_len <= _right2_l) _right=1;    \
+        }   \
         if (_left && _right) {    \
             sj2_c++;   \
             _bin_search(_anc.bid, _bid_up, _bid_up_n, uint64_t, _hit, _hit_i)  \
