@@ -103,11 +103,10 @@ void cal_cand_node(SG sg, int **entry, int **exit, int *entry_n, int *exit_n)
 
 void sg_update_asm_edge(SG *sg, SGasm *sg_asm, int pre_id, int cur_id)
 {
-    int hit = 0;
     if (sg->node[pre_id].node_e.end == 0 || sg->node[cur_id].node_e.start == MAX_SITE) return;
-    int pre_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, sg->node[pre_id].node_e.end+1, &hit);
-    int cur_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sg->node[cur_id].node_e.start-1, &hit);
-    int edge_i = _err_sg_bin_sch_edge(sg, pre_site_id, cur_site_id, &hit); 
+    int pre_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, sg->node[pre_id].node_e.end+1);
+    int cur_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, sg->node[cur_id].node_e.start-1);
+    int edge_i = _err_sg_bin_sch_edge(sg, pre_site_id, cur_site_id); 
     _bin_insert(edge_i, sg_asm->edge_id, sg_asm->edge_n, sg_asm->edge_m, int)
 }
 

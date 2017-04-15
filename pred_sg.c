@@ -224,8 +224,8 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 // 3.0. (don_site, acc_site) => (don_site_id, acc_site_id)
                 don_site_id = sg_bin_sch_site(don_site, don_n, sj->don, &hit); if (hit == 0) continue;
                 acc_site_id = sg_bin_sch_site(acc_site, acc_n, sj->acc, &hit); if (hit == 0) continue;
-                GTF_don_site_id = _err_sg_bin_sch_site(sg_don, sg_don_n, sj->don, &hit);
-                GTF_acc_site_id = _err_sg_bin_sch_site(sg_acc, sg_acc_n, sj->acc, &hit);
+                GTF_don_site_id = _err_sg_bin_sch_site(sg_don, sg_don_n, sj->don);
+                GTF_acc_site_id = _err_sg_bin_sch_site(sg_acc, sg_acc_n, sj->acc);
                 sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); 
                 if (hit == 0 && no_novel_sj == 1) continue;
                 else if (hit == 0) sj->is_anno = 0;
@@ -237,12 +237,12 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                     int GTF_don_id = sg_don[GTF_don_site_id].exon_id[j];
                     if (node_map[sg_i][GTF_don_id] == 7) {
                         exon_t node_e = sg_node[GTF_don_id].node_e;
-                        int don_id = _err_sg_bin_sch_node(sr_sg, node_e, &hit);
-                        _insert(don_id, don_site[don_site_id].exon_id, don_site[don_site_id].exon_n, don_site[don_site_id].exon_m, int)
+                        int don_id = _err_sg_bin_sch_node(sr_sg, node_e);
+                        _bin_insert(don_id, don_site[don_site_id].exon_id, don_site[don_site_id].exon_n, don_site[don_site_id].exon_m, int)
                         // update v_start
                         if (sg_node[GTF_don_id].is_init == 1) {
-                            _insert(don_id, node[0].next_id, node[0].next_n, node[0].next_m, int)
-                            _insert(0, node[don_id].pre_id, node[don_id].pre_n, node[don_id].pre_m, int)
+                            _bin_insert(don_id, node[0].next_id, node[0].next_n, node[0].next_m, int)
+                            _bin_insert(0, node[don_id].pre_id, node[don_id].pre_n, node[don_id].pre_m, int)
                             node[don_id].is_init = 1;
                         }
                     }
@@ -251,12 +251,12 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                     int GTF_acc_id = sg_acc[GTF_acc_site_id].exon_id[j];
                     if (node_map[sg_i][GTF_acc_id] == 7) {
                         exon_t node_e = sg_node[GTF_acc_id].node_e;
-                        int acc_id = _err_sg_bin_sch_node(sr_sg, node_e, &hit);
-                        _insert(acc_id, acc_site[acc_site_id].exon_id, acc_site[acc_site_id].exon_n, acc_site[acc_site_id].exon_m, int)
+                        int acc_id = _err_sg_bin_sch_node(sr_sg, node_e);
+                        _bin_insert(acc_id, acc_site[acc_site_id].exon_id, acc_site[acc_site_id].exon_n, acc_site[acc_site_id].exon_m, int)
                         // update v_end
                         if (sg_node[GTF_acc_id].is_termi == 1) {
-                            _insert(acc_id, node[node_n-1].pre_id, node[node_n-1].pre_n, node[node_n-1].pre_m, int)
-                            _insert((int)node_n-1, node[acc_id].next_id, node[acc_id].next_n, node[acc_id].next_m, int)
+                            _bin_insert(acc_id, node[node_n-1].pre_id, node[node_n-1].pre_n, node[node_n-1].pre_m, int)
+                            _bin_insert((int)node_n-1, node[acc_id].next_id, node[acc_id].next_n, node[acc_id].next_m, int)
                             node[acc_id].is_termi = 1;
                         }
                     }
@@ -264,11 +264,11 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 for (j = 0; j < don_site[don_site_id].exon_n; ++j) {
                     int don_id = don_site[don_site_id].exon_id[j];
                     exon_t don_e = node[don_id].node_e;
-                    int GTF_don_id = _err_sg_bin_sch_node(sg, don_e, &hit);
+                    int GTF_don_id = _err_sg_bin_sch_node(sg, don_e);
                     for (k = 0; k < acc_site[acc_site_id].exon_n; ++k) {
                         int acc_id = acc_site[acc_site_id].exon_id[k];
                         exon_t acc_e = node[acc_id].node_e;
-                        int GTF_acc_id = _err_sg_bin_sch_node(sg, acc_e, &hit);
+                        int GTF_acc_id = _err_sg_bin_sch_node(sg, acc_e);
                         // set next/pre
                         if (no_novel_com) {
                             // if (GTF_don_id.next == GTF_acc_id)

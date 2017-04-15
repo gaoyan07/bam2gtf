@@ -152,11 +152,12 @@ int sg_bin_sch_node(SG *sg, exon_t e, int *hit)
     }
     return sg->node_n;
 }
-int err_sg_bin_sch_node(const char *func, const int line, SG *sg, exon_t e, int *hit)
+int err_sg_bin_sch_node(const char *func, const int line, SG *sg, exon_t e)
 {
-    int id = sg_bin_sch_node(sg, e, hit);
+    int hit;
+    int id = sg_bin_sch_node(sg, e, &hit);
     char head[100]; sprintf(head, "%s:%d", func, line);
-    if (*hit == 0) _err_fatal_simple(head, "Can not hit node.\n");
+    if (hit == 0) _err_fatal_simple(head, "Can not hit node.\n");
     return id;
 }
 
@@ -203,11 +204,12 @@ int sg_bin_sch_site(SGsite *site, int site_n, int s, int *hit)
     }
     return site_n;
 }
-int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int site_n, int s, int *hit)
+int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int site_n, int s)
 {
-    int id = sg_bin_sch_site(site, site_n, s, hit);
+    int hit;
+    int id = sg_bin_sch_site(site, site_n, s, &hit);
     char head[100]; sprintf(head, "%s:%d", func, line);
-    if (*hit == 0) _err_fatal_simple(head, "Can not hit site.\n");
+    if (hit == 0) _err_fatal_simple(head, "Can not hit site.\n");
     return id;
 }
 
@@ -264,11 +266,12 @@ int sg_bin_sch_edge(SG *sg, int don_site_id, int acc_site_id, int *hit)
     }
     return sg->edge_n;
 }
-int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_site_id, int acc_site_id, int *hit)
+int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_site_id, int acc_site_id)
 {
-    int id = sg_bin_sch_edge(sg, don_site_id, acc_site_id, hit);
+    int hit;
+    int id = sg_bin_sch_edge(sg, don_site_id, acc_site_id, &hit);
     char head[100]; sprintf(head, "%s:%d", func, line);
-    if (*hit == 0) _err_fatal_simple(head, "Can not hit edge.\n");
+    if (hit == 0) _err_fatal_simple(head, "Can not hit edge.\n");
     return id;
 }
 
@@ -282,11 +285,11 @@ int sg_update_edge(SG *sg, int don_id, int acc_id, int don_site_id, int acc_site
         sg_add_edge(sg->edge, e_i, (sg->edge_n), (sg->edge_m), don_site_id, acc_site_id, is_rev, is_anno)
     }
     // set next/pre
-    _insert(acc_id, sg->node[don_id].next_id, sg->node[don_id].next_n, sg->node[don_id].next_m, int)
-    _insert(don_id, sg->node[acc_id].pre_id, sg->node[acc_id].pre_n, sg->node[acc_id].pre_m, int)
+    _bin_insert(acc_id, sg->node[don_id].next_id, sg->node[don_id].next_n, sg->node[don_id].next_m, int)
+    _bin_insert(don_id, sg->node[acc_id].pre_id, sg->node[acc_id].pre_n, sg->node[acc_id].pre_m, int)
     // set site
-    _insert(don_id, sg->don_site[don_site_id].exon_id, sg->don_site[don_site_id].exon_n, sg->don_site[don_site_id].exon_m, int)
-    _insert(acc_id, sg->acc_site[acc_site_id].exon_id, sg->acc_site[acc_site_id].exon_n, sg->acc_site[acc_site_id].exon_m, int)
+    _bin_insert(don_id, sg->don_site[don_site_id].exon_id, sg->don_site[don_site_id].exon_n, sg->don_site[don_site_id].exon_m, int)
+    _bin_insert(acc_id, sg->acc_site[acc_site_id].exon_id, sg->acc_site[acc_site_id].exon_n, sg->acc_site[acc_site_id].exon_m, int)
     return 0;
 }
 
@@ -355,7 +358,7 @@ void cal_post_domn(SG *sg)
 // construct splice-graph for each gene
 void construct_SpliceGraph_core(SG *sg, gene_t gene)
 {
-    int i, j, hit; int don_id, acc_id, don_site_id, acc_site_id; exon_t e; int start, end;
+    int i, j, don_id, acc_id, don_site_id, acc_site_id; exon_t e; int start, end;
     
     sg->tid = gene.tid, sg->is_rev = gene.is_rev;
     // generate node
@@ -384,14 +387,14 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             if (gene.trans[i].exon_n == 1) continue;
             e = gene.trans[i].exon[0]; e.start = 0;
 
-            don_id = _err_sg_bin_sch_node(sg, e, &hit);
-            don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit);
+            don_id = _err_sg_bin_sch_node(sg, e);
+            don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1);
             sg->node[don_id].s_site_id = -1;
             sg->node[don_id].e_site_id = don_site_id;
 
             // set next_id of v_start
-            _insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, int)
-            _insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, int)
+            _bin_insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, int)
+            _bin_insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, int)
 
             sg->node[don_id].is_init = 1;
 
@@ -399,8 +402,8 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                 e = gene.trans[i].exon[j];
                 if (j == gene.trans[i].exon_n-1) e.end = MAX_SITE;
 
-                acc_id = _err_sg_bin_sch_node(sg, e, &hit);
-                acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit);
+                acc_id = _err_sg_bin_sch_node(sg, e);
+                acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1);
                 sg->node[acc_id].s_site_id = acc_site_id;
 
                 sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
@@ -409,13 +412,13 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                     sg->node[acc_id].e_site_id = -1;
                     break;
                 }
-                don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit);
+                don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1);
                 sg->node[acc_id].e_site_id = don_site_id;
                 don_id = acc_id;
             }
             // set pre_id of v_end
-            _insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, int)
-            _insert((int)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, int)
+            _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, int)
+            _bin_insert((int)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, int)
 
             sg->node[acc_id].is_termi = 1;
         }
@@ -424,13 +427,13 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             if (gene.trans[i].exon_n == 1) continue;
             e = gene.trans[i].exon[0]; e.end = MAX_SITE;
 
-            acc_id = _err_sg_bin_sch_node(sg, e, &hit);
-            acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit);
+            acc_id = _err_sg_bin_sch_node(sg, e);
+            acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1);
             sg->node[acc_id].e_site_id = -1;
             sg->node[acc_id].s_site_id = acc_site_id;
             // set pre_id of v_end
-            _insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, int)
-            _insert((int)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, int)
+            _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, int)
+            _bin_insert((int)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, int)
 
             sg->node[acc_id].is_termi = 1;
 
@@ -438,8 +441,8 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                 e = gene.trans[i].exon[j]; 
                 if (j == gene.trans[i].exon_n-1) e.start = 0;
 
-                don_id = _err_sg_bin_sch_node(sg, e, &hit);
-                don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1, &hit);
+                don_id = _err_sg_bin_sch_node(sg, e);
+                don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1);
                 sg->node[don_id].e_site_id = don_site_id;
 
                 sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
@@ -448,13 +451,13 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                     sg->node[don_id].s_site_id = -1;
                     break;
                 }
-                acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1, &hit);
+                acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1);
                 sg->node[don_id].s_site_id = acc_site_id;
                 acc_id = don_id;
             }
             // set next_id of v_start
-            _insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, int)
-            _insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, int)
+            _bin_insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, int)
+            _bin_insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, int)
 
             sg->node[don_id].is_init = 1;
         }

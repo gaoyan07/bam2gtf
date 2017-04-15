@@ -52,8 +52,8 @@ int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
                     int don_id = don_site[GTF_don_site_id].exon_id[i];
                     for (j = 0; j < acc_site[GTF_acc_site_id].exon_n; ++j) {
                         int acc_id = acc_site[GTF_acc_site_id].exon_id[j];
-                        _sim_insert(acc_id, node[don_id].next_id, node[don_id].next_n, node[don_id].next_m, int)
-                        _sim_insert(don_id, node[acc_id].pre_id, node[acc_id].pre_n, node[acc_id].pre_m, int)
+                        _bin_insert(acc_id, node[don_id].next_id, node[don_id].next_n, node[don_id].next_m, int)
+                        _bin_insert(don_id, node[acc_id].pre_id, node[acc_id].pre_n, node[acc_id].pre_m, int)
                         
                     }
                 }

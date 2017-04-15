@@ -144,8 +144,8 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
                 int ej_id = sg_bin_sch_edge(sg, pre_don_site_i, next_acc_site_i, &hit);
 
                 if (hit == 1) {
-                    int ij1_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, cur.s_site_id, &hit);
-                    int ij2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next.s_site_id, &hit);
+                    int ij1_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, cur.s_site_id);
+                    int ij2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next.s_site_id);
                     if ((use_multi == 1 || (sg->edge[ej_id].uniq_c > 0 && sg->edge[ij1_id].uniq_c > 0 && sg->edge[ij2_id].uniq_c > 0)) 
                     && (only_novel == 0 || ed[ej_id].is_anno == 0 || ed[ij1_id].is_anno == 0 || ed[ij2_id].is_anno == 0)) {
                         int up_c=0, down_c=0, both_c=0, skip_c=0;
@@ -184,7 +184,7 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
 
 void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, int only_novel)
 {
-    int i, j, k, hit; uint8_t is_rev = sg->is_rev; 
+    int i, j, k; uint8_t is_rev = sg->is_rev; 
     SGnode *n = sg->node, cur; SGedge *ed = sg->edge;
     if (is_rev) {
         SGnode next1, next2;
@@ -200,8 +200,8 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                     next2 = n[cur.next_id[k]];
                     next2_s = next2.start; next2_e = next2.end;
                     if (next1_e == next2_e && next1_s != next2_s) {
-                        int sj1_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next1.s_site_id, &hit);
-                        int sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id, &hit);
+                        int sj1_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next1.s_site_id);
+                        int sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0)) 
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                                 int lon_c=0, shor_c=0;
@@ -229,8 +229,8 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                     pre2 = n[cur.pre_id[k]];
                     pre2_s = pre2.start; pre2_e = pre2.end;
                     if (pre1_s == pre2_s && pre1_e != pre2_e) {
-                        int sj1_id = _err_sg_bin_sch_edge(sg, pre1.e_site_id, cur.s_site_id, &hit);
-                        int sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id, &hit);
+                        int sj1_id = _err_sg_bin_sch_edge(sg, pre1.e_site_id, cur.s_site_id);
+                        int sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                             int lon_c=0, shor_c=0;
@@ -270,7 +270,7 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
 
 void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, int only_novel)
 {
-    int i, j, k, hit; uint8_t is_rev = sg->is_rev;
+    int i, j, k; uint8_t is_rev = sg->is_rev;
     SGnode *n = sg->node, cur; SGedge *ed = sg->edge;
     if (is_rev) {
         SGnode pre1, pre2;
@@ -286,8 +286,8 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                     pre2 = n[cur.pre_id[k]];
                     pre2_s = pre2.start; pre2_e = pre2.end;
                     if (pre1_s == pre2_s && pre1_e != pre2_e) {
-                        int sj1_id = _err_sg_bin_sch_edge(sg, pre1.e_site_id, cur.s_site_id, &hit);
-                        int sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id, &hit);
+                        int sj1_id = _err_sg_bin_sch_edge(sg, pre1.e_site_id, cur.s_site_id);
+                        int sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                             int lon_c=0, shor_c=0;
@@ -315,8 +315,8 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                     next2 = n[cur.next_id[k]];
                     next2_s = next2.start; next2_e = next2.end;
                     if (next1_e == next2_e && next1_s != next2_s) {
-                        int sj1_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next1.s_site_id, &hit);
-                        int sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id, &hit);
+                        int sj1_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next1.s_site_id);
+                        int sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                             int lon_c=0, shor_c=0;
@@ -361,7 +361,7 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
 
 void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, int only_novel)
 {
-    int i, j, k, m, n, l, hit;
+    int i, j, k, m, n, l;
     SGnode *node = sg->node, mx1, mx2, pre, next; SGedge *ed = sg->edge;
     for (i = 0; i < a->node_n-1; ++i) {
         mx1 = node[a->node_id[i]];
@@ -380,10 +380,10 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
                                 if (mx2.next_id[l] == (int)sg->node_n-1) continue;
                                 if (mx1.next_id[n] == mx2.next_id[l]) {
                                     next = node[mx1.next_id[n]];
-                                    int sj1_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, mx1.s_site_id, &hit);
-                                    int sj2_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, mx2.s_site_id, &hit);
-                                    int sj3_id = _err_sg_bin_sch_edge(sg, mx1.e_site_id, next.s_site_id, &hit);
-                                    int sj4_id = _err_sg_bin_sch_edge(sg, mx2.e_site_id, next.s_site_id, &hit);
+                                    int sj1_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, mx1.s_site_id);
+                                    int sj2_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, mx2.s_site_id);
+                                    int sj3_id = _err_sg_bin_sch_edge(sg, mx1.e_site_id, next.s_site_id);
+                                    int sj4_id = _err_sg_bin_sch_edge(sg, mx2.e_site_id, next.s_site_id);
                                     if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0 && ed[sj3_id].uniq_c > 0 && ed[sj4_id].uniq_c > 0))
                                     && (only_novel == 0 ||  ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0 || ed[sj3_id].is_anno == 0 || ed[sj4_id].is_anno == 0)){
                                         int fir_up_c=0,fir_down_c=0,fir_both_c=0,sec_up_c=0,sec_down_c=0,sec_both_c=0;
@@ -425,7 +425,7 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
 
 void asm2ri(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, int only_novel)
 {
-    int i, j, k, hit;
+    int i, j, k;
     SGnode *n = sg->node, pre, ri, next; SGedge *ed = sg->edge;
     for (i = 0; i < a->node_n-2; ++i) {
         pre = n[a->node_id[i]];
@@ -435,7 +435,7 @@ void asm2ri(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
                 for (k = 0; k < pre.next_n; ++k) {
                     next = n[pre.next_id[k]];
                     if (ri.end == next.end) {
-                        int sj_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, next.s_site_id, &hit);
+                        int sj_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, next.s_site_id);
                         if ((use_multi == 1 || (ed[sj_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj_id].is_anno == 0)) {
                             int sj_c=0;

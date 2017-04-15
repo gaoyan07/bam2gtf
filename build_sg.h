@@ -220,14 +220,14 @@ int sg_update_node(SG *sg, exon_t e, int start, int end);
 int sg_update_site(SG *sg, int site, uint8_t type);
 
 int sg_bin_sch_node(SG *sg, exon_t e, int *hit);
-int err_sg_bin_sch_node(const char *func, const int line, SG *sg, exon_t e, int *hit);
-#define _err_sg_bin_sch_node(sg, e, hit) err_sg_bin_sch_node(__func__, __LINE__, sg, e, hit)
+int err_sg_bin_sch_node(const char *func, const int line, SG *sg, exon_t e);
+#define _err_sg_bin_sch_node(sg, e ) err_sg_bin_sch_node(__func__, __LINE__, sg, e)
 int sg_bin_sch_site(SGsite *site, int site_n, int s, int *hit);
-int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int site_n, int s, int *hit);
-#define _err_sg_bin_sch_site(site, site_n, s, hit) err_sg_bin_sch_site(__func__, __LINE__, site, site_n, s, hit)
+int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int site_n, int s);
+#define _err_sg_bin_sch_site(site, site_n, s) err_sg_bin_sch_site(__func__, __LINE__, site, site_n, s)
 int sg_bin_sch_edge(SG *sg, int don_site_id, int acc_site_id, int *hit);
-int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_site_id, int acc_site_id, int *hit);
-#define _err_sg_bin_sch_edge(sg, don_site_id, acc_site_id, hit) err_sg_bin_sch_edge(__func__, __LINE__, sg, don_site_id, acc_site_id, hit)
+int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_site_id, int acc_site_id);
+#define _err_sg_bin_sch_edge(sg, don_site_id, acc_site_id) err_sg_bin_sch_edge(__func__, __LINE__, sg, don_site_id, acc_site_id)
 
 void cal_pre_domn(SG *sg);
 void cal_post_domn(SG *sg);
