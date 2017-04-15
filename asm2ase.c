@@ -52,8 +52,8 @@ int asm2ase_usage(void)
             if (_anc.right_hard) {   \
                 if (_anc.right_anc_len == _right_l) _right=1;  \
             } else if (_anc.right_anc_len <= _right_l) _right=1;   \
-                if (_left && _right) cnt++; \
         }   \
+        if (_left && _right) cnt++; \
     }   \
 }
 
