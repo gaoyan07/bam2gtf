@@ -47,14 +47,13 @@ int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
                 sg_update_edge_wei(sg->edge[GTF_edge_id], sj)
             } else if (hit == 0 && no_novel_sj == 0) { // add new edge
                 int is_anno = 0, is_rev = sg->is_rev;
-                // XXX add edge between all candidate nodes
+                // add edge between all candidate nodes
                 for (i = 0; i < don_site[GTF_don_site_id].exon_n; ++i) {
                     int don_id = don_site[GTF_don_site_id].exon_id[i];
                     for (j = 0; j < acc_site[GTF_acc_site_id].exon_n; ++j) {
                         int acc_id = acc_site[GTF_acc_site_id].exon_id[j];
                         _bin_insert(acc_id, node[don_id].next_id, node[don_id].next_n, node[don_id].next_m, int)
                         _bin_insert(don_id, node[acc_id].pre_id, node[acc_id].pre_n, node[acc_id].pre_m, int)
-                        
                     }
                 }
 

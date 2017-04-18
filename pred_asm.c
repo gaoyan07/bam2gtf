@@ -318,7 +318,7 @@ const struct option asm_long_opt [] = {
 
 int pred_asm(int argc, char *argv[])
 {
-    int c; char out_fn[1024]="", ref_fn[1024]="";
+    int c, i; char out_fn[1024]="", ref_fn[1024]="";
     sg_para *sgp = sg_init_para();
 	while ((c = getopt_long(argc, argv, "nNsmo:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
@@ -361,7 +361,6 @@ int pred_asm(int argc, char *argv[])
     SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
-    int i;
     SGasm_group **asm_g_rep = (SGasm_group**)_err_malloc(sgp->tol_rep_n * sizeof(SGasm_group*));
     for (i = 0; i < sgp->tol_rep_n; ++i) {
         char *in_name = sgp->in_name[i];
@@ -371,12 +370,10 @@ int pred_asm(int argc, char *argv[])
         if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
         if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
         sj_m = 10000; sj_group = (sj_t*)_err_malloc(sj_m * sizeof(sj_t));
-        // FIXME bam2itv.tmp
-        sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
+        // calculate number of junction-reads and exon-body reads
+        sj_n = bam2cnt_core(in, h, b, seq, seq_n, &sj_group, sj_m, sg_g, sgp);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
 
-        // XXX // predict splice-graph with GTF-based splice-graph and splice-junciton
-        //sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
         // update edge weight and add novel edge for GTF-SG
         update_SpliceGraph(sg_g, sj_group, sj_n, sgp);
         free(sj_group);
@@ -384,15 +381,9 @@ int pred_asm(int argc, char *argv[])
         // generate ASM with short-read splice-graph
         SGasm_group *asm_g = gen_asm(sg_g, sgp);
 
-        // calculate number of reads falling into exon-body
-        samFile *in; bam_hdr_t *h; bam1_t *b;
-        in = sam_open(in_name, "rb"); h = sam_hdr_read(in); b = bam_init1(); 
-        cal_asm_exon_cnt(sg_g, in, h, b);
-        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
         // output asm
         asm_output(in_name, out_fn, sg_g, asm_g, sgp);
         asm_g_rep[i] = asm_g;
-
     }
     for (i = 0; i < sgp->tol_rep_n; ++i) sg_free_asm_group(asm_g_rep[i]); 
     free(asm_g_rep); sg_free_group(sg_g);

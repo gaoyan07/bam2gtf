@@ -41,22 +41,21 @@
 #define ACC_SITE_F 1
 
 typedef struct {
-    int tid; uint8_t is_rev;
-    int start, end; //1-based, ref
+    int32_t tid; uint8_t is_rev;
+    int32_t start, end; //1-based, ref
                         //0: start of init exon
                         //MAX: end of term exon
 } exon_t;
 
 typedef struct {
-    uint64_t bid;   // id of junction read
-    int left_anc_len, right_anc_len; // anchor length
-    int left_sj_len, right_sj_len;   // if hard==1, sj length of left/right side
-    uint8_t left_hard, right_hard;   // hard anchor
+    int32_t bid:30, left_hard:1, right_hard:1;   // id of junction read, hard-anchor
+    int32_t left_anc_len:16, right_anc_len:16; // anchor length
+    int32_t left_sj_len, right_sj_len;   // if hard==1, sj length of left/right side
 } anc_t;
 
 typedef struct {
-    int tid; uint8_t strand; // 0:undefined, 1:+, 2:-
-    int don, acc;
+    int32_t tid; uint8_t strand; // 0:undefined, 1:+, 2:-
+    int32_t don, acc;
     uint8_t motif, is_anno;
     int uniq_c, multi_c, max_over;
     anc_t *anc; int anc_m; // for each uniq-junction

@@ -96,13 +96,13 @@ typedef struct {
 typedef struct {
     int lon, shor, down;
     int asm_i, sg_i;
-    int lon_c, shor_c;
+    int lon_c, pj_c, shor_c;
 } A5SS_t; // alternative 3' splice site
 
 typedef struct {
     int up, lon, shor;
     int asm_i, sg_i;
-    int lon_c, shor_c;
+    int lon_c, pj_c, shor_c;
 } A3SS_t; // alternative 3' splice site
 
 typedef struct {
@@ -114,7 +114,7 @@ typedef struct {
 typedef struct {
     int up, down, in;
     int asm_i, sg_i;
-    int sj_c;
+    int ej_c, pj1_c, pj2_c;
 } RI_t;  // retained intron
 
 typedef struct {

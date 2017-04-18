@@ -88,65 +88,6 @@ uint8_t intr_deri_str(kseq_t *seq, int seq_n, int tid, int start, int end, uint8
     return 0;
 }
 
-int gen_sj(bam1_t *b, uint64_t bid, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
-{
-    if (bam_unmap(b)) return 0;
-    int n_cigar = b->core.n_cigar; uint32_t *c = bam_get_cigar(b);
-
-    int tid = b->core.tid, start = b->core.pos+1, end = b->core.pos;/*1-base*/
-    uint8_t strand, motif_i, is_uniq, is_prop; 
-    if ((is_uniq = bam_is_uniq_NH(b)) == 0) return 0; // unique (2)
-    is_prop = bam_is_prop(b);    // prop-pair (3)
-    if (sgp->read_type == PAIR_T && is_prop == 0) return 0;
-    
-    int i; int min_intr_len = sgp->intron_len, sj_n = 0, last_sj_l;
-
-    for (i = 0; i < n_cigar; ++i) {
-        int l = bam_cigar_oplen(c[i]);
-        switch (bam_cigar_op(c[i])) {
-            case BAM_CREF_SKIP: // N(0 1)
-                if (l >= min_intr_len) {
-                    strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
-                    add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq);
-                    (*sj)[sj_n-1].anc[0].left_anc_len = end-start+1;
-                    (*sj)[sj_n-1].anc[0].bid = bid;
-                    (*sj)[sj_n-1].anc[0].left_hard = 0, (*sj)[sj_n-1].anc[0].right_hard = 0;
-                    if (sj_n > 1) {
-                        (*sj)[sj_n-1].anc[0].left_hard = 1;
-                        (*sj)[sj_n-1].anc[0].left_sj_len = last_sj_l;
-                        (*sj)[sj_n-2].anc[0].right_anc_len = end-start+1;
-                        (*sj)[sj_n-2].anc[0].right_hard = 1;
-                        (*sj)[sj_n-2].anc[0].right_sj_len = l;
-                    }
-                    start = end+l+1;
-                    last_sj_l = l;
-                }
-                end += l;
-                break;
-            case BAM_CMATCH: // 1 1
-            case BAM_CEQUAL:
-            case BAM_CDIFF:
-                end += l;
-                break;
-            case BAM_CDEL : // D(0 1)
-                //end += l;
-                return 0; break; // XXX only M&N allowed
-            case BAM_CINS: // 1 0
-            case BAM_CSOFT_CLIP:
-            case BAM_CHARD_CLIP:
-            case BAM_CPAD: // 0 0
-            case BAM_CBACK:
-                return 0; break; // XXX only M&N allowed
-            default:
-                err_printf("Error: unknown cigar type: %d.\n", bam_cigar_op(c[i]));
-                break;
-        }
-    }
-    if (sj_n > 0) (*sj)[sj_n-1].anc[0].right_anc_len = end-start+1;
-
-    return sj_n;
-}
-
 int sj_sch_group(sj_t *SJ, int SJ_n, sj_t sj, int *hit)
 {
     *hit = 0;
@@ -228,20 +169,124 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
     return seq;
 }
 
+int gen_sj(int tid, int start, int n_cigar, uint32_t *c, int32_t bid, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
+{
+    int end = start - 1; /* 1-base */
+    uint8_t strand, motif_i;
+    
+    int i; int min_intr_len = sgp->intron_len, sj_n = 0, last_sj_l;
+
+    for (i = 0; i < n_cigar; ++i) {
+        int l = bam_cigar_oplen(c[i]);
+        switch (bam_cigar_op(c[i])) {
+            case BAM_CREF_SKIP: // N(0 1)
+                if (l >= min_intr_len) {
+                    strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
+                    add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, 1); // XXX is_uniq == 1
+                    (*sj)[sj_n-1].anc[0].left_anc_len = end-start+1;
+                    (*sj)[sj_n-1].anc[0].bid = bid;
+                    (*sj)[sj_n-1].anc[0].left_hard = 0, (*sj)[sj_n-1].anc[0].right_hard = 0;
+                    if (sj_n > 1) {
+                        (*sj)[sj_n-1].anc[0].left_hard = 1;
+                        (*sj)[sj_n-1].anc[0].left_sj_len = last_sj_l;
+                        (*sj)[sj_n-2].anc[0].right_anc_len = end-start+1;
+                        (*sj)[sj_n-2].anc[0].right_hard = 1;
+                        (*sj)[sj_n-2].anc[0].right_sj_len = l;
+                    }
+                    start = end+l+1;
+                    last_sj_l = l;
+                }
+                end += l;
+                break;
+            case BAM_CMATCH: // 1 1
+            case BAM_CEQUAL:
+            case BAM_CDIFF:
+                end += l;
+                break;
+            case BAM_CDEL : // D(0 1)
+                //end += l;
+                return 0; break; // XXX only M&N allowed
+            case BAM_CINS: // 1 0
+            case BAM_CSOFT_CLIP:
+            case BAM_CHARD_CLIP:
+            case BAM_CPAD: // 0 0
+            case BAM_CBACK:
+                return 0; break; // XXX only M&N allowed
+            default:
+                err_printf("Error: unknown cigar type: %d.\n", bam_cigar_op(c[i]));
+                break;
+        }
+    }
+    if (sj_n > 0) (*sj)[sj_n-1].anc[0].right_anc_len = end-start+1;
+
+    return sj_n;
+}
+
+int bam2cnt_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, SG_group *sg_g, sg_para *sgp) {
+    print_format_time(stderr); err_printf("[%s] calculating junction- and exon-body-read count ...\n", __func__);
+    int n_cigar; uint32_t *cigar;
+    uint8_t is_uniq, is_prop; int tid, bam_start, bam_end;
+    // exon-body
+    int i, j, last_sg_i = 0;
+    // junction
+    int SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
+    sj->anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->anc_m = 1;
+    int32_t bid=0;
+    // read bam record
+    while (sam_read1(in, h, b) >= 0) {
+        if (bam_unmap(b)) continue; // unmap (0)
+        if ((is_uniq = bam_is_uniq_NH(b)) == 0) continue; // uniq-map (1)
+        if ((is_prop = bam_is_prop(b) == 0) && sgp->read_type == PAIR_T) continue; // prop-pair (2)
+
+        tid = b->core.tid; n_cigar = b->core.n_cigar, cigar = bam_get_cigar(b);
+        bam_start = b->core.pos+1, bam_end = b->core.pos+bam_cigar2rlen(n_cigar, cigar);
+        // junction-read
+        if ((sj_n = gen_sj(tid, bam_start, n_cigar, cigar, bid, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
+        bid++;
+        // exon-body read
+        if (last_sg_i == sg_g->SG_n) continue;
+        for (i = last_sg_i; i < sg_g->SG_n; ++i) {
+            SG *sg = sg_g->SG[i];
+            int tid = sg->tid, start = sg->start, end = sg->end;
+            if (tid < b->core.tid || start == MAX_SITE || end == 0 || (tid == b->core.tid && end <= bam_start)) {
+                if (i == last_sg_i) last_sg_i++; continue;
+            } else if (tid > b->core.tid || (tid == b->core.tid && start >= bam_end)) break;
+            else {
+                for (j = 0; j < sg->node_n; ++j) {
+                    if (sg->node[j].start <= bam_start && sg->node[j].end >= bam_end) {
+                        if (is_uniq) sg->node[j].uniq_c++;
+                        else sg->node[j].multi_c++;
+                    }
+                }
+            }
+        }
+    }
+    print_format_time(stderr); err_printf("[%s] calculating junction- and exon-body-read count done!\n", __func__);
+
+    return SJ_n;
+}
+
 int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
-    int SJ_n = 0, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
+    int n_cigar; uint32_t *cigar;
+    uint8_t is_uniq, is_prop; int tid, bam_start, bam_end;
+    int SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
     sj->anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->anc_m = 1;
     uint64_t bid=0;
     while (sam_read1(in, h, b) >= 0) {
-        int sj_n = gen_sj(b, bid, seq, seq_n, &sj, &sj_m, sgp);
-        if (sj_n > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
+        if (bam_unmap(b)) continue; // unmap (0)
+        if ((is_uniq = bam_is_uniq_NH(b)) == 0) continue; // uniq-map (1)
+        if ((is_prop = bam_is_prop(b) == 0) && sgp->read_type == PAIR_T) continue; // prop-pair (2)
+
+        tid = b->core.tid; n_cigar = b->core.n_cigar, cigar = bam_get_cigar(b);
+        bam_start = b->core.pos+1, bam_end = b->core.pos+bam_cigar2rlen(n_cigar, cigar);
+        if ((sj_n = gen_sj(tid, bam_start, n_cigar, cigar, bid, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
         bid++;
     }
     int i; for (i = 0; i < sj_m; ++i) free(sj[i].anc); free(sj);
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
-    
+
     return SJ_n;
 }
 
@@ -263,13 +308,13 @@ int bam2sj(int argc, char *argv[])
     sg_para *sgp = sg_init_para();
     //FILE *gtf_fp=NULL; // TODO gtf anno
 
-	while ((c = getopt_long(argc, argv, "g:t:a:i:", bam2sj_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "g:t:a:i:", bam2sj_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'g': strcpy(ref_fn, optarg); break;
             case 't': if (strcmp(optarg, PAIR) == 0) sgp->read_type = PAIR_T;
-                      else if (strcmp(optarg, SING) == 0) sgp->read_type = SING_T;
-                      else return bam2sj_usage();
-                      break;
+                          else if (strcmp(optarg, SING) == 0) sgp->read_type = SING_T;
+                          else return bam2sj_usage();
+                          break;
             case 'a': sgp->anchor_len = atoi(optarg); break;
             case 'i': sgp->intron_len = atoi(optarg); break;
 

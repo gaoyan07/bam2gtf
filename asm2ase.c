@@ -34,6 +34,7 @@ int asm2ase_usage(void)
     return 1;
 }
 
+// XXX handle multi-junction reads (more than 2 junctions)
 #define _count_sj_read(ed, pre, next, cnt) { \
     int _left_l = _node_len(pre), _right_l = _node_len(next);   \
     int _is_init = pre.is_init, _is_termi = next.is_termi; \
@@ -57,6 +58,61 @@ int asm2ase_usage(void)
     }   \
 }
 
+#define _count_pj_read(sg, n, ed, __long_ed, __shor, __pre, __next, pj_c) {\
+    /* reads corresponding to previous junction and long-cur junction */ \
+    int _i, _l, _left, _right;  \
+    int32_t *_bid_up = (int32_t*)_err_calloc(2, sizeof(uint32_t)); int _bid_up_n=0, _bid_up_m=2, _hit, _hit_i;    \
+    SGedge ed1, ed2 = __long_ed; SGnode pre, next = __next, cur = __pre;    \
+    int _shor_l = _node_len(__shor), _left2_l = _node_len(cur), _right2_l = _node_len(next);  \
+    anc_t _anc; \
+    if (cur.is_init == 0) \
+    { \
+        for (_i = 0; _i < cur.pre_n; ++_i) { \
+            pre = n[cur.pre_id[_i]]; ed1 = _err_sg_bin_sch_edge(sg, pre.e_site_id, cur.s_site_id);  \
+            int _sj1_l = cur.start - pre.end - 1, _sj2_l = next.start - cur.end - 1; \
+            int _left1_l = _node_len(pre), _right1_l = _node_len(cur);  \
+            int _is_init1 = pre.is_init, _is_termi2 = next.is_termi; \
+            for (_l = 0; _l < ed1.uniq_c; ++_l) { \
+                _left = 0, _right=0;    \
+                _anc = ed1.anc[_l];    \
+                if (_is_init1) _left=1;    \
+                else {  \
+                    if (_anc.left_hard) {    \
+                        if (_anc.left_anc_len == _left1_l) _left=1;   \
+                    } else if (_anc.left_anc_len <= _left1_l) _left=1;    \
+                }   \
+                if (_anc.right_hard) {   \
+                    if (_anc.right_anc_len == _right1_l && _anc.right_sj_len == _sj2_l) _right=1; \
+                } else if (_anc.right_anc_len <= _right1_l && _anc.right_anc_len > _shor_l) _right=1;  \
+                if (_left && _right) {  \
+                    pj_c++;    \
+                    _bin_insert(_anc.bid, _bid_up, _bid_up_n, _bid_up_m, int32_t)   \
+                }   \
+            }   \
+        }   \
+    }   \
+    for (_l = 0; _l < ed2.uniq_c; ++_l) {    \
+        _left = 0, _right=0;    \
+        _anc = ed2.anc[_l];    \
+        if (_anc.left_hard) {    \
+            if (_anc.left_anc_len == _left2_l && _anc.left_sj_len == ) _left=1;   \
+        } else if (_anc.left_anc_len <= _left2_l && _anc.left_anc_len > (_left2-_shor_l)) _left=1;    \
+        if (next._is_termi) _right = 1; \
+        else {    \
+            if (_anc.right_hard) {   \
+                if (_anc.right_anc_len == _right2_l) _right=1;   \
+            } else if (_anc.right_anc_len <= _right2_l) _right=1;    \
+        }   \
+        if (_left && _right) {    \
+            pj_c++;   \
+            _bin_search(_anc.bid, _bid_up, _bid_up_n, int32_t, _hit, _hit_i)  \
+            if (_hit) pj_c--; \
+        }   \
+    }  \
+    free(_bid_up);  \
+    /* reads corresponding to exon-body */ \
+}
+
 // for sj1, if right_hard == 1, sj1 & sj2 should be in that read together
 // for sj2, if left_hard == 1, same to above
 #define _count_both_read(ed1, pre, sj1_c, ed2, next, sj2_c, cur, both_c) { \
@@ -65,7 +121,7 @@ int asm2ase_usage(void)
     int _left2_l = _node_len(cur), _right2_l = _node_len(next);  \
     int _is_init1 = pre.is_init,_is_termi2 = next.is_termi; \
     int _l, _left, _right;  \
-    uint64_t *_bid_up = (uint64_t*)_err_calloc(2, sizeof(uint64_t)); int _bid_up_n=0, _bid_up_m=2, _hit, _hit_i;    \
+    int32_t *_bid_up = (int32_t*)_err_calloc(2, sizeof(uint32_t)); int _bid_up_n=0, _bid_up_m=2, _hit, _hit_i;    \
     for (_l = 0; _l < ed1.uniq_c; ++_l) { \
         _left = 0, _right=0;    \
         anc_t _anc = ed1.anc[_l];    \
@@ -80,7 +136,7 @@ int asm2ase_usage(void)
         } else if (_anc.right_anc_len <= _right1_l) _right=1;  \
         if (_left && _right) {  \
             sj1_c++;    \
-            _bin_insert(_anc.bid, _bid_up, _bid_up_n, _bid_up_m, uint64_t)   \
+            _bin_insert(_anc.bid, _bid_up, _bid_up_n, _bid_up_m, int32_t)   \
         }   \
     }   \
     for (_l = 0; _l < ed2.uniq_c; ++_l) {    \
@@ -97,7 +153,7 @@ int asm2ase_usage(void)
         }   \
         if (_left && _right) {    \
             sj2_c++;   \
-            _bin_search(_anc.bid, _bid_up, _bid_up_n, uint64_t, _hit, _hit_i)  \
+            _bin_search(_anc.bid, _bid_up, _bid_up_n, int32_t, _hit, _hit_i)  \
             if (_hit) both_c++; \
         }   \
     }  \
@@ -233,8 +289,9 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                         int sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
-                            int lon_c=0, shor_c=0;
+                            int lon_c=0, pj_c=0, shor_c=0;
                             _count_sj_read(ed[sj1_id], pre1, cur, shor_c)
+                            _count_pj_read(sg, n, ed, ed[sj2_id], pre1, pre2, cur, pj_c)
                             _count_sj_read(ed[sj2_id], pre2, cur, lon_c)
 
                             int shor = pre1.node_id, lon = pre2.node_id, down = cur.node_id;
@@ -403,7 +460,7 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
     }
 }
 
-#define add_asm_ri(ase, up_e, down_e, in_e, sj_c, asm_i, sg_i) {  \
+#define add_asm_ri(ase, up_e, down_e, in_e, ej_c, asm_i, sg_i) {  \
     int _i, _flag=0;                           \
     for (_i = ase->ri_n-1; _i >= 0; --_i) { \
         if (ase->ri[_i].sg_i != sg_i) break;  \
@@ -416,7 +473,7 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
         ase->ri[ase->ri_n].up = up_e;     \
         ase->ri[ase->ri_n].down = down_e; \
         ase->ri[ase->ri_n].in = in_e; \
-        ase->ri[ase->ri_n].sj_c = sj_c; \
+        ase->ri[ase->ri_n].ej_c = ej_c; \
         ase->ri[ase->ri_n].asm_i = asm_i; \
         ase->ri[ase->ri_n].sg_i = sg_i; \
         ase->ri_n++;    \
@@ -438,11 +495,11 @@ void asm2ri(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
                         int sj_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, next.s_site_id);
                         if ((use_multi == 1 || (ed[sj_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj_id].is_anno == 0)) {
-                            int sj_c=0;
-                            _count_sj_read(ed[sj_id], pre, next, sj_c)
+                            int ej_c=0;
+                            _count_sj_read(ed[sj_id], pre, next, ej_c)
 
                             int up = pre.node_id, down = next.node_id, in = ri.node_id;
-                            add_asm_ri(ase, up, down, in, sj_c, asm_i, sg_i)
+                            add_asm_ri(ase, up, down, in, ej_c, asm_i, sg_i)
                         }
                     }
                 }
@@ -546,7 +603,7 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
             int sg_i = ase->ri[i].sg_i, asm_i = ase->ri[i].asm_i;
             SG *sg = sg_g->SG[sg_i]; RI_t e = ase->ri[i]; SGnode *n = sg->node;
             fprintf(out_fp[4], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.down].start, n[e.down].end);
-            fprintf(out_fp[9], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.in].uniq_c-n[e.up].uniq_c-n[e.down].uniq_c, e.sj_c);
+            fprintf(out_fp[9], "%d\t%c\t%s\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.in].uniq_c-n[e.up].uniq_c-n[e.down].uniq_c, e.ej_c);
         }
     }
 
@@ -656,7 +713,7 @@ const struct option se_long_opt [] = {
 int asm2ase(int argc, char *argv[])
 {
     // same to pred_asm START
-    int c; char out_pre[1024]="", ref_fn[1024]="";
+    int c, i; char out_pre[1024]="", ref_fn[1024]="";
     sg_para *sgp = sg_init_para();
 	while ((c = getopt_long(argc, argv, "nNlmMt:g:a:o:", se_long_opt, NULL)) >= 0) {
         switch (c) {
@@ -701,7 +758,6 @@ int asm2ase(int argc, char *argv[])
     SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
-    int i;
     SGasm_group **asm_g_rep = (SGasm_group**)_err_malloc(sgp->tol_rep_n * sizeof(SGasm_group*));
     ASE_t **ase_rep = (ASE_t**)_err_malloc(sgp->tol_rep_n * sizeof(ASE_t*));
     for (i = 0; i < sgp->tol_rep_n; ++i) {
@@ -713,11 +769,10 @@ int asm2ase(int argc, char *argv[])
         if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
         if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
         sj_m = 10000; sj_group = (sj_t*)_err_malloc(sj_m * sizeof(sj_t));
-        // FIXME bam2itv.tmp
-        sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
+        // calculate number of junction-reads and exon-body reads
+        sj_n = bam2cnt_core(in, h, b, seq, seq_n, &sj_group, sj_m, sg_g, sgp);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
-        // XXX// predict splice-graph with GTF-based splice-graph and splice-junciton
-        // SG_group *sr_sg_g = predict_SpliceGraph(*sg_g, sj_group, sj_n, sgp);
+
         // update edge weight and add novel edge for GTF-SG
         update_SpliceGraph(sg_g, sj_group, sj_n, sgp);
         int j; for (j = 0; j < sj_n; ++j) free((sj_group+j)->anc); free(sj_group);
@@ -725,11 +780,6 @@ int asm2ase(int argc, char *argv[])
         // generate ASM with short-read splice-graph
         SGasm_group *asm_g = gen_asm(sg_g, sgp);
 
-        // calculate number of reads falling into exon-body
-        samFile *in; bam_hdr_t *h; bam1_t *b;
-        in = sam_open(in_name, "rb"); h = sam_hdr_read(in); b = bam_init1(); 
-        cal_asm_exon_cnt(sg_g, in, h, b);
-        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
         // output asm
         asm_output(in_name, out_pre, sg_g, asm_g, sgp);
         // same to pred_asm END
