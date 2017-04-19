@@ -58,100 +58,31 @@ int asm2ase_usage(void)
     }   \
 }
 
-#define _count_pj_read(sg, n, ed, __long_ed, __shor, __pre, __next, pj_c) {\
-    /* reads corresponding to previous junction and long-cur junction */ \
-    int _i, _l, _left, _right;  \
-    int32_t *_bid_up = (int32_t*)_err_calloc(2, sizeof(uint32_t)); int _bid_up_n=0, _bid_up_m=2, _hit, _hit_i;    \
-    SGedge ed1, ed2 = __long_ed; SGnode pre, next = __next, cur = __pre;    \
-    int _shor_l = _node_len(__shor), _left2_l = _node_len(cur), _right2_l = _node_len(next);  \
-    anc_t _anc; \
-    if (cur.is_init == 0) \
-    { \
-        for (_i = 0; _i < cur.pre_n; ++_i) { \
-            pre = n[cur.pre_id[_i]]; ed1 = _err_sg_bin_sch_edge(sg, pre.e_site_id, cur.s_site_id);  \
-            int _sj1_l = cur.start - pre.end - 1, _sj2_l = next.start - cur.end - 1; \
-            int _left1_l = _node_len(pre), _right1_l = _node_len(cur);  \
-            int _is_init1 = pre.is_init, _is_termi2 = next.is_termi; \
-            for (_l = 0; _l < ed1.uniq_c; ++_l) { \
-                _left = 0, _right=0;    \
-                _anc = ed1.anc[_l];    \
-                if (_is_init1) _left=1;    \
-                else {  \
-                    if (_anc.left_hard) {    \
-                        if (_anc.left_anc_len == _left1_l) _left=1;   \
-                    } else if (_anc.left_anc_len <= _left1_l) _left=1;    \
-                }   \
-                if (_anc.right_hard) {   \
-                    if (_anc.right_anc_len == _right1_l && _anc.right_sj_len == _sj2_l) _right=1; \
-                } else if (_anc.right_anc_len <= _right1_l && _anc.right_anc_len > _shor_l) _right=1;  \
-                if (_left && _right) {  \
-                    pj_c++;    \
-                    _bin_insert(_anc.bid, _bid_up, _bid_up_n, _bid_up_m, int32_t)   \
-                }   \
-            }   \
-        }   \
-    }   \
-    for (_l = 0; _l < ed2.uniq_c; ++_l) {    \
-        _left = 0, _right=0;    \
-        _anc = ed2.anc[_l];    \
-        if (_anc.left_hard) {    \
-            if (_anc.left_anc_len == _left2_l && _anc.left_sj_len == ) _left=1;   \
-        } else if (_anc.left_anc_len <= _left2_l && _anc.left_anc_len > (_left2-_shor_l)) _left=1;    \
-        if (next._is_termi) _right = 1; \
-        else {    \
-            if (_anc.right_hard) {   \
-                if (_anc.right_anc_len == _right2_l) _right=1;   \
-            } else if (_anc.right_anc_len <= _right2_l) _right=1;    \
-        }   \
-        if (_left && _right) {    \
-            pj_c++;   \
-            _bin_search(_anc.bid, _bid_up, _bid_up_n, int32_t, _hit, _hit_i)  \
-            if (_hit) pj_c--; \
-        }   \
-    }  \
-    free(_bid_up);  \
-    /* reads corresponding to exon-body */ \
-}
-
 // for sj1, if right_hard == 1, sj1 & sj2 should be in that read together
 // for sj2, if left_hard == 1, same to above
 #define _count_both_read(ed1, pre, sj1_c, ed2, next, sj2_c, cur, both_c) { \
     int _sj1_l = cur.start - pre.end - 1, _sj2_l = next.start - cur.end - 1; \
-    int _left1_l = _node_len(pre), _right1_l = _node_len(cur);  \
-    int _left2_l = _node_len(cur), _right2_l = _node_len(next);  \
-    int _is_init1 = pre.is_init,_is_termi2 = next.is_termi; \
+    int _right1_l = _node_len(cur), _left2_l = _node_len(cur);  \
     int _l, _left, _right;  \
     int32_t *_bid_up = (int32_t*)_err_calloc(2, sizeof(uint32_t)); int _bid_up_n=0, _bid_up_m=2, _hit, _hit_i;    \
     for (_l = 0; _l < ed1.uniq_c; ++_l) { \
-        _left = 0, _right=0;    \
+        _right=0;    \
         anc_t _anc = ed1.anc[_l];    \
-        if (_is_init1) _left=1;    \
-        else {  \
-            if (_anc.left_hard) {    \
-                if (_anc.left_anc_len == _left1_l) _left=1;   \
-            } else if (_anc.left_anc_len <= _left1_l) _left=1;    \
-        }   \
         if (_anc.right_hard) {   \
             if (_anc.right_anc_len == _right1_l && _anc.right_sj_len == _sj2_l) _right=1; \
         } else if (_anc.right_anc_len <= _right1_l) _right=1;  \
-        if (_left && _right) {  \
+        if (_right) {  \
             sj1_c++;    \
             _bin_insert(_anc.bid, _bid_up, _bid_up_n, _bid_up_m, int32_t)   \
         }   \
     }   \
     for (_l = 0; _l < ed2.uniq_c; ++_l) {    \
-        _left = 0, _right=0;    \
+        _left = 0;    \
         anc_t _anc = ed2.anc[_l];    \
         if (_anc.left_hard) {    \
             if (_anc.left_anc_len == _left2_l && _anc.left_sj_len == _sj1_l) _left=1;   \
         } else if (_anc.left_anc_len <= _left2_l) _left=1;    \
-        if (_is_termi2) _right = 1; \
-        else {    \
-            if (_anc.right_hard) {   \
-                if (_anc.right_anc_len == _right2_l) _right=1;   \
-            } else if (_anc.right_anc_len <= _right2_l) _right=1;    \
-        }   \
-        if (_left && _right) {    \
+        if (_left) {    \
             sj2_c++;   \
             _bin_search(_anc.bid, _bid_up, _bid_up_n, int32_t, _hit, _hit_i)  \
             if (_hit) both_c++; \
@@ -182,6 +113,7 @@ int asm2ase_usage(void)
         ase->se_n++;    \
     }   \
 }
+
 // XXX optimization
 void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, int only_novel)
 {
@@ -289,9 +221,8 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                         int sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
-                            int lon_c=0, pj_c=0, shor_c=0;
+                            int lon_c=0,  shor_c=0;
                             _count_sj_read(ed[sj1_id], pre1, cur, shor_c)
-                            _count_pj_read(sg, n, ed, ed[sj2_id], pre1, pre2, cur, pj_c)
                             _count_sj_read(ed[sj2_id], pre2, cur, lon_c)
 
                             int shor = pre1.node_id, lon = pre2.node_id, down = cur.node_id;
