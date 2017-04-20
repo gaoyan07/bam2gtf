@@ -493,7 +493,7 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
         fprintf(out_fp[5], "ID\tSTRAND\tCHR\tIJ1_UCNT\tIJ2_UCNT\tBOTH_UCNT\tEJ_UCNT\n");
         fprintf(out_fp[6], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\n");
         fprintf(out_fp[7], "ID\tSTRAND\tCHR\tLO_UCNT\tSH_UCNT\n");
-        fprintf(out_fp[8], "ID\tSTRAND\tCHR\tFIR1_UCNT\tFIR2_UCNT\tSEC1_UCNT\tSEC2_UCNT\n");
+        fprintf(out_fp[8], "ID\tSTRAND\tCHR\tFIR1_UCNT\tFIR2_UCNT\tFIR_BOTH_UCNT\tSEC1_UCNT\tSEC2_UCNT\tSEC_BOTH_UCNT\n");
         fprintf(out_fp[9], "ID\tSTRAND\tCHR\tRE_UCNT\tSJ_UCNT\n");
     }
 
@@ -526,7 +526,7 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
             int sg_i = ase->mxe[i].sg_i, asm_i = ase->mxe[i].asm_i;
             SG *sg = sg_g->SG[sg_i]; MXE_t e = ase->mxe[i]; SGnode *n = sg->node;
             fprintf(out_fp[3], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], n[e.up].start, n[e.up].end, n[e.fir].start, n[e.fir].end, n[e.sec].start, n[e.sec].end, n[e.down].start, n[e.down].end);
-            fprintf(out_fp[8], "%d\t%c\t%s\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.fir_up_c, e.fir_down_c, e.sec_up_c, e.sec_down_c);
+            fprintf(out_fp[8], "%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", i, "+-"[sg->is_rev], cname->chr_name[sg->tid], e.fir_up_c, e.fir_down_c, e.fir_both_c, e.sec_up_c, e.sec_down_c, e.sec_both_c);
         }
     }
     { // RI
