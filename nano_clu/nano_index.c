@@ -4,16 +4,16 @@
 #include <getopt.h>
 #include <math.h>
 #include <zlib.h>
-#include "rest_index.h"
+#include "nano_index.h"
 #include "debwt.h"
 #include "bntseq.h"
 #include "utils.h"
 
-int rest_index_usage(void)
+int nano_index_usage(void)
 {
     fprintf(stderr, "\n");
-    fprintf(stderr, "Usage:   rest index [option] <ref.fa>\n");
-    fprintf(stderr, "                    bulid index for <ref.fa>\n\n");
+    fprintf(stderr, "Usage:   nano index [option] <gene.fa>\n");
+    fprintf(stderr, "                    bulid index for <gene.fa>\n\n");
     fprintf(stderr, "Option:  \n");
     fprintf(stderr, "         -k [INT]     Length of kmer to construct de Bruijn graph. [Def=22]\n");
     //fprintf(stderr, "         -s [INT]     Length of first level's hashed sequence. [Def=12]\n");
@@ -85,32 +85,34 @@ void hash_reset_idx_para(hash_idx *h)
     }
 }
 #else
-// NEW for lower memory XXX
-// 
-// hash-node: (uint32_t)
-// ni:  8       5       2   1   0
-// [1--24][25--27][28--30][31][32]
-//  12-mer  bwt_c  next_c  spe uni_offset_c
-//
-// for spe-kmer
-// hash-node: (uint32_t)
-// ni:  8       5       0
-// [1--24][25--27][28--32]
-//  12-mer  bwt_c   k-len  
-//                  k-len: for special-kmer, len<k (2^5=32)
-//
-//
-// hash-node: (uint32_t)
-// ni:16         13  12      9       6      1   0
-// [1-16][17-18][19--20][21-23][24--26][27-31][32]
-//  8-mer none   in/out  bwt_c  next_c  k-len  uni
-//                                      k-len: for special-kmer, len<k (2^5=32)
-// for spe-kmer
-// hash-node: (uint64_t)
-// ni:32     16         13  12      9       6      1   0
-// [1-32][33-48][49-50][51--52][53-55][56--58][59-63][64]
-//  uid   8-mer none   in/out  bwt_c  next_c  k-len  uni
-//                                            k-len: for special-kmer, len<k (2^5=32)
+/*
+    // NEW for lower memory XXX
+    // 
+    // hash-node: (uint32_t)
+    // ni:  8       5       2   1   0
+    // [1--24][25--27][28--30][31][32]
+    //  12-mer  bwt_c  next_c  spe uni_offset_c
+    //
+    // for spe-kmer
+    // hash-node: (uint32_t)
+    // ni:  8       5       0
+    // [1--24][25--27][28--32]
+    //  12-mer  bwt_c   k-len  
+    //                  k-len: for special-kmer, len<k (2^5=32)
+    //
+    //
+    // hash-node: (uint32_t)
+    // ni:16         13  12      9       6      1   0
+    // [1-16][17-18][19--20][21-23][24--26][27-31][32]
+    //  8-mer none   in/out  bwt_c  next_c  k-len  uni
+    //                                      k-len: for special-kmer, len<k (2^5=32)
+    // for spe-kmer
+    // hash-node: (uint64_t)
+    // ni:32     16         13  12      9       6      1   0
+    // [1-32][33-48][49-50][51--52][53-55][56--58][59-63][64]
+    //  uid   8-mer  none   in/out  bwt_c  next_c  k-len  uni
+    //                                             k-len: for special-kmer, len<k (2^5=32)
+*/
 void hash_init_idx32_para(hash_idx *h)
 {
     h->hp.k = 22;
@@ -166,7 +168,7 @@ void hash_reset_idx_para(hash_idx *h)
 }
 #endif
 
-int rest_index(int argc, char *argv[])
+int nano_index(int argc, char *argv[])
 {
     char *prefix=0; int c, for_only=0;
 
@@ -181,10 +183,10 @@ int rest_index(int argc, char *argv[])
         {
             case 'k': h_idx.hp.k = atoi(optarg); break;
             case 'f': for_only = 1; break;
-            default: return rest_index_usage();
+            default: return nano_index_usage();
         }
     }
-    if (optind + 1 > argc) return rest_index_usage();
+    if (optind + 1 > argc) return nano_index_usage();
     hash_reset_idx_para(&h_idx);
     prefix = strdup(argv[optind]);
 

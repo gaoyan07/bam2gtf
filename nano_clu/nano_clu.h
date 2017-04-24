@@ -1,5 +1,5 @@
-#ifndef _REST_ALN_H_
-#define _REST_ALN_H_
+#ifndef _NANO_CLU_H_
+#define _NANO_CLU_H_
 
 #include "debwt.h"
 #include "bntseq.h"
@@ -47,12 +47,11 @@ typedef struct {
     int seed_len;  //
     int debwt_hash_len;
     int debwt_uni_occ_thd;     
-
-} rest_aln_para;
+} nano_clu_para;
 
 typedef struct {
 
-} rest_seq_t;
+} nano_seq_t;
 
 typedef struct {
     int tid;
@@ -64,13 +63,13 @@ typedef struct {
     int n_seqs;         // read seqs
     kseq_t *w_seqs;
 
-    rest_aln_para *ap; // aln parameters
+    nano_clu_para *cp; // clu parameters
     // aux data during alignment
     // alignment result
-} rest_aux_t;
+} nano_aux_t;
 
 
-int rest_aln(int argc, char *argv[]);
+int nano_clu(int argc, char *argv[]);
 void realloc_seed_loc(seed_loc_t *s);
 
 #endif

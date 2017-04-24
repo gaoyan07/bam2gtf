@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <zlib.h>
 
-#include "rest_index.h"
+#include "debwt.h"
 
 #ifndef BWA_UBYTE
 #define BWA_UBYTE

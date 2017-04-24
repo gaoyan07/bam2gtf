@@ -1,6 +1,5 @@
 #ifndef _KMER_HASH_H_
 #define _KMER_HASH_H_
-#include "rest_index.h"
 #include "debwt.h"
 
 #define nt_A 0

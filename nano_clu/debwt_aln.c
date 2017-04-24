@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "rest_index.h"
-#include "rest_aln.h"
+#include <string.h>
+#include "nano_index.h"
+#include "nano_clu.h"
 #include "debwt_aln.h"
 #include "debwt.h"
 #include "kmer_hash.h"
@@ -12,11 +13,15 @@
 #define LOB_LEN 13
 #define LOB_DIS 3
 
-void uni_pos_print(uni_sa_t uid, debwt_t *db)
+void uni_pos_print(uni_sa_t uid, debwt_t *db, const bntseq_t *bns)
 {
-    uint32_t m;
+    uint32_t m; uint32_t pos;
+    char name[1024]; int rid;
     for (m = db->uni_pos_c[uid]; m < db->uni_pos_c[uid+1]; ++m) {
-        stdout_printf("\t%c%d\n", "+-"[_debwt_get_strand(db->uni_pos_strand, m)], (int)db->uni_pos[m]);
+        pos = bns_pos2rid(bns, db->uni_pos[m]);
+        rid = bns_pos2rid(bns, pos);
+        strcpy(name, bns->anns[rid].name);
+        stdout_printf("%s\t%c\n", name, "+-"[_debwt_get_strand(db->uni_pos_strand, m)]);
     }
 }
 
@@ -162,10 +167,10 @@ void set_uni_loc(uni_loc_t *uni_loc, int read_off, int read_loc_len, uni_sa_t ui
     uni_loc->uni_m = 1;
 }
 
-int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, uint8_t *pac, rest_aln_para *ap, seed_loc_t *loc_clu)
+int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, uint8_t *pac, nano_clu_para *cp, seed_loc_t *loc_clu)
 {
     int cur_i, old_i, old_lob_i;
-    debwt_count_t i, uni_occ_thd = ap->debwt_uni_occ_thd, k, l, il;
+    debwt_count_t i, uni_occ_thd = cp->debwt_uni_occ_thd, k, l, il;
     lob_t *lob = (lob_t*)_err_malloc(sizeof(lob_t)); lob->lob_flag = -1;
     uni_loc_t uni_loc;
 
@@ -209,7 +214,7 @@ int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, ui
             lob->lob_flag = -1;
             int l_i = loc_clu->n; loc_t l = loc_clu->loc[l_i-1];
             stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", l.uid, l.uni_off, l.read_off, l.len1);
-            uni_pos_print(l.uid, db);
+            uni_pos_print(l.uid, db, bns);
         } else if (max_len >= LOB_LEN) {
             int res = push_1lob(lob, uni_loc, db);
             if (res == 0) { // lob_flag == -1
@@ -220,7 +225,7 @@ int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, ui
                 old_lob_i = cur_i;
                 int lob_i = loc_clu->n; loc_t l = loc_clu->loc[lob_i-1];
                 stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.len1, l.len2);
-                uni_pos_print(l.uid, db);
+                uni_pos_print(l.uid, db, bns);
             } else { // check == 0
                 cur_i = old_lob_i;
             }

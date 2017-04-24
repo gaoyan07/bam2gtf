@@ -93,7 +93,7 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 	FILE *fp;
 	int i;
 	{ // dump .ann
-		strcpy(str, prefix); strcat(str, ".rest.ann");
+		strcpy(str, prefix); strcat(str, ".nanoclu.ann");
 		fp = xopen(str, "w");
 		err_fprintf(fp, "%lld %d %u\n", (long long)bns->l_pac, bns->n_seqs, bns->seed);
 		for (i = 0; i != bns->n_seqs; ++i) {
@@ -107,7 +107,7 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 		err_fclose(fp);
 	}
 	{ // dump .amb
-		strcpy(str, prefix); strcat(str, ".rest.amb");
+		strcpy(str, prefix); strcat(str, ".nanoclu.amb");
 		fp = xopen(str, "w");
 		err_fprintf(fp, "%lld %d %u\n", (long long)bns->l_pac, bns->n_seqs, bns->n_holes);
 		for (i = 0; i != bns->n_holes; ++i) {
@@ -195,9 +195,9 @@ bntseq_t *bns_restore(const char *prefix)
 	char ann_filename[1024], amb_filename[1024], pac_filename[1024], alt_filename[1024];
 	FILE *fp;
 	bntseq_t *bns;
-	strcat(strcpy(ann_filename, prefix), ".rest.ann");
-	strcat(strcpy(amb_filename, prefix), ".rest.amb");
-	strcat(strcpy(pac_filename, prefix), ".rest.pac");
+	strcat(strcpy(ann_filename, prefix), ".nanoclu.ann");
+	strcat(strcpy(amb_filename, prefix), ".nanoclu.amb");
+	strcat(strcpy(pac_filename, prefix), ".nanoclu.pac");
 	bns = bns_restore_core(ann_filename, amb_filename, pac_filename);
 	if (bns == 0) return 0;
 	if ((fp = fopen(strcat(strcpy(alt_filename, prefix), ".alt"), "r")) != 0) { // read .alt file if present
@@ -358,7 +358,7 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	bns->ambs = (bntamb1_t*)calloc(m_holes, sizeof(bntamb1_t));
 	pac = (uint8_t*)calloc(m_pac/4, 1);
 	q = bns->ambs;
-	strcpy(name, prefix); strcat(name, ".rest.pac");
+	strcpy(name, prefix); strcat(name, ".nanoclu.pac");
 	fp = xopen(name, "wb");
 	// read sequences
 	while (kseq_read(seq) >= 0) pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);

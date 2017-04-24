@@ -2,33 +2,33 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <pthread.h>
-#include "rest_aln.h"
+#include "nano_clu.h"
 #include "debwt_aln.h"
 #include "debwt.h"
 #include "utils.h"
 #include "kseq.h"
 
-int rest_aln_usage(void)
+int nano_clu_usage(void)
 {
-    fprintf(stderr, "rest aln [option] ref.fa read.fq/fa\n");
+    fprintf(stderr, "nano clu [option] ref.fa read.fq/fa\n");
     return 0;
 }
 
-rest_aln_para *rest_init_ap(void)
+nano_clu_para *nano_init_cp(void)
 {
     // XXX init para
-    rest_aln_para *ap = (rest_aln_para*)calloc(1, sizeof(rest_aln_para));
-    ap->n_thread = 1;
-    ap->seed_len = REST_SEED_LEN;
-    ap->debwt_hash_len = _BWT_HASH_K;
-    ap->debwt_uni_occ_thd = REST_UNI_OCC_THD;
-    return ap;
+    nano_clu_para *cp = (nano_clu_para*)calloc(1, sizeof(nano_clu_para));
+    cp->n_thread = 1;
+    cp->seed_len = REST_SEED_LEN;
+    cp->debwt_hash_len = _BWT_HASH_K;
+    cp->debwt_uni_occ_thd = REST_UNI_OCC_THD;
+    return cp;
 }
 
-void aux_free(rest_aux_t *aux)
+void aux_free(nano_aux_t *aux)
 {
     int i;
-    free(aux->ap);
+    free(aux->cp);
     debwt_index_free(aux->db); free(aux->db);
     free(aux->pac); bns_destroy(aux->bns);
 
@@ -45,7 +45,7 @@ void aux_free(rest_aux_t *aux)
     free(aux);
 }
 
-int rest_read_seq(kseq_t *read_seq, int chunk_read_n)
+int nano_read_seq(kseq_t *read_seq, int chunk_read_n)
 {
     kseq_t *s = read_seq; int n = 0;
     while (kseq_read(s+n) >= 0) {
@@ -84,12 +84,12 @@ void free_seed_loc(seed_loc_t *loc) { free(loc->loc); free(loc); }
 }*/
 
 
-int rest_main_aln(rest_aux_t *aux)
+int nano_main_aln(nano_aux_t *aux)
 {
     debwt_t *db = aux->db; bntseq_t *bns = aux->bns; uint8_t *pac = aux->pac;
     kseq_t *w_seqs = aux->w_seqs; int n_seqs = aux->n_seqs; 
     seed_loc_t *seed_loc = init_seed_loc();
-    rest_aln_para *ap = aux->ap;
+    nano_clu_para *cp = aux->cp;
     int i_seq=0; uint64_t i;
     while (i_seq < n_seqs) {
         if (i_seq == n_seqs) break;
@@ -99,7 +99,7 @@ int rest_main_aln(rest_aux_t *aux)
         for (i = 0; i < seqs->seq.l; ++i) bseq[i] = nst_nt4_table[(int)(seqs->seq.s[i])];
 
         // seeding and locating
-        debwt_gen_loc_clu(bseq, seqs->seq.l, db, bns, pac, ap, seed_loc);
+        debwt_gen_loc_clu(bseq, seqs->seq.l, db, bns, pac, cp, seed_loc);
         // debug
         //while (1);
         
@@ -120,12 +120,12 @@ int rest_main_aln(rest_aux_t *aux)
     return 0;
 }
 
-static void *rest_thread_main_aln(void *a)
+static void *nano_thread_main_clu(void *a)
 {
-    rest_aux_t *aux = (rest_aux_t*)a;
+    nano_aux_t *aux = (nano_aux_t*)a;
     debwt_t *db = aux->db; bntseq_t *bns = aux->bns; uint8_t *pac = aux->pac;
     kseq_t *w_seqs = aux->w_seqs; int n_seqs = aux->n_seqs; 
-    rest_aln_para *ap = aux->ap;
+    nano_clu_para *cp = aux->cp;
     int i;
     while (1) {
         pthread_rwlock_wrlock(&RWLOCK);
@@ -150,10 +150,10 @@ static void *rest_thread_main_aln(void *a)
     return 0;
 }
 
-int rest_aln_core(const char *ref_fn, const char *read_fn, rest_aln_para *rest_ap)
+int nano_clu_core(const char *ref_fn, const char *read_fn, nano_clu_para *nano_cp)
 {
     /* load index */
-    err_printf("[rest_aln_core] Restoring ref-indices ... ");
+    err_printf("[nano_clu_core] Restoring ref-indices ... ");
     debwt_t *db_idx = debwt_restore_index(ref_fn);
     bntseq_t *bns = bns_restore(ref_fn);
     uint8_t *pac = (uint8_t*)_err_calloc(bns->l_pac/4+1, 1);
@@ -168,34 +168,34 @@ int rest_aln_core(const char *ref_fn, const char *read_fn, rest_aln_para *rest_a
     for (i = 0; i < CHUNK_READ_N; ++i) read_seqs[i].f = fs;
 
     // alloc and init for auxiliary data
-    if (rest_ap->n_thread < 1) rest_ap->n_thread = 1;
-    rest_aux_t *aux = (rest_aux_t*)_err_calloc(rest_ap->n_thread, sizeof(rest_aux_t));
-    for (i = 0; i < rest_ap->n_thread; ++i) {
-        aux[i].tid = i; aux[i].ap = rest_ap;
+    if (nano_cp->n_thread < 1) nano_cp->n_thread = 1;
+    nano_aux_t *aux = (nano_aux_t*)_err_calloc(nano_cp->n_thread, sizeof(nano_aux_t));
+    for (i = 0; i < nano_cp->n_thread; ++i) {
+        aux[i].tid = i; aux[i].cp = nano_cp;
         aux[i].db = db_idx; aux[i].bns = bns; aux[i].pac = pac;
     }
  
-    if (rest_ap->n_thread <= 1) {
-        while ((n_seqs = rest_read_seq(read_seqs, CHUNK_READ_N)) != 0) { 
+    if (nano_cp->n_thread <= 1) {
+        while ((n_seqs = nano_read_seq(read_seqs, CHUNK_READ_N)) != 0) { 
             aux->n_seqs = n_seqs;
             aux->w_seqs = read_seqs;
-            rest_main_aln(aux);
+            nano_main_aln(aux);
             // output
         }
     } else { // multi-threads
         pthread_rwlock_init(&RWLOCK, NULL);
-        while ((n_seqs = rest_read_seq(read_seqs, CHUNK_READ_N)) != 0) { 
+        while ((n_seqs = nano_read_seq(read_seqs, CHUNK_READ_N)) != 0) { 
             THREAD_READ_I = 0;
             pthread_t *tid; pthread_attr_t attr;
             pthread_attr_init(&attr); pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-            tid = (pthread_t*)_err_calloc(rest_ap->n_thread, sizeof(pthread_t));
+            tid = (pthread_t*)_err_calloc(nano_cp->n_thread, sizeof(pthread_t));
             int j;
-            for (j = 0; j < rest_ap->n_thread; ++j) {
+            for (j = 0; j < nano_cp->n_thread; ++j) {
                 aux[j].n_seqs = n_seqs;
                 aux[j].w_seqs = read_seqs;
-                pthread_create(&tid[j], &attr, rest_thread_main_aln, aux+j);
+                pthread_create(&tid[j], &attr, nano_thread_main_clu, aux+j);
             }
-            for (j = 0; j < rest_ap->n_thread; ++j) pthread_join(tid[j], 0);
+            for (j = 0; j < nano_cp->n_thread; ++j) pthread_join(tid[j], 0);
             free(tid);
             // output
         }
@@ -206,21 +206,21 @@ int rest_aln_core(const char *ref_fn, const char *read_fn, rest_aln_para *rest_a
     return 0;
 }
 
-int rest_aln(int argc, char *argv[])
+int nano_clu(int argc, char *argv[])
 {
     int c;
-    rest_aln_para *rest_ap = rest_init_ap();
+    nano_clu_para *nano_cp = nano_init_cp();
 
     while ((c = getopt(argc, argv, "t:l:")) >= 0) {
         switch (c)
         {
-            case 't': rest_ap->n_thread = atoi(optarg); break;
-            case 'l': rest_ap->seed_len = atoi(optarg); break;
-            default: return rest_aln_usage();
+            case 't': nano_cp->n_thread = atoi(optarg); break;
+            case 'l': nano_cp->seed_len = atoi(optarg); break;
+            default: return nano_clu_usage();
         }
     }
-    if (argc - optind != 2) return rest_aln_usage();
+    if (argc - optind != 2) return nano_clu_usage();
 
-    rest_aln_core(argv[optind], argv[optind+1], rest_ap);
+    nano_clu_core(argv[optind], argv[optind+1], nano_cp);
     return 0;
 }

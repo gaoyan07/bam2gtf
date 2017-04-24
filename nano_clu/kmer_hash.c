@@ -6,8 +6,6 @@
 #include <zlib.h>
 #include "kmer_hash.h"
 #include "debwt.h"
-#include "rest_index.h"
-#include "debwt.h"
 #include "bntseq.h"
 #include "kseq.h"
 #include "utils.h" 

@@ -8,9 +8,9 @@ SRC_DIR =
 SOURCE  = $(wildcard $(SRC_DIR)*.c)
 OBJS    = $(SOURCE:.c=.o)
 
-PROG    = $(BIN_DIR)rest
-DEBUG   = $(BIN_DIR)gdb_rest
-LIT     = $(BIN_DIR)lit_rest
+PROG    = $(BIN_DIR)nanoclu
+DEBUG   = $(BIN_DIR)gdb_nanoclu
+LIT     = $(BIN_DIR)lit_nanoclu
 DMARCRO = -D __DEBUG__
 LMARCRO = -D __LIT__
 

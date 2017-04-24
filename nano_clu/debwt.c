@@ -4,7 +4,6 @@
 #include <zlib.h>
 #include <math.h>
 #include "debwt.h"
-#include "rest_index.h"
 #include "kmer_hash.h"
 #include "kstring.h"
 #include "utils.h"
@@ -369,7 +368,7 @@ void debwt_dump(const char *prefix, debwt_t *db)
     char *fn = (char*)_err_calloc(strlen(prefix)+15, sizeof(char));
     // dump bwt
     err_printf("[%s] Writing bwt to file ...\n", __func__);
-    strcpy(fn, prefix); strcat(fn, ".rest.debwt");
+    strcpy(fn, prefix); strcat(fn, ".nanoclu.debwt");
     FILE *fp = xopen(fn, "wb");
     err_fwrite(&db->bwt_l, sizeof(debwt_count_t), 1, fp);
     err_fwrite(&db->bwt_size, sizeof(debwt_count_t), 1, fp);
@@ -380,7 +379,7 @@ void debwt_dump(const char *prefix, debwt_t *db)
 
     // dump sa
     err_printf("[%s] Writing sa to file ...\n", __func__);
-    strcpy(fn, prefix); strcat(fn, ".rest.usa");
+    strcpy(fn, prefix); strcat(fn, ".nanoclu.usa");
     fp = xopen(fn, "wb");
     err_fwrite(&db->bwt_l, sizeof(debwt_count_t), 1, fp);
     err_fwrite(&db->n_sa, sizeof(debwt_count_t), 1, fp);
@@ -400,7 +399,7 @@ void debwt_dump(const char *prefix, debwt_t *db)
 
     // dump bwt-hash
     err_printf("[%s] Writing bwt-hash to file ...\n", __func__);
-    strcpy(fn, prefix); strcat(fn, ".rest.dhs");
+    strcpy(fn, prefix); strcat(fn, ".nanoclu.dhs");
     fp = xopen(fn, "wb");
     err_fwrite(&db->bwt_hash_size, sizeof(uint32_t), 1, fp);
     err_fwrite(db->bwt_hash, sizeof(debwt_count_t), db->bwt_hash_size, fp);
@@ -429,7 +428,7 @@ debwt_t *debwt_restore_index(const char *prefix)
     char *fn = (char*)_err_calloc(strlen(prefix)+15, sizeof(char));
     debwt_t *db;
     // restore bwt
-    strcpy(fn, prefix); strcat(fn, ".rest.debwt");
+    strcpy(fn, prefix); strcat(fn, ".nanoclu.debwt");
     FILE *fp = xopen(fn, "rb");
 
     db = (debwt_t*)_err_calloc(1, sizeof(debwt_t));
@@ -441,7 +440,7 @@ debwt_t *debwt_restore_index(const char *prefix)
     err_fclose(fp); 
 
     // restore sa
-    strcpy(fn, prefix); strcat(fn, ".rest.usa");
+    strcpy(fn, prefix); strcat(fn, ".nanoclu.usa");
     fp = xopen(fn, "rb");
     debwt_count_t bwt_l;
     err_fread_noeof(&bwt_l, sizeof(debwt_count_t), 1, fp);
@@ -469,7 +468,7 @@ debwt_t *debwt_restore_index(const char *prefix)
     err_fclose(fp); 
 
     // restore bwt-hash
-    strcpy(fn, prefix); strcat(fn, ".rest.dhs");
+    strcpy(fn, prefix); strcat(fn, ".nanoclu.dhs");
     fp = xopen(fn, "rb");
     err_fread_noeof(&db->bwt_hash_size, sizeof(uint32_t), 1, fp);
     db->bwt_hash = (debwt_count_t*)_err_calloc(db->bwt_hash_size, sizeof(debwt_count_t));
