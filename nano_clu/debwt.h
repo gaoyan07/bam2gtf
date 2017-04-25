@@ -168,7 +168,7 @@ typedef struct {
     //XXX//debwt_count_t *uni_offset_c; // cumulative number of offsets for each unipath
     uni_sa_t *uni_pos_c;
     //ref_off_t  *uni_offset;   // offsets of each unipath
-    ref_off_t *uni_pos;
+    ref_off_t *uni_pos;         // 0-base
     uint8_t *uni_pos_strand;       // 0: forward, 1: reverse
 
     debwt_count_t C[_OCC_C];     // cumulative count of 'A/C/G/T/#'

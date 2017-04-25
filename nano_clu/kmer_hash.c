@@ -720,13 +720,13 @@ int pac_gen_skmer(debwt_pac_t *db_pac, debwt_count_t l_pac, debwt_count_t f_pac,
     seq_i = 0; is_rev = 0;
     pre_k_i = -1; pre_hashKey = 0;
     if (debwt_pac_first_kmer(db_pac, l_pac, &seq_i, h_idx->hp, &kmerInt, &next_nt)) {        // first kmer
-        if (seq_i > f_pac) { is_rev = 1; pos = ((f_pac+1)<<1) - (seq_i+1-h_idx->hp.k); }
-        else { is_rev = 0; pos = seq_i+1-h_idx->hp.k; }
+        if (seq_i > f_pac) { is_rev = 1; pos = ((f_pac+1)<<1)-1-(seq_i+1-h_idx->hp.k); }
+        else { is_rev = 0; pos = seq_i-h_idx->hp.k; }
         k_i = hash_spe_check(h_idx, db_idx, pos, is_rev, kmerInt, nt_N, pre_hashKey, pre_k_i, &hashKey);
         pre_k_i = k_i; pre_hashKey = hashKey;
         while (debwt_pac_shift_kmer(db_pac, l_pac, &seq_i, h_idx->hp, &kmerInt, &pre_nt, &next_nt)) { // generate kmer based on last kmer
-            if (seq_i > f_pac) { is_rev = 1; pos = ((f_pac+1)<<1) - (seq_i+1-h_idx->hp.k); }
-            else { is_rev = 0; pos = seq_i+1-h_idx->hp.k; }
+            if (seq_i > f_pac) { is_rev = 1; pos = ((f_pac+1)<<1)-1-(seq_i+1-h_idx->hp.k); }
+            else { is_rev = 0; pos = seq_i-h_idx->hp.k; }
             k_i = hash_spe_check(h_idx, db_idx, pos, is_rev, kmerInt, pre_nt, pre_hashKey, pre_k_i, &hashKey);
             pre_k_i = k_i; pre_hashKey = hashKey;
             if (seq_i % _COUNT_S == 0)

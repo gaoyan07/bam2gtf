@@ -111,6 +111,93 @@ extern "C" {
 }
 #endif
 
+// binary search
+#define _sim_insert(v, p, n, m, type) { \
+    if (n == m) {               \
+        _realloc(p, m, type)    \
+    }                           \
+    p[n++] = v;                 \
+}
+
+#define _insert(v, p, n, m, type) { \
+    int _i, _flag=0;                  \
+    for (_i = 0; _i < n; ++_i) {       \
+        if (p[_i] == v) {            \
+            _flag = 1;               \
+            break;                  \
+        }                           \
+    }                               \
+    if (_flag == 0) {                \
+        if (n == m) {               \
+            _realloc(p, m, type)    \
+        }                           \
+        p[n++] = v;                 \
+    }                               \
+}
+
+#define _bin_insert_idx(v, p, n, m, type, flag, k_i) { \
+    flag=0, k_i=-1;   \
+    int _left=0,_right=n-1,_mid;    \
+    type _mid_v, _tmp_v;                 \
+    if (_right == -1) k_i = 0;   \
+    else {                      \
+        while (_left <= _right) { \
+            _mid = (_left+_right) >> 1;    \
+            _mid_v = p[_mid];             \
+            if (_mid_v == v) {           \
+                k_i = _mid; \
+                flag = 1; break;        \
+            } else if (_mid_v > v) {     \
+                if (_mid != 0) {         \
+                    _tmp_v = p[_mid-1];   \
+                }                       \
+                if (_mid == 0 || v > _tmp_v) { \
+                    k_i = _mid;          \
+                    break;              \
+                }                       \
+                else _right = _mid-1;     \
+            } else _left = _mid+1;        \
+        }                               \
+    }                                   \
+    if (k_i == -1) k_i = n;         \
+}
+     
+#define _bin_insert(v, p, n, m, type) { \
+    int _k_i, _flag;    \
+    _bin_insert_idx(v, p, n, m, type, _flag, _k_i)   \
+    if (_flag == 0) {                \
+        if (n == m) {               \
+            _realloc(p, m, type)    \
+        }                           \
+        if (_k_i <= n-1)             \
+            memmove(p+_k_i+1, p+_k_i, (n-_k_i)*sizeof(type));  \
+        (p)[_k_i] = v;               \
+        (n)++;                      \
+    }                               \
+}
+
+#define _bin_search(v, p, n, type, hit, i) { \
+    int _left =0,_right=n-1,_mid; \
+    type _mid_v;    \
+    hit = 0;               \
+    if (_right == -1) hit=0;   \
+    else {  \
+        while (_left <= _right) {   \
+            _mid = (_left+_right) >> 1; \
+            _mid_v = p[_mid];       \
+            if (_mid_v == v) {  \
+                i = _mid;   \
+                hit = 1;   \
+                break;      \
+            } else if (_mid_v > v) {   \
+                _right = _mid-1;    \
+            } else {    \
+                _left = _mid+1; \
+            }   \
+        }   \
+    }   \
+} 
+
 static inline uint64_t hash_64(uint64_t key)
 {
 	key += ~(key << 32);

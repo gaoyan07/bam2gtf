@@ -3,25 +3,81 @@
 #include <string.h>
 #include "nano_index.h"
 #include "nano_clu.h"
-#include "debwt_aln.h"
+#include "debwt_clu.h"
 #include "debwt.h"
 #include "kmer_hash.h"
 #include "bntseq.h"
-#include "utils.h"
+#include "../utils.h"
 
 #define MEM_LEN 19
 #define LOB_LEN 13
 #define LOB_DIS 3
 
+
+seed_loc_t *init_seed_loc()
+{
+    seed_loc_t *loc = (seed_loc_t*)_err_malloc(sizeof(seed_loc_t));
+    loc->n = 0, loc->m = 100;
+    loc->loc = (loc_t*)_err_malloc(loc->m * sizeof(loc_t));
+    int i; 
+    for (i = 0; i < loc->m; ++i) {
+        loc->loc[i].uid = 0;
+        loc->loc[i].uni_off = 0, loc->loc[i].len1 = 0;
+        loc->loc[i].read_off = 0, loc->loc[i].len2 = 0;
+    }
+    return loc;
+}
+void realloc_seed_loc(seed_loc_t *s)
+{
+    s->m <<= 1;
+    s->loc = (loc_t*)_err_realloc(s->loc, s->m * sizeof(loc_t));
+}
+
+void free_seed_loc(seed_loc_t *loc) { free(loc->loc); free(loc); }
+
+
 void uni_pos_print(uni_sa_t uid, debwt_t *db, const bntseq_t *bns)
 {
     uint32_t m; uint32_t pos;
-    char name[1024]; int rid;
+    int rid;
     for (m = db->uni_pos_c[uid]; m < db->uni_pos_c[uid+1]; ++m) {
-        pos = bns_pos2rid(bns, db->uni_pos[m]);
+        pos = db->uni_pos[m];
         rid = bns_pos2rid(bns, pos);
-        strcpy(name, bns->anns[rid].name);
-        stdout_printf("%s\t%c\n", name, "+-"[_debwt_get_strand(db->uni_pos_strand, m)]);
+        if (rid == -1) err_fatal(__func__, "pos: %d\n", pos+1);
+        stdout_printf("%s\t%c\n", bns->anns[rid].name, "+-"[_debwt_get_strand(db->uni_pos_strand, m)]);
+    }
+}
+
+#define _add_vote(v, p, pc, n, m) { \
+    int _flag, _k_i;    \
+    _bin_insert_idx(v, p, n, m, int, _flag, _k_i)   \
+    if (_flag == 0) {                \
+        if (n == m) {               \
+            int _m = m; \
+            _realloc(p, _m, int)    \
+            _realloc(pc, m, int)    \
+        }                           \
+        if (_k_i <= n-1) {             \
+            memmove(p+_k_i+1, p+_k_i, (n-_k_i)*sizeof(int));  \
+            memmove(pc+_k_i+1, pc+_k_i, (n-_k_i)*sizeof(int));  \
+        }   \
+        (p)[_k_i] = v;               \
+        (pc)[_k_i] = 1; \
+        (n)++;                      \
+    } else                          \
+        ((pc)[_k_i])++;   \
+}
+
+void nano_add_vote(vote_t *v, uni_sa_t uid, debwt_t *db, const bntseq_t *bns)
+{
+    uint32_t m; uint32_t pos;
+    int rid;
+    for (m = db->uni_pos_c[uid]; m < db->uni_pos_c[uid+1]; ++m) {
+        pos = db->uni_pos[m];
+        rid = bns_pos2rid(bns, pos);
+        if (rid == -1) err_fatal(__func__, "pos: %d\n", pos+1);
+        _add_vote(rid, v->vote_id, v->vote_c, v->n, v->m)
+        stdout_printf("%s\t%c\n", bns->anns[rid].name, "+-"[_debwt_get_strand(db->uni_pos_strand, m)]);
     }
 }
 
@@ -75,10 +131,11 @@ int uni_mem(uint8_t *read_seq, int read_len, uint32_t read_off1, uint32_t read_o
     uni_len = uni_len1+off2-off1+1+uni_len2;
 
     uint8_t is_rev = _debwt_get_strand(db->uni_pos_strand, uni_pos_i);
-    if (is_rev) pac_coor = uni_pos-uni_start-uni_len;
-    else pac_coor = uni_pos+uni_start-1;
+    if (is_rev) pac_coor = uni_pos-uni_start-uni_len+1;
+    else pac_coor = uni_pos+uni_start;
     uint8_t *uni_seq = _bns_get_seq(bns->l_pac, pac, pac_coor, uni_len, is_rev);
     int mem_l = bi_extend(_read_seq, uni_seq, off1, off2, uni_len, l1, l2);
+    free(uni_seq);
     return mem_l;
 }
 
@@ -167,10 +224,11 @@ void set_uni_loc(uni_loc_t *uni_loc, int read_off, int read_loc_len, uni_sa_t ui
     uni_loc->uni_m = 1;
 }
 
-int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, uint8_t *pac, nano_clu_para *cp, seed_loc_t *loc_clu)
+int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, uint8_t *pac, nano_clu_para *cp, vote_t *v)
 {
     int cur_i, old_i, old_lob_i;
     debwt_count_t i, uni_occ_thd = cp->debwt_uni_occ_thd, k, l, il;
+    seed_loc_t *loc_clu = init_seed_loc();
     lob_t *lob = (lob_t*)_err_malloc(sizeof(lob_t)); lob->lob_flag = -1;
     uni_loc_t uni_loc;
 
@@ -210,29 +268,30 @@ int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, ui
         cur_i = old_i;
         if (max_len > 0) set_uni_loc(&uni_loc, max_read_off, max_loc_len2, max_uid, max_uni_off, max_loc_len1);
         if (max_len >= MEM_LEN) { // MEM seed
-            cur_i = push_loc(loc_clu, uni_loc) - _BWT_HASH_K; // push mem loc
+            // XXX cur_i = push_loc(loc_clu, uni_loc) - _BWT_HASH_K; // push mem loc
+            cur_i = uni_loc.read_off - _BWT_HASH_K;
             lob->lob_flag = -1;
-            int l_i = loc_clu->n; loc_t l = loc_clu->loc[l_i-1];
-            stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", l.uid, l.uni_off, l.read_off, l.len1);
-            uni_pos_print(l.uid, db, bns);
+            // XXX int l_i = loc_clu->n; loc_t l = loc_clu->loc[l_i-1];
+            // XXX stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", l.uid, l.uni_off, l.read_off, l.len1);
+            nano_add_vote(v, uni_loc.uni_id, db, bns);
         } else if (max_len >= LOB_LEN) {
             int res = push_1lob(lob, uni_loc, db);
             if (res == 0) { // lob_flag == -1
                 cur_i = uni_loc.read_off - _BWT_HASH_K;
                 old_lob_i = old_i;
             } else if (res == 1) { // check == 1
-                cur_i = push_lob(loc_clu, *lob) - _BWT_HASH_K; // push lob loc
+                // XXX cur_i = push_lob(loc_clu, *lob) - _BWT_HASH_K; // push lob loc
+                cur_i = lob->lob[lob->lob_flag].read_off - _BWT_HASH_K;
                 old_lob_i = cur_i;
-                int lob_i = loc_clu->n; loc_t l = loc_clu->loc[lob_i-1];
-                stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.len1, l.len2);
-                uni_pos_print(l.uid, db, bns);
+                // XXX int lob_i = loc_clu->n; loc_t l = loc_clu->loc[lob_i-1];
+                // XXX stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.len1, l.len2);
+                nano_add_vote(v, lob->lob[lob->lob_flag].uni_id, db, bns);
             } else { // check == 0
                 cur_i = old_lob_i;
             }
         }
     }
     
-    free(lob);
-    // return loc
+    free(lob); free_seed_loc(loc_clu);
     return 0;
 }

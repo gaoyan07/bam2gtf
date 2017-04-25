@@ -3,9 +3,9 @@
 #include <getopt.h>
 #include <pthread.h>
 #include "nano_clu.h"
-#include "debwt_aln.h"
+#include "debwt_clu.h"
 #include "debwt.h"
-#include "utils.h"
+#include "../utils.h"
 #include "kseq.h"
 
 int nano_clu_usage(void)
@@ -19,10 +19,30 @@ nano_clu_para *nano_init_cp(void)
     // XXX init para
     nano_clu_para *cp = (nano_clu_para*)calloc(1, sizeof(nano_clu_para));
     cp->n_thread = 1;
-    cp->seed_len = REST_SEED_LEN;
+    cp->seed_len = NANO_SEED_LEN;
     cp->debwt_hash_len = _BWT_HASH_K;
-    cp->debwt_uni_occ_thd = REST_UNI_OCC_THD;
+    cp->debwt_uni_occ_thd = NANO_UNI_OCC_THD;
     return cp;
+}
+
+vote_t *init_vote(int v_n)
+{
+    vote_t *v = (vote_t*)_err_malloc(v_n * sizeof(vote_t));
+    int i; for (i = 0; i < v_n; ++i) {
+        v[i].n = 0, v[i].m = 10;
+        v[i].vote_id = (int*)_err_malloc(10 * sizeof(int));
+        v[i].vote_c = (int*)_err_malloc(10 * sizeof(int));
+    }
+    return v;
+}
+
+void free_vote(vote_t *v, int v_n)
+{
+    int i;
+    for (i = 0; i < v_n; ++i) {
+        free(v[i].vote_id); free(v[i].vote_c);
+    }
+    free(v);
 }
 
 void aux_free(nano_aux_t *aux)
@@ -40,6 +60,7 @@ void aux_free(nano_aux_t *aux)
             free((aux->w_seqs+i)->qual.s);
         }
     }
+    free_vote(aux->v, CHUNK_READ_N);
     ks_destroy(aux->w_seqs->f);
     free(aux->w_seqs);
     free(aux);
@@ -54,69 +75,71 @@ int nano_read_seq(kseq_t *read_seq, int chunk_read_n)
     return n;
 }
 
+int nano_output_clu(nano_aux_t *aux)
+{
+    kseq_t *w_seqs = aux->w_seqs; int n_seqs = aux->n_seqs; vote_t *v = aux->v;
+    int i, j, max, max_id;
+    for (i = 0; i < n_seqs; ++i) {
+        kseq_t *seqs = w_seqs + i;
+        if (v[i].n > 0) {
+            max = 0; max_id = v[i].vote_id[0];
+            for (j = 0; j < v[i].n; ++j) {
+                if (v[i].vote_c[j] > max) {
+                    max = v[i].vote_c[j];
+                    max_id = v[i].vote_id[j];
+                }
+            }
+            stdout_printf("%s\n%s\n", seqs->name.s, seqs->seq.s);
+            stdout_printf("vote_id: %d, vote_c: %d\n", max_id, max);
+        } else {
+            stdout_printf("%s\n%s\n", seqs->name.s, seqs->seq.s);
+            stdout_printf("vote_id: %s, vote_c: %d\n", "NONE", 0);
+        }
+    }
+    return 0;
+}
+
 int THREAD_READ_I;
 pthread_rwlock_t RWLOCK;
 
-seed_loc_t *init_seed_loc()
+int nano_cal_clu(debwt_t *db, bntseq_t *bns, uint8_t *pac, kseq_t *seqs, nano_clu_para *cp, vote_t *v)
 {
-    seed_loc_t *loc = (seed_loc_t*)_err_malloc(sizeof(seed_loc_t));
-    loc->n = 0, loc->m = 100;
-    loc->loc = (loc_t*)_err_malloc(loc->m * sizeof(loc_t));
-    int i; 
-    for (i = 0; i < loc->m; ++i) {
-        loc->loc[i].uid = 0;
-        loc->loc[i].uni_off = 0, loc->loc[i].len1 = 0;
-        loc->loc[i].read_off = 0, loc->loc[i].len2 = 0;
+    uint32_t i;
+    uint8_t *bseq = (uint8_t*)_err_malloc(seqs->seq.l * sizeof(uint8_t));
+    for (i = 0; i < seqs->seq.l; ++i) bseq[i] = nst_nt4_table[(int)(seqs->seq.s[i])];
+
+    // seeding and locating
+    v->n = 0;
+    debwt_gen_loc_clu(bseq, seqs->seq.l, db, bns, pac, cp, v);
+
+    /* exact match test
+    debwt_count_t ok, ol, l;
+    uint32_t uid, off, m;
+    l = debwt_exact_match(db, seqs->seq.l, bseq, &ok, &ol);
+    for (i = 0; i < l; ++i) {
+        uid = debwt_sa(db, ok+i, &off);
+        stdout_printf("UID: #%d\n", uid);
+        for (m = db->uni_pos_c[uid]; m < db->uni_pos_c[uid+1]; ++m)
+            stdout_printf("%c%d\t%d\n", "+-"[_debwt_get_strand(db->uni_pos_strand, m)], (int)db->uni_pos[m]+1, off);
     }
-    return loc;
-}
-void realloc_seed_loc(seed_loc_t *s)
-{
-    s->m <<= 1;
-    s->loc = (loc_t*)_err_realloc(s->loc, s->m * sizeof(loc_t));
+    */
+    free(bseq);
+    return 0;
 }
 
-void free_seed_loc(seed_loc_t *loc) { free(loc->loc); free(loc); }
-
-/*void reall_seed_loc(seed_loc_t *loc)
-{
-    ;
-}*/
-
-
-int nano_main_aln(nano_aux_t *aux)
+int nano_main_clu(nano_aux_t *aux)
 {
     debwt_t *db = aux->db; bntseq_t *bns = aux->bns; uint8_t *pac = aux->pac;
     kseq_t *w_seqs = aux->w_seqs; int n_seqs = aux->n_seqs; 
-    seed_loc_t *seed_loc = init_seed_loc();
-    nano_clu_para *cp = aux->cp;
-    int i_seq=0; uint64_t i;
+    nano_clu_para *cp = aux->cp; vote_t *w_v = aux->v;
+    int i_seq=0;
     while (i_seq < n_seqs) {
         if (i_seq == n_seqs) break;
         kseq_t *seqs = w_seqs+i_seq;
-        stdout_printf("%s\n%s\n", seqs->name.s, seqs->seq.s);
-        uint8_t *bseq = (uint8_t*)_err_malloc(seqs->seq.l * sizeof(uint8_t));
-        for (i = 0; i < seqs->seq.l; ++i) bseq[i] = nst_nt4_table[(int)(seqs->seq.s[i])];
-
-        // seeding and locating
-        debwt_gen_loc_clu(bseq, seqs->seq.l, db, bns, pac, cp, seed_loc);
-        // debug
-        //while (1);
-        
-
-        debwt_count_t ok, ol, l;
-        uint32_t uid, off, m;
-        l = debwt_exact_match(db, seqs->seq.l, bseq, &ok, &ol);
-        for (i = 0; i < l; ++i) {
-            uid = debwt_sa(db, ok+i, &off);
-            stdout_printf("UID: #%d\n", uid);
-            for (m = db->uni_pos_c[uid]; m < db->uni_pos_c[uid+1]; ++m)
-                stdout_printf("%c%d\t%d\n", "+-"[_debwt_get_strand(db->uni_pos_strand, m)], (int)db->uni_pos[m], off);
-        }
-        free(bseq);
+        vote_t *v = w_v+i_seq;
+        nano_cal_clu(db, bns, pac, seqs, cp, v);
         i_seq++;
     }
-    free_seed_loc(seed_loc);
     return 0;
 }
 
@@ -125,27 +148,16 @@ static void *nano_thread_main_clu(void *a)
     nano_aux_t *aux = (nano_aux_t*)a;
     debwt_t *db = aux->db; bntseq_t *bns = aux->bns; uint8_t *pac = aux->pac;
     kseq_t *w_seqs = aux->w_seqs; int n_seqs = aux->n_seqs; 
-    nano_clu_para *cp = aux->cp;
-    int i;
+    nano_clu_para *cp = aux->cp; vote_t *w_v = aux->v;
+    int i_seq;
     while (1) {
         pthread_rwlock_wrlock(&RWLOCK);
-        i = THREAD_READ_I++;
+        i_seq = THREAD_READ_I++;
         pthread_rwlock_unlock(&RWLOCK);
-        if (i >= n_seqs) break;
-        kseq_t *seqs = w_seqs+i;
-        stdout_printf("%s\n%s\n", seqs->name.s, seqs->seq.s);
-        uint8_t *bseq = (uint8_t*)_err_malloc(seqs->seq.l * sizeof(uint8_t));
-        uint64_t j;
-        for (j = 0; j < seqs->seq.l; ++j) bseq[j] = nst_nt4_table[(int)(seqs->seq.s[j])];
-        debwt_count_t ok, ol, l;
-        uint32_t uid, off, m, n;
-        l = debwt_exact_match(db, seqs->seq.l, bseq, &ok, &ol);
-        for (j = 0; j < l; ++j) {
-            uid = debwt_sa(db, ok+j, &off);
-            for (m = db->uni_pos_c[uid]; m < db->uni_pos_c[uid+1]; ++m)
-                stdout_printf("%c%d\t%d\n", "+-"[_debwt_get_strand(db->uni_pos_strand, m)], (int)db->uni_pos[m], off);
-        }
-        free(bseq);
+        if (i_seq >= n_seqs) break;
+        kseq_t *seqs = w_seqs+i_seq;
+        vote_t *v = w_v+i_seq;
+        nano_cal_clu(db, bns, pac, seqs, cp, v);
     }
     return 0;
 }
@@ -174,13 +186,15 @@ int nano_clu_core(const char *ref_fn, const char *read_fn, nano_clu_para *nano_c
         aux[i].tid = i; aux[i].cp = nano_cp;
         aux[i].db = db_idx; aux[i].bns = bns; aux[i].pac = pac;
     }
+    vote_t *v = init_vote(CHUNK_READ_N);
  
     if (nano_cp->n_thread <= 1) {
         while ((n_seqs = nano_read_seq(read_seqs, CHUNK_READ_N)) != 0) { 
             aux->n_seqs = n_seqs;
             aux->w_seqs = read_seqs;
-            nano_main_aln(aux);
-            // output
+            aux->v = v;
+            nano_main_clu(aux);
+            nano_output_clu(aux);
         }
     } else { // multi-threads
         pthread_rwlock_init(&RWLOCK, NULL);
@@ -193,11 +207,12 @@ int nano_clu_core(const char *ref_fn, const char *read_fn, nano_clu_para *nano_c
             for (j = 0; j < nano_cp->n_thread; ++j) {
                 aux[j].n_seqs = n_seqs;
                 aux[j].w_seqs = read_seqs;
+                aux[j].v = v;
                 pthread_create(&tid[j], &attr, nano_thread_main_clu, aux+j);
             }
             for (j = 0; j < nano_cp->n_thread; ++j) pthread_join(tid[j], 0);
             free(tid);
-            // output
+            nano_output_clu(aux);
         }
         pthread_rwlock_destroy(&RWLOCK);
     }
