@@ -9,8 +9,8 @@
 #include "bntseq.h"
 #include "../utils.h"
 
-#define MEM_LEN 19
-#define LOB_LEN 13
+#define MEM_LEN 14
+#define LOB_LEN 11
 #define LOB_DIS 3
 
 
@@ -48,7 +48,7 @@ void uni_pos_print(uni_sa_t uid, debwt_t *db, const bntseq_t *bns)
     }
 }
 
-#define _add_vote(v, p, pc, n, m) { \
+#define _add_vote(v, l, p, pc, n, m) { \
     int _flag, _k_i;    \
     _bin_insert_idx(v, p, n, m, int, _flag, _k_i)   \
     if (_flag == 0) {                \
@@ -62,13 +62,13 @@ void uni_pos_print(uni_sa_t uid, debwt_t *db, const bntseq_t *bns)
             memmove(pc+_k_i+1, pc+_k_i, (n-_k_i)*sizeof(int));  \
         }   \
         (p)[_k_i] = v;               \
-        (pc)[_k_i] = 1; \
+        (pc)[_k_i] = l; \
         (n)++;                      \
     } else                          \
-        ((pc)[_k_i])++;   \
+        ((pc)[_k_i])+=l;   \
 }
 
-void nano_add_vote(vote_t *v, uni_sa_t uid, debwt_t *db, const bntseq_t *bns)
+void nano_add_vote(vote_t *v, int len, uni_sa_t uid, debwt_t *db, const bntseq_t *bns)
 {
     uint32_t m; uint32_t pos;
     int rid;
@@ -76,7 +76,7 @@ void nano_add_vote(vote_t *v, uni_sa_t uid, debwt_t *db, const bntseq_t *bns)
         pos = db->uni_pos[m];
         rid = bns_pos2rid(bns, pos);
         if (rid == -1) err_fatal(__func__, "pos: %d\n", pos+1);
-        _add_vote(rid, v->vote_id, v->vote_c, v->n, v->m)
+        _add_vote(rid, len, v->vote_id, v->vote_score, v->n, v->m)
         stdout_printf("%s\t%c\n", bns->anns[rid].name, "+-"[_debwt_get_strand(db->uni_pos_strand, m)]);
     }
 }
@@ -268,24 +268,30 @@ int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, ui
         cur_i = old_i;
         if (max_len > 0) set_uni_loc(&uni_loc, max_read_off, max_loc_len2, max_uid, max_uni_off, max_loc_len1);
         if (max_len >= MEM_LEN) { // MEM seed
-            // XXX cur_i = push_loc(loc_clu, uni_loc) - _BWT_HASH_K; // push mem loc
+            // XXX 
+            cur_i = push_loc(loc_clu, uni_loc) - _BWT_HASH_K; // push mem loc
             cur_i = uni_loc.read_off - _BWT_HASH_K;
             lob->lob_flag = -1;
-            // XXX int l_i = loc_clu->n; loc_t l = loc_clu->loc[l_i-1];
-            // XXX stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", l.uid, l.uni_off, l.read_off, l.len1);
-            nano_add_vote(v, uni_loc.uni_id, db, bns);
+            // XXX 
+            int l_i = loc_clu->n; loc_t l = loc_clu->loc[l_i-1];
+            // XXX 
+            stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", l.uid, l.uni_off, l.read_off, l.len1);
+            nano_add_vote(v, l.len1, uni_loc.uni_id, db, bns);
         } else if (max_len >= LOB_LEN) {
             int res = push_1lob(lob, uni_loc, db);
             if (res == 0) { // lob_flag == -1
                 cur_i = uni_loc.read_off - _BWT_HASH_K;
                 old_lob_i = old_i;
             } else if (res == 1) { // check == 1
-                // XXX cur_i = push_lob(loc_clu, *lob) - _BWT_HASH_K; // push lob loc
+                // XXX
+                cur_i = push_lob(loc_clu, *lob) - _BWT_HASH_K; // push lob loc
                 cur_i = lob->lob[lob->lob_flag].read_off - _BWT_HASH_K;
                 old_lob_i = cur_i;
-                // XXX int lob_i = loc_clu->n; loc_t l = loc_clu->loc[lob_i-1];
-                // XXX stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.len1, l.len2);
-                nano_add_vote(v, lob->lob[lob->lob_flag].uni_id, db, bns);
+                // XXX
+                int lob_i = loc_clu->n; loc_t l = loc_clu->loc[lob_i-1];
+                // XXX
+                stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.len1, l.len2);
+                nano_add_vote(v, l.len1, lob->lob[lob->lob_flag].uni_id, db, bns);
             } else { // check == 0
                 cur_i = old_lob_i;
             }

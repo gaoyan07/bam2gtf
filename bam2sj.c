@@ -28,21 +28,27 @@ int bam2sj_usage(void)
     err_printf("Note:    in.bam should be sorted in advance\n\n");
     err_printf("Options:\n\n");
     err_printf("         -t --read-type   [STR]    %s OR %s. -t %s will force filtering out reads mapped in improper pair. [%s]\n", PAIR, SING, PAIR, PAIR);
-    err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d]\n", ANCHOR_MIN_LEN);
-    err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
+    err_printf("         -G --gtf-anno    [STR]    GTF annotation file, indicating known splice-junctions. \n");
     err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
+    err_printf("         -a --anchor-len  [INT,INT,INT,INT,INT]\n");
+    err_printf("                                   minimum anchor length for junction read, [annotated, GT/AG, GC/AG, AT/AC, non-canonical]. [%d,%d,%d,%d,%d]\n", ANCHOR_MIN_LEN, ANCHOR1, ANCHOR2, ANCHOR3, NON_ANCHOR);
+    err_printf("         -U --uniq-map    [INT,INT,INT,INT,INT]\n");
+    err_printf("                                   minimum uniq-map read count for junction read, [annotated, GT/AG, GC/AG, AT/AC, non-canonical]. [%d,%d,%d,%d,%d]\n", UNIQ_MIN, UNIQ_MIN1, UNIQ_MIN2, UNIQ_MIN3, NON_UNIQ_MIN);
+    err_printf("         -A --all-map    [INT,INT,INT,INT,INT]\n");
+    err_printf("                                   minimum total uniq-map and multi-map read count for junction read, [annotated, GT/AG, GC/AG, AT/AC, non-canonical]. [%d,%d,%d,%d,%d]\n", ALL_MIN, ALL_MIN1, ALL_MIN2, ALL_MIN3, NON_ALL_MIN);
+    err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
     err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
-    //err_printf("         -g --gtf-anno    [INT]    GTF annotation file. [NULL]\n");
-    //err_printf("         -s --source      [STR]    source field in GTF, program, database or project name. [NONE]\n");
 	err_printf("\n");
 	return 1;
 }
 
 const struct option bam2sj_long_opt [] = {
-    //{ "gtf-anno", 1, NULL, 'g' },
-    { "genome-file", 1, NULL, 'g' },
     { "read-type", 1, NULL, 't' },
+    { "gtf-anno", 1, NULL, 'G' },
+    { "genome-file", 1, NULL, 'g' },
     { "anchor-len", 1, NULL, 'a' },
+    { "uniq-map", 1, NULL, 'U' },
+    { "all-map", 1, NULL, 'A' },
     { "intron-len", 1, NULL, 'i' },
 
     { 0, 0, 0, 0}
@@ -308,7 +314,7 @@ int bam2sj(int argc, char *argv[])
     sg_para *sgp = sg_init_para();
     //FILE *gtf_fp=NULL; // TODO gtf anno
 
-    while ((c = getopt_long(argc, argv, "g:t:a:i:", bam2sj_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "G:g:t:a:i:A:U:", bam2sj_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'g': strcpy(ref_fn, optarg); break;
             case 't': if (strcmp(optarg, PAIR) == 0) sgp->read_type = PAIR_T;

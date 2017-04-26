@@ -15,7 +15,7 @@ KSEQ_INIT(gzFile, gzread)
 
 typedef struct {
     int n, m;
-    int *vote_id, *vote_c;
+    int *vote_id, *vote_score;
 } vote_t; // cluster
 
 typedef struct {

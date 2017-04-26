@@ -168,6 +168,8 @@ void hash_reset_idx_para(hash_idx *h)
 }
 #endif
 
+const char index_suffix[10] = ".nanoclu";
+
 int nano_index(int argc, char *argv[])
 {
     char *prefix=0; int c, for_only=0;

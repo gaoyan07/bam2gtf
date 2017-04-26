@@ -106,8 +106,11 @@ typedef struct {
     int sam_n, tol_rep_n, *rep_n;
     char **in_name;
     int no_novel_sj, no_novel_com, only_novel;
-    int use_multi, read_type, anchor_len, intron_len;
+    int use_multi, read_type, intron_len;
     int merge_out;
+    int anchor_len[5]; // [anno, GT/AG, GC/AG, AT/AC]
+    int uniq_min[5];   // [anno, GT/AG, GC/AG, AT/AC]
+    int all_min[5];    //  [anno, GT/AG, GC/AG, AT/AC]
 } sg_para;
 
 int comp_sj_sg(sj_t sj, SG sg);

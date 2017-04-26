@@ -23,8 +23,6 @@
    SOFTWARE.
 */
 
-/* Contact: Heng Li <lh3@sanger.ac.uk> */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,6 +80,8 @@ unsigned char com_nst_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 };
 
+extern char index_suffix[10];
+
 //replace 'N' with 'G':           A  C  G  T  N->G
 const int8_t hash_nt4_table[5] = {0, 1, 2, 3, 2};
 
@@ -93,7 +93,7 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 	FILE *fp;
 	int i;
 	{ // dump .ann
-		strcpy(str, prefix); strcat(str, ".nanoclu.ann");
+		strcpy(str, prefix); strcat(str, index_suffix); strcat(str, ".ann");
 		fp = xopen(str, "w");
 		err_fprintf(fp, "%lld %d %u\n", (long long)bns->l_pac, bns->n_seqs, bns->seed);
 		for (i = 0; i != bns->n_seqs; ++i) {
@@ -107,7 +107,7 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 		err_fclose(fp);
 	}
 	{ // dump .amb
-		strcpy(str, prefix); strcat(str, ".nanoclu.amb");
+		strcpy(str, prefix); strcat(str, index_suffix); strcat(str, ".amb");
 		fp = xopen(str, "w");
 		err_fprintf(fp, "%lld %d %u\n", (long long)bns->l_pac, bns->n_seqs, bns->n_holes);
 		for (i = 0; i != bns->n_holes; ++i) {
@@ -195,9 +195,9 @@ bntseq_t *bns_restore(const char *prefix)
 	char ann_filename[1024], amb_filename[1024], pac_filename[1024], alt_filename[1024];
 	FILE *fp;
 	bntseq_t *bns;
-	strcat(strcpy(ann_filename, prefix), ".nanoclu.ann");
-	strcat(strcpy(amb_filename, prefix), ".nanoclu.amb");
-	strcat(strcpy(pac_filename, prefix), ".nanoclu.pac");
+	strcat(strcpy(ann_filename, prefix), index_suffix); strcat(ann_filename, ".ann");
+	strcat(strcpy(amb_filename, prefix), index_suffix); strcat(ann_filename, ".amb");
+	strcat(strcpy(pac_filename, prefix), index_suffix); strcat(ann_filename, ".pac");
 	bns = bns_restore_core(ann_filename, amb_filename, pac_filename);
 	if (bns == 0) return 0;
 	if ((fp = fopen(strcat(strcpy(alt_filename, prefix), ".alt"), "r")) != 0) { // read .alt file if present
@@ -358,7 +358,7 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	bns->ambs = (bntamb1_t*)calloc(m_holes, sizeof(bntamb1_t));
 	pac = (uint8_t*)calloc(m_pac/4, 1);
 	q = bns->ambs;
-	strcpy(name, prefix); strcat(name, ".nanoclu.pac");
+	strcpy(name, prefix); strcat(name, index_suffix); strcat(name, ".pac");
 	fp = xopen(name, "wb");
 	// read sequences
 	while (kseq_read(seq) >= 0) pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);

@@ -160,11 +160,28 @@ int print_gene(gene_t g, FILE *out);
 void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char **group_line, int *group_line_n);
 void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 
+// for filtering splice-junction
 #define INTRON_MIN_LEN 25
 #define INTER_EXON_MIN_LEN 6
 #define SPLICE_DISTANCE 0
 #define MIN_INTRON_NUM 0
-#define ANCHOR_MIN_LEN 1
+#define ANCHOR_MIN_LEN 1 // for annotated sj
+#define UNIQ_MIN 0 // for annotated sj
+#define ALL_MIN 0 // for annotated sj
+// for novel sj
+#define NON_ANCHOR 30 // non-canonical anchor-len
+#define ANCHOR1 12    // GT/AG, CT/AC anchor-len
+#define ANCHOR2 12    // GC/AG, CT/GC anchor-len
+#define ANCHOR3 12    // AT/AC, GT/AT anchor-len
+#define NON_UNIQ_MIN 3 // non-canonical uniq-map
+#define UNIQ_MIN1 1    // GT/AG, CT/AC uniq-map
+#define UNIQ_MIN2 2    // GC/AG, CT/GC uniq-map
+#define UNIQ_MIN3 3    // AT/AC, GT/AT uniq-map
+#define NON_ALL_MIN 3 // non-canonical all-map
+#define ALL_MIN1 1    // GT/AG, CT/AC all-map 
+#define ALL_MIN2 1    // GC/AG, CT/GC all-map
+#define ALL_MIN3 1    // AT/AC, GT/AT all-map
+
 
 int check_iden(trans_t t1, trans_t t2, int dis);
 

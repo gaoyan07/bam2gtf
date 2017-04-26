@@ -31,7 +31,7 @@ vote_t *init_vote(int v_n)
     int i; for (i = 0; i < v_n; ++i) {
         v[i].n = 0, v[i].m = 10;
         v[i].vote_id = (int*)_err_malloc(10 * sizeof(int));
-        v[i].vote_c = (int*)_err_malloc(10 * sizeof(int));
+        v[i].vote_score = (int*)_err_malloc(10 * sizeof(int));
     }
     return v;
 }
@@ -40,7 +40,7 @@ void free_vote(vote_t *v, int v_n)
 {
     int i;
     for (i = 0; i < v_n; ++i) {
-        free(v[i].vote_id); free(v[i].vote_c);
+        free(v[i].vote_id); free(v[i].vote_score);
     }
     free(v);
 }
@@ -84,16 +84,16 @@ int nano_output_clu(nano_aux_t *aux)
         if (v[i].n > 0) {
             max = 0; max_id = v[i].vote_id[0];
             for (j = 0; j < v[i].n; ++j) {
-                if (v[i].vote_c[j] > max) {
-                    max = v[i].vote_c[j];
+                if (v[i].vote_score[j] > max) {
+                    max = v[i].vote_score[j];
                     max_id = v[i].vote_id[j];
                 }
             }
             stdout_printf("%s\n%s\n", seqs->name.s, seqs->seq.s);
-            stdout_printf("vote_id: %d, vote_c: %d\n", max_id, max);
+            stdout_printf("vote_id: %d, vote_score: %d\n", max_id, max);
         } else {
             stdout_printf("%s\n%s\n", seqs->name.s, seqs->seq.s);
-            stdout_printf("vote_id: %s, vote_c: %d\n", "NONE", 0);
+            stdout_printf("vote_id: %s, vote_score: %d\n", "NONE", 0);
         }
     }
     return 0;
@@ -110,6 +110,7 @@ int nano_cal_clu(debwt_t *db, bntseq_t *bns, uint8_t *pac, kseq_t *seqs, nano_cl
 
     // seeding and locating
     v->n = 0;
+    stdout_printf("%s\n%s\n", seqs->name.s, seqs->seq.s);
     debwt_gen_loc_clu(bseq, seqs->seq.l, db, bns, pac, cp, v);
 
     /* exact match test
