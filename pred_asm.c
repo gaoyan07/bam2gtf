@@ -21,7 +21,7 @@ int pred_asm_usage(void)
     err_printf("Options:\n\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel combination of known exons in the ASM. [False]\n");
-    err_printf("         -t --read-type   [STR]    %s OR %s. -t %s will force filtering out reads mapped in improper pair. [%s].\n", PAIR, SING, PAIR, PAIR);
+    err_printf("         -p --prop-pair            set -p to force to filter out reads mapped in improper pair. [False]\n");
     err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d].\n", ANCHOR_MIN_LEN);
     err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
     err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
@@ -306,7 +306,7 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
 const struct option asm_long_opt [] = {
     { "novel-sj", 0, NULL, 'n' },
     { "novel-com", 0, NULL, 'N' },
-    { "read-type", 1, NULL, 't' },
+    { "proper-pair", 1, NULL, 'p' },
     { "anchor-len", 1, NULL, 'a' },
     { "intron-len", 1, NULL, 'i' },
     { "genome-file", 1, NULL, 'g' },
@@ -318,19 +318,34 @@ const struct option asm_long_opt [] = {
 
 int pred_asm(int argc, char *argv[])
 {
-    int c, i; char out_fn[1024]="", ref_fn[1024]="";
+    int c, i; char out_fn[1024]="", ref_fn[1024]="", *p;
     sg_para *sgp = sg_init_para();
-	while ((c = getopt_long(argc, argv, "nNsmo:", asm_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "nNlmMpa:U:A:i:g:G:o:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'N': sgp->no_novel_com = 0; break;
+            case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'm': sgp->use_multi = 1; break;
             case 'M': sgp->merge_out = 1; break;
-            case 't': if (strcmp(optarg, "paired") == 0) sgp->read_type = 1;
-                      else if (strcmp(optarg, "single") == 0) sgp->read_type = 0;
-                      else return pred_asm_usage();
+            case 'p': sgp->read_type = PAIR_T; break;
+            case 'a': sgp->anchor_len[0] = strtol(optarg, &p, 10);
+                      if (*p != 0) sgp->anchor_len[1] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->anchor_len[2] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->anchor_len[3] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->anchor_len[4] = strtol(p+1, &p, 10); else return pred_asm_usage();
                       break;
-            case 'a': sgp->anchor_len = atoi(optarg); break;
+            case 'U': sgp->uniq_min[0] = strtol(optarg, &p, 10);
+                      if (*p != 0) sgp->uniq_min[1] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->uniq_min[2] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->uniq_min[3] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->uniq_min[4] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      break; 
+            case 'A': sgp->all_min[0] = strtol(optarg, &p, 10);
+                      if (*p != 0) sgp->all_min[1] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->all_min[2] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->all_min[3] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      if (*p != 0) sgp->all_min[4] = strtol(p+1, &p, 10); else return pred_asm_usage();
+                      break;
             case 'i': sgp->intron_len = atoi(optarg); break;
             case 'g': strcpy(ref_fn, optarg); break;
             case 'o': strcpy(out_fn, optarg); break;
@@ -356,7 +371,7 @@ int pred_asm(int argc, char *argv[])
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
     bam_set_cname(h, cname);
     bam_hdr_destroy(h); sam_close(in);
-    // build splice-graph with GTF
+    // build splice-graph
     FILE *gtf_fp = xopen(argv[optind], "r");
     SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
@@ -376,7 +391,7 @@ int pred_asm(int argc, char *argv[])
 
         // update edge weight and add novel edge for GTF-SG
         update_SpliceGraph(sg_g, sj_group, sj_n, sgp);
-        free(sj_group);
+        free_sj_group(sj_group, sj_n);
 
         // generate ASM with short-read splice-graph
         SGasm_group *asm_g = gen_asm(sg_g, sgp);

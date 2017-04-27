@@ -29,9 +29,12 @@ sg_para *sg_init_para(void)
     sgp->rep_n = NULL; sgp->in_name = NULL;
     sgp->sam_n = 0; sgp->tol_rep_n = 0;
     sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
-    sgp->use_multi = 0; sgp->read_type = 1; // 1: pair, 0: single
-    sgp->anchor_len = INTRON_MIN_LEN; sgp->intron_len = INTRON_MIN_LEN;
+    sgp->use_multi = 0; sgp->read_type = 0; // 1: pair, 0: single
+    sgp->intron_len = INTRON_MIN_LEN;
     sgp->merge_out = 0;
+    sgp->anchor_len[0] = ANCHOR_MIN_LEN, sgp->anchor_len[1] = NON_ANCHOR, sgp->anchor_len[2] = ANCHOR1, sgp->anchor_len[3] = ANCHOR2, sgp->anchor_len[4] = ANCHOR3;
+    sgp->uniq_min[0] = UNIQ_MIN, sgp->uniq_min[1] = NON_UNIQ_MIN, sgp->uniq_min[2] = UNIQ_MIN1, sgp->uniq_min[3] = UNIQ_MIN2, sgp->uniq_min[4] = UNIQ_MIN3;
+    sgp->all_min[0] = ALL_MIN, sgp->all_min[1] = NON_ALL_MIN, sgp->all_min[2] = ALL_MIN1, sgp->all_min[3] = ALL_MIN2, sgp->all_min[4] = ALL_MIN3;
     return sgp;
 }
 
@@ -113,15 +116,29 @@ int sg_update_edge_pred(SG *sg, sj_t sj, int don_site_id, int acc_site_id)
         else sg->edge[e_i].is_rev = sj.strand - 1; // 0:+, 1:-, 2:undefined
         sg->edge[e_i].motif = sj.motif, sg->edge[e_i].is_anno = sj.is_anno;
         sg->edge[e_i].uniq_c = sj.uniq_c, sg->edge[e_i].multi_c = sj.multi_c, sg->edge[e_i].max_over = sj.max_over;
-        sg->edge[e_i].anc = (anc_t*)_err_calloc(sj.uniq_c, sizeof(anc_t));
-        int i; for (i = 0; i < sj.uniq_c; ++i) {
-            sg->edge[e_i].anc[i].bid = sj.anc[i].bid;
-            sg->edge[e_i].anc[i].left_anc_len = sj.anc[i].left_anc_len;
-            sg->edge[e_i].anc[i].right_anc_len = sj.anc[i].right_anc_len;
-            sg->edge[e_i].anc[i].left_hard= sj.anc[i].left_hard;
-            sg->edge[e_i].anc[i].right_hard = sj.anc[i].right_hard;
-            sg->edge[e_i].anc[i].left_sj_len = sj.anc[i].left_sj_len;
-            sg->edge[e_i].anc[i].right_sj_len = sj.anc[i].right_sj_len;
+        sg->edge[e_i].uniq_anc = (anc_t*)_err_calloc(sj.uniq_c, sizeof(anc_t));
+        sg->edge[e_i].multi_anc = (anc_t*)_err_calloc(sj.multi_c, sizeof(anc_t));
+        int i;
+        if (sj.uniq_c > 0) {
+            for (i = 0; i < sj.uniq_c; ++i) {
+                sg->edge[e_i].uniq_anc[i].bid = sj.uniq_anc[i].bid;
+                sg->edge[e_i].uniq_anc[i].left_anc_len = sj.uniq_anc[i].left_anc_len;
+                sg->edge[e_i].uniq_anc[i].right_anc_len = sj.uniq_anc[i].right_anc_len;
+                sg->edge[e_i].uniq_anc[i].left_hard= sj.uniq_anc[i].left_hard;
+                sg->edge[e_i].uniq_anc[i].right_hard = sj.uniq_anc[i].right_hard;
+                sg->edge[e_i].uniq_anc[i].left_sj_len = sj.uniq_anc[i].left_sj_len;
+                sg->edge[e_i].uniq_anc[i].right_sj_len = sj.uniq_anc[i].right_sj_len;
+            }
+        } else {
+            for (i = 0; i < sj.multi_c; ++i) {
+                sg->edge[e_i].multi_anc[i].bid = sj.multi_anc[i].bid;
+                sg->edge[e_i].multi_anc[i].left_anc_len = sj.multi_anc[i].left_anc_len;
+                sg->edge[e_i].multi_anc[i].right_anc_len = sj.multi_anc[i].right_anc_len;
+                sg->edge[e_i].multi_anc[i].left_hard= sj.multi_anc[i].left_hard;
+                sg->edge[e_i].multi_anc[i].right_hard = sj.multi_anc[i].right_hard;
+                sg->edge[e_i].multi_anc[i].left_sj_len = sj.multi_anc[i].left_sj_len;
+                sg->edge[e_i].multi_anc[i].right_sj_len = sj.multi_anc[i].right_sj_len;
+            }
         }
     }
     return 0;
@@ -390,6 +407,7 @@ int pred_sg(int argc, char *argv[])
         free(seq[i].name.s); free(seq[i].seq.s);
     } free(seq);
     sg_free_group(sg_g); sg_free_group(sr_sg_g); gzclose(genome_fp); sg_free_para(sgp);
+    free_sj_group(sj_group, sj_n);
     return 0;
 }
 #endif

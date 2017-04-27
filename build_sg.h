@@ -68,7 +68,7 @@ typedef struct {
     uint8_t is_rev;
     uint8_t motif, is_anno;
     int uniq_c, multi_c, max_over;
-    anc_t *anc; // for each uniq-junction
+    anc_t *uniq_anc, *multi_anc; // for each uniq-junction
 } SGedge; // edge of splicing-graph, splice junction
 
 typedef struct {
@@ -108,9 +108,9 @@ typedef struct {
     int no_novel_sj, no_novel_com, only_novel;
     int use_multi, read_type, intron_len;
     int merge_out;
-    int anchor_len[5]; // [anno, GT/AG, GC/AG, AT/AC]
-    int uniq_min[5];   // [anno, GT/AG, GC/AG, AT/AC]
-    int all_min[5];    //  [anno, GT/AG, GC/AG, AT/AC]
+    int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
+    int uniq_min[5];   // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
+    int all_min[5];    // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
 } sg_para;
 
 int comp_sj_sg(sj_t sj, SG sg);
@@ -123,7 +123,7 @@ int comp_sj_sg(sj_t sj, SG sg);
     ed[ei].don_site_id = _don_site_id, ed[ei].acc_site_id = _acc_site_id,   \
     ed[ei].is_rev = _is_rev; ed[ei].is_anno = _is_anno;  \
     ed[ei].motif=0; ed[ei].uniq_c=0; ed[ei].multi_c=0; ed[ei].max_over=0; \
-    ed[ei].anc=NULL; \
+    ed[ei].uniq_anc=NULL; ed[ei].multi_anc=NULL; \
 }
 
 #define PAIR "paried"

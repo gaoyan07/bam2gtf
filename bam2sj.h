@@ -22,6 +22,7 @@ static inline uint8_t bam_is_uniq_NH(bam1_t *b)
 
 kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m);
 int bam2cnt_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, SG_group *sg_g, sg_para *sgp);
+void free_sj_group(sj_t *sj_g, int sj_n);
 int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, sg_para *sgp);
 int bam2sj(int argc, char *argv[]);
 

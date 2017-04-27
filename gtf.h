@@ -58,7 +58,8 @@ typedef struct {
     int32_t don, acc;
     uint8_t motif, is_anno;
     int uniq_c, multi_c, max_over;
-    anc_t *anc; int anc_m; // for each uniq-junction
+    anc_t *uniq_anc; int uniq_anc_m; // for each uniq-map-junction
+    anc_t *multi_anc; int multi_anc_m; // for each mult-mqp-junction
 } sj_t;
 
 
@@ -175,8 +176,8 @@ void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 #define ANCHOR3 12    // AT/AC, GT/AT anchor-len
 #define NON_UNIQ_MIN 3 // non-canonical uniq-map
 #define UNIQ_MIN1 1    // GT/AG, CT/AC uniq-map
-#define UNIQ_MIN2 2    // GC/AG, CT/GC uniq-map
-#define UNIQ_MIN3 3    // AT/AC, GT/AT uniq-map
+#define UNIQ_MIN2 1    // GC/AG, CT/GC uniq-map
+#define UNIQ_MIN3 1    // AT/AC, GT/AT uniq-map
 #define NON_ALL_MIN 3 // non-canonical all-map
 #define ALL_MIN1 1    // GT/AG, CT/AC all-map 
 #define ALL_MIN2 1    // GC/AG, CT/GC all-map
