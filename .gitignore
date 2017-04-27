@@ -44,3 +44,7 @@ test_data/*
 #tags
 tags
 cscope.*
+# temp submodule
+nano_clu/*.o
+nano_clu/gdb_nano_clu
+nano_clu/nano_clu
