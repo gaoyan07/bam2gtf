@@ -19,21 +19,22 @@ typedef struct {
 } vote_t; // cluster
 
 typedef struct {
-    int read_off, read_loc_len;
     int uni_n, uni_m;
     uni_sa_t uni_id;  // array XXX
     ref_off_t uni_off, uni_loc_len; // array XXX
+    int read_off, read_loc_len;
 } uni_loc_t; // for LOB
 
 typedef struct {
     int lob_flag; // -1:NULL, 0/1: 1 LOB
+    int cur_i;
     uni_loc_t lob[2];
 } lob_t;
 
 typedef struct {
     uni_sa_t uid;
-    ref_off_t uni_off, len1;
-    int read_off, len2;
+    ref_off_t uni_off, uni_loc_len;
+    int read_off, read_loc_len;
 } loc_t; // MEM/LOB
 
 typedef struct {

@@ -196,8 +196,8 @@ bntseq_t *bns_restore(const char *prefix)
 	FILE *fp;
 	bntseq_t *bns;
 	strcat(strcpy(ann_filename, prefix), index_suffix); strcat(ann_filename, ".ann");
-	strcat(strcpy(amb_filename, prefix), index_suffix); strcat(ann_filename, ".amb");
-	strcat(strcpy(pac_filename, prefix), index_suffix); strcat(ann_filename, ".pac");
+	strcat(strcpy(amb_filename, prefix), index_suffix); strcat(amb_filename, ".amb");
+	strcat(strcpy(pac_filename, prefix), index_suffix); strcat(pac_filename, ".pac");
 	bns = bns_restore_core(ann_filename, amb_filename, pac_filename);
 	if (bns == 0) return 0;
 	if ((fp = fopen(strcat(strcpy(alt_filename, prefix), ".alt"), "r")) != 0) { // read .alt file if present

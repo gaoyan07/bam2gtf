@@ -44,3 +44,9 @@ test_data/*
 #tags
 tags
 cscope.*
+
+# nano_clu
+nano_clu/*.o
+nano_clu/nanoclu
+nano_clu/gdb_nanoclu
+nano_clu/data/*

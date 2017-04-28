@@ -22,8 +22,8 @@ seed_loc_t *init_seed_loc()
     int i; 
     for (i = 0; i < loc->m; ++i) {
         loc->loc[i].uid = 0;
-        loc->loc[i].uni_off = 0, loc->loc[i].len1 = 0;
-        loc->loc[i].read_off = 0, loc->loc[i].len2 = 0;
+        loc->loc[i].uni_off = 0, loc->loc[i].uni_loc_len = 0;
+        loc->loc[i].read_off = 0, loc->loc[i].read_loc_len = 0;
     }
     return loc;
 }
@@ -144,8 +144,8 @@ int push_loc(seed_loc_t *loc, uni_loc_t uloc)
     if (loc->n == loc->m) realloc_seed_loc(loc);
 
     loc->loc[loc->n].uid = uloc.uni_id;
-    loc->loc[loc->n].uni_off = uloc.uni_off, loc->loc[loc->n].len1 = uloc.uni_loc_len;
-    loc->loc[loc->n].read_off = uloc.read_off, loc->loc[loc->n].len2 = uloc.read_loc_len;
+    loc->loc[loc->n].uni_off = uloc.uni_off, loc->loc[loc->n].uni_loc_len = uloc.uni_loc_len;
+    loc->loc[loc->n].read_off = uloc.read_off, loc->loc[loc->n].read_loc_len = uloc.read_loc_len;
     ++loc->n;
     return uloc.read_off;
 }
@@ -159,9 +159,9 @@ int push_lob(seed_loc_t *loc, lob_t lob)
     loc->loc[loc->n].uid = lob.lob[l1].uni_id;
     loc->loc[loc->n].uni_off = lob.lob[l1].uni_off, loc->loc[loc->n].read_off = lob.lob[l1].read_off;
     // calcu len1,len2 and next_seed_i
-    ref_off_t len1 = lob.lob[l2].uni_off - lob.lob[l1].uni_off + lob.lob[l2].uni_loc_len;
-    int len2 = lob.lob[l2].read_off - lob.lob[l1].read_off + lob.lob[l2].read_loc_len;
-    loc->loc[loc->n].len1 = len1, loc->loc[loc->n].len2 = len2;
+    ref_off_t uni_l = lob.lob[l2].uni_off - lob.lob[l1].uni_off + lob.lob[l2].uni_loc_len;
+    int read_l = lob.lob[l2].read_off - lob.lob[l1].read_off + lob.lob[l2].read_loc_len;
+    loc->loc[loc->n].uni_loc_len = uni_l, loc->loc[loc->n].read_loc_len = read_l;
     ++loc->n;
     return lob.lob[l1].read_off;
 }
@@ -172,9 +172,9 @@ int lob_check(uni_loc_t l1, uni_loc_t l2, debwt_t *db)
     //for (i = 0; i < l1.uni_n; ++i) { // XXX
         //for (j = 0; j < l2.uni_n; ++j) { //XXX
             if (l1.uni_id == l2.uni_id) { // same unipath
-                if (abs(l1.read_off-(l2.read_off + l2.read_loc_len)) <= LOB_DIS) {
+                if (abs(l1.read_off-(l2.read_off + l2.read_loc_len)) <= LOB_DIS) { 
                     int uni_off2 = l2.uni_off, uni_off1 = l1.uni_off, uni_loc_len2 = l2.uni_loc_len;
-                    if (abs((l1.read_off-(l2.read_off+l2.read_loc_len)) - (uni_off1-(uni_off2+uni_loc_len2))) <= LOB_DIS) return 1;
+                    if (abs((l1.read_off-(l2.read_off+l2.read_loc_len)) - (uni_off1-(uni_off2+uni_loc_len2))) <= LOB_DIS) return 1; // XXX LOB_DIS ?? LOB_DIFF
                 }
             } else { // different unipath
                 //uint32_t m, n;
@@ -189,23 +189,35 @@ int lob_check(uni_loc_t l1, uni_loc_t l2, debwt_t *db)
     return 0;
 }
 
+// return value:
+#define ONE_LOB 0
+#define UNMERG_LOB 1
+#define MERGED_LOB 2
+// [empty] flag = -1
+// [lob] flag = 0
+// [LOB] flag = 1
 int push_1lob(lob_t *lob, uni_loc_t uni_loc, debwt_t *db)
 {
+    int cur_i = lob->cur_i;
     if (lob->lob_flag == -1) { // NULL
         lob->lob[0] = uni_loc;
         lob->lob_flag = 0;
-        return 0;
+        lob->cur_i = 0;
+        return ONE_LOB;
     } else if (lob->lob_flag == 0 || lob->lob_flag == 1) {
         // check_lob(lob[0/1] and new loc)
-        if (lob_check(lob->lob[lob->lob_flag], uni_loc, db)) {
-            lob->lob[1-lob->lob_flag] = uni_loc;
-            lob->lob_flag = 1-lob->lob_flag;
-            return 1;
+        if (lob_check(lob->lob[cur_i], uni_loc, db)) {
+            // update LOB
+            lob->lob[cur_i].uni_off = uni_loc.uni_off;
+            lob->lob[cur_i].read_off = uni_loc.read_off;
+            lob->lob[cur_i].uni_loc_len = lob->lob[cur_i].uni_off-uni_loc.uni_off+lob->lob[cur_i].uni_loc_len;
+            lob->lob[cur_i].read_loc_len = lob->lob[cur_i].read_off-uni_loc.read_off+lob->lob[cur_i].read_loc_len;
+            return MERGED_LOB;
         } else {
-            //lob->lob[1-lob->lob_flag] = uni_loc;
-            //lob->lob_flag = 1-lob->lob_flag;
-            lob->lob_flag = -1;
-            return -1;
+            lob->lob[1-cur_i] = uni_loc;
+            lob->cur_i = 1 - cur_i;
+            if (lob->lob_flag == 0) return ONE_LOB;
+            else { lob->lob_flag = 0; return UNMERG_LOB; }
         }
     } else {
         err_printf("[push_lob] Error: unknown lob flag: %d.\n", lob->lob_flag);
@@ -275,13 +287,15 @@ int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, ui
             // XXX 
             int l_i = loc_clu->n; loc_t l = loc_clu->loc[l_i-1];
             // XXX 
-            stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", l.uid, l.uni_off, l.read_off, l.len1);
-            nano_add_vote(v, l.len1, uni_loc.uni_id, db, bns);
+            stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", l.uid, l.uni_off, l.read_off, l.uni_loc_len);
+            nano_add_vote(v, l.uni_loc_len, uni_loc.uni_id, db, bns);
         } else if (max_len >= LOB_LEN) {
             int res = push_1lob(lob, uni_loc, db);
-            if (res == 0) { // lob_flag == -1
+            if (res == ONE_LOB) { // lob_flag == -1
                 cur_i = uni_loc.read_off - _BWT_HASH_K;
                 old_lob_i = old_i;
+            } else if (res == UNMERG_LOB) {
+
             } else if (res == 1) { // check == 1
                 // XXX
                 cur_i = push_lob(loc_clu, *lob) - _BWT_HASH_K; // push lob loc
@@ -290,8 +304,8 @@ int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, ui
                 // XXX
                 int lob_i = loc_clu->n; loc_t l = loc_clu->loc[lob_i-1];
                 // XXX
-                stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.len1, l.len2);
-                nano_add_vote(v, l.len1, lob->lob[lob->lob_flag].uni_id, db, bns);
+                stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.uni_loc_len, l.read_loc_len);
+                nano_add_vote(v, l.uni_loc_len, lob->lob[lob->lob_flag].uni_id, db, bns);
             } else { // check == 0
                 cur_i = old_lob_i;
             }
