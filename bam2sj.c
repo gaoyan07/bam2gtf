@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <ctype.h>
 #include "htslib/htslib/sam.h"
 #include "bam2gtf.h"
 #include "bam2sj.h"
@@ -102,8 +103,10 @@ uint8_t intr_deri_str(kseq_t *seq, int seq_n, int tid, int start, int end, uint8
     if (seq_n == 0) return 0;
     if (tid >= seq_n) err_fatal(__func__, "unknown tid: %d\n", tid); 
     char intron[10]="";
-    strncpy(intron, seq[tid].seq.s+start-1, 2);
-    strncpy(intron+2, seq[tid].seq.s+end-2, 2);
+    intron[0] = toupper(seq[tid].seq.s[start-1]);
+    intron[1] = toupper(seq[tid].seq.s[start]);
+    intron[2] = toupper(seq[tid].seq.s[end-2]);
+    intron[3] = toupper(seq[tid].seq.s[end-1]);
     int i;
     for (i = 0; i < intron_motif_n; ++i) {
         if (strcmp(intron, intron_motif[i]) == 0) {
