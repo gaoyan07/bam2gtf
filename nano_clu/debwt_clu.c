@@ -150,20 +150,18 @@ int push_loc(seed_loc_t *loc, uni_loc_t uloc)
     return uloc.read_off;
 }
 
-int push_lob(seed_loc_t *loc, lob_t lob)
+int push_lob(seed_loc_t *loc, lob_t lob) // flag == 0
 {
     if (loc->n == loc->m) realloc_seed_loc(loc);
 
-    int l1=lob.lob_flag, l2 = 1-lob.lob_flag;
+    int lob_i = lob.cur_i;
 
-    loc->loc[loc->n].uid = lob.lob[l1].uni_id;
-    loc->loc[loc->n].uni_off = lob.lob[l1].uni_off, loc->loc[loc->n].read_off = lob.lob[l1].read_off;
+    loc->loc[loc->n].uid = lob.lob[lob_i].uni_id;
+    loc->loc[loc->n].uni_off = lob.lob[lob_i].uni_off, loc->loc[loc->n].read_off = lob.lob[lob_i].read_off;
     // calcu len1,len2 and next_seed_i
-    ref_off_t uni_l = lob.lob[l2].uni_off - lob.lob[l1].uni_off + lob.lob[l2].uni_loc_len;
-    int read_l = lob.lob[l2].read_off - lob.lob[l1].read_off + lob.lob[l2].read_loc_len;
-    loc->loc[loc->n].uni_loc_len = uni_l, loc->loc[loc->n].read_loc_len = read_l;
+    loc->loc[loc->n].uni_loc_len = lob.lob[lob_i].uni_loc_len, loc->loc[loc->n].read_loc_len = lob.lob[lob_i].read_loc_len;
     ++loc->n;
-    return lob.lob[l1].read_off;
+    return lob.lob[lob_i].read_off;
 }
 
 int lob_check(uni_loc_t l1, uni_loc_t l2, debwt_t *db)
@@ -191,8 +189,9 @@ int lob_check(uni_loc_t l1, uni_loc_t l2, debwt_t *db)
 
 // return value:
 #define ONE_LOB 0
-#define UNMERG_LOB 1
-#define MERGED_LOB 2
+#define TWO_LOB 1
+#define UNMERG_LOB 2
+#define MERGED_LOB 3
 // [empty] flag = -1
 // [lob] flag = 0
 // [LOB] flag = 1
@@ -212,11 +211,12 @@ int push_1lob(lob_t *lob, uni_loc_t uni_loc, debwt_t *db)
             lob->lob[cur_i].read_off = uni_loc.read_off;
             lob->lob[cur_i].uni_loc_len = lob->lob[cur_i].uni_off-uni_loc.uni_off+lob->lob[cur_i].uni_loc_len;
             lob->lob[cur_i].read_loc_len = lob->lob[cur_i].read_off-uni_loc.read_off+lob->lob[cur_i].read_loc_len;
+            lob->lob_flag = 1;
             return MERGED_LOB;
         } else {
             lob->lob[1-cur_i] = uni_loc;
             lob->cur_i = 1 - cur_i;
-            if (lob->lob_flag == 0) return ONE_LOB;
+            if (lob->lob_flag == 0) return TWO_LOB;
             else { lob->lob_flag = 0; return UNMERG_LOB; }
         }
     } else {
@@ -245,6 +245,7 @@ int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, ui
     uni_loc_t uni_loc;
 
     for (cur_i = seq_len - _BWT_HASH_K; cur_i >= 0; --cur_i) {
+        printf("cur_i: %d\n", cur_i);
         old_i = cur_i;
         // debwt hash
         k = db->bwt_hash[get_hash_value(bseq+cur_i, _BWT_HASH_K)];
@@ -280,36 +281,44 @@ int debwt_gen_loc_clu(uint8_t *bseq, int seq_len, debwt_t *db, bntseq_t *bns, ui
         cur_i = old_i;
         if (max_len > 0) set_uni_loc(&uni_loc, max_read_off, max_loc_len2, max_uid, max_uni_off, max_loc_len1);
         if (max_len >= MEM_LEN) { // MEM seed
-            // XXX 
+            if (lob->lob_flag == 1) {
+                lob->cur_i = 1 - lob->cur_i;
+                push_lob(loc_clu, *lob);
+                loc_t l = loc_clu->loc[loc_clu->n-1];
+                stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.uni_loc_len, l.read_loc_len);
+        nano_add_vote(v, l.uni_loc_len, l.uid, db, bns);
+            }
+            lob->lob_flag = -1;
             cur_i = push_loc(loc_clu, uni_loc) - _BWT_HASH_K; // push mem loc
             cur_i = uni_loc.read_off - _BWT_HASH_K;
-            lob->lob_flag = -1;
-            // XXX 
-            int l_i = loc_clu->n; loc_t l = loc_clu->loc[l_i-1];
-            // XXX 
-            stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", l.uid, l.uni_off, l.read_off, l.uni_loc_len);
-            nano_add_vote(v, l.uni_loc_len, uni_loc.uni_id, db, bns);
+            stdout_printf("MEM: id: %d, uni_off: %d, read_off: %d, len: %d\n", uni_loc.uni_id, uni_loc.uni_off, uni_loc.read_off, uni_loc.uni_loc_len);
+            nano_add_vote(v, uni_loc.uni_loc_len, uni_loc.uni_id, db, bns);
         } else if (max_len >= LOB_LEN) {
+            // XXX bug exists
             int res = push_1lob(lob, uni_loc, db);
             if (res == ONE_LOB) { // lob_flag == -1
                 cur_i = uni_loc.read_off - _BWT_HASH_K;
                 old_lob_i = old_i;
-            } else if (res == UNMERG_LOB) {
-
-            } else if (res == 1) { // check == 1
-                // XXX
-                cur_i = push_lob(loc_clu, *lob) - _BWT_HASH_K; // push lob loc
-                cur_i = lob->lob[lob->lob_flag].read_off - _BWT_HASH_K;
-                old_lob_i = cur_i;
-                // XXX
-                int lob_i = loc_clu->n; loc_t l = loc_clu->loc[lob_i-1];
-                // XXX
-                stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.uni_loc_len, l.read_loc_len);
-                nano_add_vote(v, l.uni_loc_len, lob->lob[lob->lob_flag].uni_id, db, bns);
-            } else { // check == 0
+            } else if (res == TWO_LOB) { // lob_flag == 0
                 cur_i = old_lob_i;
+            } else if (res == UNMERG_LOB) { // push lob->lob[1-cur_i]
+                cur_i = push_lob(loc_clu, *lob) - _BWT_HASH_K;
+                old_lob_i = cur_i;
+                loc_t l = loc_clu->loc[loc_clu->n-1];
+                stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.uni_loc_len, l.read_loc_len);
+                nano_add_vote(v, l.uni_loc_len, l.uid, db, bns);
+            } else { // MERGED_LOB
+                cur_i = uni_loc.read_off - _BWT_HASH_K;
+                old_lob_i = cur_i;
             }
         }
+    }
+    if (lob->lob_flag == 1) {
+        lob->cur_i = 1 - lob->cur_i;
+        push_lob(loc_clu, *lob);
+        loc_t l = loc_clu->loc[loc_clu->n-1];
+        stdout_printf("LOB id: %d, uni_off: %d, read_off: %d, len1: %d, len2: %d\n", l.uid, l.uni_off, l.read_off, l.uni_loc_len, l.read_loc_len);
+        nano_add_vote(v, l.uni_loc_len, l.uid, db, bns);
     }
     
     free(lob); free_seed_loc(loc_clu);
