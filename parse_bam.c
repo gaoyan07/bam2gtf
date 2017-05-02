@@ -72,12 +72,11 @@ uint8_t bam_is_uniq_NH(bam1_t *b)
     return (bam_aux2i(p) == 1);
 }
 
-int bam_cigar_opn(int n_cigar, const uint32_t *c, uint32_t op)
+int bam_cigar_opn(int n_cigar, const uint32_t *cigar, uint32_t op)
 {
-    int i, j=0;
-    for (i = 0; i < n_cigar; ++i) {
-        if (bam_cigar_op(c[i]) == op) j++;
-    }
+    int i, j;
+    for (i = j = 0; i < n_cigar; ++i)
+        if (bam_cigar_op(cigar[i]) == op) ++j;
     return j;
 }
 
@@ -312,7 +311,7 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, int32_
     return sj_n;
 }
 
-int parse_bam(int tid, int start, int *_end, int n_cigar, uint32_t *c, int bid, uint8_t is_uniq, kseq_t *seq, int seq_n, int *intv_n, int **intv_l, int **intv_d, sj_t **sj, int *_sj_n, int *sj_m, sg_para *sgp)
+int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, int bid, uint8_t is_uniq, kseq_t *seq, int seq_n, int *intv_n, int **intv_l, int **intv_d, sj_t **sj, int *_sj_n, int *sj_m, sg_para *sgp)
 {
     int N_n =  bam_cigar_opn(n_cigar, c, BAM_CREF_SKIP); 
     int end = start - 1; /* 1-base */
@@ -418,7 +417,7 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
         is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
         if (bam_is_prop(b) != 1 && sgp->read_type == PAIR_T) continue; // prop-pair (2)
 
-        tid = b->core.tid; n_cigar = b->core.n_cigar, cigar = bam_get_cigar(b);
+        tid = b->core.tid; n_cigar = b->core.n_cigar; cigar = bam_get_cigar(b);
         bam_start = b->core.pos+1;
         // alignment details
         if (_AD_n == AD_m) _realloc(*AD_group, AD_m, ad_t)
