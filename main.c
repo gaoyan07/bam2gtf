@@ -5,7 +5,7 @@
 #include "bam_filter.h"
 #include "update_gtf.h"
 #include "bam2gtf.h"
-#include "bam2sj.h"
+#include "parse_bam.h"
 #include "pred_asm.h"
 #include "asm2ase.h"
 

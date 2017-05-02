@@ -105,7 +105,7 @@ extern "C" {
 	void ks_introsort_64 (size_t n, uint64_t *a);
 	void ks_introsort_128(size_t n, pair64_t *a);
 
-#define _realloc(p, m, type) {m <<= 1; p = (type*)_err_realloc(p, m * sizeof(type));}
+#define _realloc(p, m, type) {(m) <<= 1; p = (type*)_err_realloc(p, (m) * sizeof(type));}
 
 #ifdef __cplusplus
 }

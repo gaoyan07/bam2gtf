@@ -9,33 +9,43 @@
 #define _node_len(n) ((n).end-(n).start+1)
 
 typedef struct {
+    int tid, start, end;
+    int intv_n, *intv_l, *intv_d; // intv_l[intv_n]: exonic, intv_d[intv_n-1]: intronic
+} ad_t;   // alignment details: start, end, intv_n, intv[]
+
+typedef struct {
     int up, se, down;
     int asm_i, sg_i;
-    int up_c, down_c, both_c, skip_c;
+    int up_c, down_c, ud_both_c, skip_c;
+    int body_c;
 } SE_t;   // skipped exon
 
 typedef struct {
     int lon, shor, down;
     int asm_i, sg_i;
-    int lon_c, pj_c, shor_c;
+    int shor_c, pj_c, lon_c, pl_both_c;
+    int body_c;
 } A5SS_t; // alternative 3' splice site
 
 typedef struct {
     int up, lon, shor;
     int asm_i, sg_i;
-    int lon_c, pj_c, shor_c;
+    int lon_c, pj_c, lp_both_c, shor_c;
+    int body_c;
 } A3SS_t; // alternative 3' splice site
 
 typedef struct {
     int up, fir, sec, down;
     int asm_i, sg_i;
     int fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c;
+    int fir_body_c, sec_body_c;
 } MXE_t; // mutually exclusive exon
 
 typedef struct {
     int up, down, in;
     int asm_i, sg_i;
-    int ej_c, pj1_c, pj2_c;
+    int ej_c, pj1_c, pj2_c, pj_both_c;
+    int body_c;
 } RI_t;  // retained intron
 
 typedef struct {
@@ -92,9 +102,23 @@ typedef struct {
 } SGasm;
 
 typedef struct {
+    int ASM_id, SG_id;
+    int v_start, v_end; // virtual start and end node
+    int iso_n, iso_m;
+    int *node_n; int **node_id;
+    int *edge_n; int **edge_id;
+    int start, end;
+} SGiso; // each ASM has one SGiso
+
+typedef struct {
     SGasm **sg_asm;
     int sg_asm_n, sg_asm_m;
 } SGasm_group;
+
+typedef struct {
+    SGiso **sg_iso;
+    int sg_iso_n, sg_iso_m;
+} SGiso_group;
  
 typedef struct {
     SG **SG;

@@ -4,7 +4,7 @@
 #include <getopt.h>
 #include "gtf.h"
 #include "build_sg.h"
-#include "bam2sj.h"
+#include "parse_bam.h"
 #include "kstring.h"
 
 extern const char PROG[20];

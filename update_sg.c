@@ -32,6 +32,8 @@
     }   \
 }
 
+// XXX update based on splice-junction OR alignment-detail
+// XXX discard edge whose weight == 0?
 int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] updating splice-graph with splice-junctions ...\n", __func__);
