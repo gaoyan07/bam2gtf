@@ -8,6 +8,7 @@
 
 #define _node_len(n) ((n).end-(n).start+1)
 
+// XXX ad->is_uniq
 typedef struct {
     int tid, start, end;
     int intv_n, *intv_l, *intv_d; // intv_l[intv_n]: exonic, intv_d[intv_n-1]: intronic
@@ -107,7 +108,7 @@ typedef struct {
     int iso_n, iso_m;
     int *node_n; int **node_id;
     int *edge_n; int **edge_id;
-    int start, end;
+    int *uniq_c, *multi_c; // XXX multi_c
 } SGiso; // each ASM has one SGiso
 
 typedef struct {
@@ -116,8 +117,8 @@ typedef struct {
 } SGasm_group;
 
 typedef struct {
-    SGiso **sg_iso;
-    int sg_iso_n, sg_iso_m;
+    SGiso **sg_asm_iso;
+    int sg_asm_n, sg_asm_m;
 } SGiso_group;
  
 typedef struct {
