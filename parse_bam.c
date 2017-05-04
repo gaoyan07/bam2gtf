@@ -100,7 +100,8 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int tid, int don, int acc, uint8_t s
 void free_ad_group(ad_t *ad, int ad_n)
 {
     int i; for (i = 0; i < ad_n; ++i) {
-        free(ad[i].exon_end); free(ad[i].intr_end);
+        free(ad[i].exon_end); 
+        if (ad[i].intr_end != NULL) free(ad[i].intr_end);
     }
     free(ad);
 }
@@ -240,7 +241,7 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
 
     ad->intv_n = 0;
     ad->exon_end = (int*)_err_malloc((N_n+1) * sizeof(int));
-    ad->intr_end = (int*)_err_malloc(N_n * sizeof(int));
+    ad->intr_end = N_n>0? (int*)_err_malloc(N_n * sizeof(int)) : NULL;
 
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);

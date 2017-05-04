@@ -194,7 +194,7 @@ void sg_free_iso_group(iso_group *iso_g)
 void sg_free_tmp_iso_group(SGiso_group *iso_g)
 {
     int i; for (i = 0; i < iso_g->sg_asm_m; ++i) {
-        sg_free_tmp_iso(iso_g->sg_asm_iso[i]);
+        if (iso_g->sg_asm_iso[i] != NULL) sg_free_tmp_iso(iso_g->sg_asm_iso[i]);
     }
     free(iso_g->sg_asm_iso); free(iso_g);
 }
@@ -308,12 +308,13 @@ void sg_update_iso(SG *sg, SGiso *iso, SGiso *next_iso, int cur_id, int next_id)
     iso->iso_n += next_iso->iso_n;
 }
 
-int sg_asm_gen_iso(SG *sg, int **node_visit, SGiso_group *iso_g, int cur_id, int s_id, int e_id)
+int sg_asm_gen_iso(SG *sg, int *node_visit, SGiso_group *iso_g, int cur_id, int s_id, int e_id)
 {
     SGiso *iso = iso_g->sg_asm_iso[cur_id-s_id];
-    if ((*node_visit)[cur_id] == 1) {
+    if (node_visit[cur_id] > 0) {
+        node_visit[cur_id]++;
         return iso->iso_n;
-    } else (*node_visit)[cur_id] = 1;
+    } else node_visit[cur_id] = 1;
     if (cur_id == e_id) return 1;
 
     iso->iso_n = 0;
@@ -324,6 +325,11 @@ int sg_asm_gen_iso(SG *sg, int **node_visit, SGiso_group *iso_g, int cur_id, int
 
         SGiso *next_iso = iso_g->sg_asm_iso[next_id-s_id];
         sg_update_iso(sg, iso, next_iso, cur_id, next_id);
+        if (node_visit[next_id] == sg->node[next_id].pre_n) {
+            // free next_iso
+            sg_free_tmp_iso(iso_g->sg_asm_iso[next_id-s_id]); 
+            iso_g->sg_asm_iso[next_id-s_id] = NULL;
+        }
     }
 
     return iso_n;
@@ -492,7 +498,7 @@ iso_group *gen_asm_iso(SG_group *sg_g, sg_para *sgp)
                     int *node_visit = (int*)_err_calloc(sg->node_n, sizeof(int));
                     SGiso_group *iso_tmp_g = sg_init_tmp_iso_group(asm_i, sg_i, entry[i], exit[j]);
                     //sub_splice_graph(sg, &node_visit, sg_asm, entry[i], exit[j]);
-                    sg_asm_gen_iso(sg, &node_visit, iso_tmp_g, entry[i], entry[i], exit[j]);
+                    sg_asm_gen_iso(sg, node_visit, iso_tmp_g, entry[i], entry[i], exit[j]);
                     free(node_visit);
                     SGiso *iso = iso_tmp_g->sg_asm_iso[0];
                     if ((only_novel == 0 || check_novel_iso(sg, iso) == 1)
