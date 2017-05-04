@@ -112,7 +112,8 @@ void sg_free_iso(SGiso *sg_iso)
         }
         free(sg_iso->node_id); free(sg_iso->edge_id);
         free(sg_iso->node_n); free(sg_iso->edge_n);
-        free(sg_iso->uniq_c); free(sg_iso->multi_c);
+        free(sg_iso->uniq_sj_c); free(sg_iso->multi_sj_c);
+        free(sg_iso->uniq_tot_c); free(sg_iso->multi_tot_c);
     }
     free(sg_iso);
 }
@@ -345,8 +346,10 @@ int sg_iso_group_add(SGiso_group *iso_g, SGiso *sg_iso)
     a->node_id = (int**)_err_malloc(a->iso_n * sizeof(int*));
     a->edge_n = (int*)_err_malloc(a->iso_n * sizeof(int));
     a->edge_id = (int**)_err_malloc(a->iso_n * sizeof(int*));
-    a->uniq_c = (int*)_err_calloc(a->iso_n, sizeof(int));
-    a->multi_c = (int*)_err_calloc(a->iso_n, sizeof(int));
+    a->uniq_sj_c = (int*)_err_calloc(a->iso_n, sizeof(int));
+    a->uniq_tot_c = (int*)_err_calloc(a->iso_n, sizeof(int));
+    a->multi_sj_c = (int*)_err_calloc(a->iso_n, sizeof(int));
+    a->multi_tot_c = (int*)_err_calloc(a->iso_n, sizeof(int));
     for (i = 0; i < a->iso_n; ++i) {
         a->node_n[i] = sg_iso->node_n[i];
         a->node_id[i] = (int*)_err_malloc(a->node_n[i] * sizeof(int));
@@ -468,7 +471,7 @@ SGiso_group *gen_asm_iso(SG_group *sg_g, sg_para *sgp)
                 if (post_domn_n > 1 && pre_domn_n > 1 
                         && sg->node[entry[i]].post_domn[1] == exit[j] 
                         && sg->node[exit[j]].pre_domn[1] == entry[i]) {
-                    // XXX if (exit[j] - entry[i] > 2) continue;
+                    if (exit[j] - entry[i] > 2) continue;
                     int *node_visit = (int*)_err_calloc(sg->node_n, sizeof(int));
                     SGiso_group *iso_tmp_g = sg_init_tmp_iso_group(asm_i, sg_i, entry[i], exit[j]);
                     //sub_splice_graph(sg, &node_visit, sg_asm, entry[i], exit[j]);
@@ -649,8 +652,13 @@ int iso_cal_cnt(SGiso_group *iso_g, ad_t *ad_group, int ad_n, SG_group *sg_g)
             for (iso_i = 0; iso_i < iso->iso_n; ++iso_i) {
                 // check if ad is consistent with iso->node
                 if (check_consis_ad(ad, node, iso->node_id[iso_i], iso->node_n[iso_i])) {
-                    if (ad->is_uniq) iso->uniq_c[iso_i]++;
-                    else iso->multi_c[iso_i]++;
+                    if (ad->is_uniq) {
+                        if (ad->is_splice) iso->uniq_sj_c[iso_i]++;
+                        iso->uniq_tot_c[iso_i]++;
+                    } else {
+                        if (ad->is_splice) iso->multi_sj_c[iso_i]++;
+                        iso->multi_tot_c[iso_i]++;
+                    }
                 }
             }
         }
@@ -716,8 +724,8 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
 
 int iso_output(char *in_fn, char *prefix, SG_group *sg_g, SGiso_group *iso_g, sg_para *sgp)
 {
-    int i, j, out_n=1;
-    char suf[1][10] = { ".ASMISO" };
+    int i, j, out_n=2;
+    char suf[2][10] = { ".IsoCnt" , ".IsoExon" };
     char suff[20] = "";
     if (sgp->use_multi==1) strcat(suff, ".multi");
     if (sgp->no_novel_sj==1) strcat(suff, ".anno");
@@ -734,23 +742,27 @@ int iso_output(char *in_fn, char *prefix, SG_group *sg_g, SGiso_group *iso_g, sg
     }
 
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
-    for (i = 0; i < out_n; ++i)
-        out_fp[i] = xopen(out_fn[i], "w");
+    for (i = 0; i < out_n; ++i) out_fp[i] = xopen(out_fn[i], "w");
 
     chr_name_t *cname = sg_g->cname;
-    fprintf(out_fp[0], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tSTART_NODE\tEND_NODE\tTOTAL_NODES_NUM\tUNIQ_READ_COUNT\tMULTI_READ_COUNT\tUCSC_POS\n");
+    fprintf(out_fp[0], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tSTART_ES\tSTART_EE\tEND_ES\tEND_EE\tUNIQ_SJ_CNT\tUNIQ_TOT_COUNT\tMULTI_SJ_COUNT\tMULTI_TOT_CNT\n");
+    fprintf(out_fp[1], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tISO_EXON\n");
     
     int iso_i = 0;
     for (i = 0; i < iso_g->sg_asm_n; ++i) {
         SGiso *a = iso_g->sg_asm_iso[i];
         int asm_i = a->ASM_id, sg_i = a->SG_id; SG *sg = sg_g->SG[sg_i]; 
         SGnode *node = sg->node;
-        int start, end; int v_s = a->v_start, v_e = a->v_end;
+        int vs = a->v_start, ve = a->v_end;
 
-        if (node[v_s].node_e.start == 0) start = sg->start-100; else start = node[v_s].node_e.start;
-        if (node[v_e].node_e.end == MAX_SITE) end = sg->end+100; else end = node[v_e].node_e.end;
         for (j = 0; j < a->iso_n; ++j) {
-            fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t(%d,%d)\t(%d,%d)\t%d\t%d\t%d\t%s:%d-%d\n", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], node[a->v_start].node_e.start, node[a->v_start].node_e.end, node[a->v_end].node_e.start, node[a->v_end].node_e.end, a->node_n[j], a->uniq_c[j], a->multi_c[j], cname->chr_name[sg->tid], start, end);
+            fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j], node[vs].start, node[vs].end, node[ve].start, node[ve].end, a->uniq_sj_c[j], a->uniq_tot_c[j], a->multi_sj_c[j], a->multi_tot_c[j]);
+            fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j]);
+            int k;
+            for (k = 0; k < a->node_n[j]; ++k) {
+                fprintf(out_fp[1], "\t%d\t%d", node[a->node_id[j][k]].start,node[a->node_id[j][k]].end);
+            }
+            fprintf(out_fp[1], "\n");
             iso_i++;
         }
     }
