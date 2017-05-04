@@ -567,7 +567,7 @@ int ad_bin_sch_node(ad_t *ad, int *ad_i, SGnode *node, int *node_id, int node_n,
 {
     if (ad->start >= node[node_id[0]].start) {
         *ad_i = 0;
-        int start = ad->start;
+        int end = ad->exon_end[0];
         int left = 0, right = node_n-1, mid;
         int mid_s, mid_e;
         if (right == -1) return 0;
@@ -575,17 +575,17 @@ int ad_bin_sch_node(ad_t *ad, int *ad_i, SGnode *node, int *node_id, int node_n,
             mid = (left + right) >> 1;
             mid_s = node[node_id[mid]].start;
             mid_e = node[node_id[mid]].end;
-            if (start >= mid_s && start <= mid_e) {
+            if (end >= mid_s && end <= mid_e) {
                 *node_i = mid;
                 return 1;
-            } else if (start < mid_s) 
+            } else if (end < mid_s) 
                 right = mid-1;
-            else // start > mid_e
+            else // end > mid_e
                 left = mid+1;
         }
     } else {
         *node_i = 0;
-        int start = node[node_id[0]].start;
+        int end = node[node_id[0]].end;
         int left = 0, right = ad->intv_n-1, mid;
         int mid_s, mid_e;
         if (right == -1) return 0;
@@ -593,18 +593,36 @@ int ad_bin_sch_node(ad_t *ad, int *ad_i, SGnode *node, int *node_id, int node_n,
             mid = (left + right) >> 1;
             mid_s = (mid == 0 ? ad->start : ad->intr_end[mid-1]+1);
             mid_e = ad->exon_end[mid];
-            if (start >= mid_s && start <= mid_e) {
+            if (end >= mid_s && end <= mid_e) {
                 *ad_i = mid;
                 return 1;
-            } else if (start < mid_s) 
+            } else if (end < mid_s) 
                 right = mid-1;
-            else // start > mid_e
+            else // end > mid_e
                 left = mid+1;
         } 
     }
     return 0;
 }
 
+#ifdef _RMATS_
+int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int node_n, int node_i)
+{
+    int ad_i, n_i;
+    int ad_pos; SGnode n;
+    for (ad_i = _ad_i, n_i = node_i; ad_i < ad->intv_n-1 && n_i < node_n-1; ++ad_i, ++n_i) {
+        // check exon end
+        ad_pos = ad->exon_end[ad_i];
+        n = node[node_id[n_i]];
+        if (ad_pos != n.end) return 0;
+        // check exon start
+        ad_pos = ad->intr_end[ad_i]+1;
+        n = node[node_id[n_i+1]];
+        if (ad_pos != n.start) return 0;
+    }
+    return 1;
+}
+#else
 int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int node_n, int node_i)
 {
     int ad_i, n_i;
@@ -614,6 +632,9 @@ int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int no
         if (ad_i != 0) { // check exon start
             ad_pos = ad->intr_end[ad_i-1] + 1;
             if (ad_pos != n.start) return 0;
+        } else {
+            ad_pos = ad->start;
+            if (ad_pos < n.start) return 0; 
         }
         ad_pos = ad->exon_end[ad_i];
         if (ad_i != ad->intv_n-1) { // check exon end
@@ -624,6 +645,7 @@ int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int no
     }
     return 1;
 }
+#endif
 
 int check_consis_ad(ad_t *ad, SGnode *node, int *node_id, int node_n)
 {
