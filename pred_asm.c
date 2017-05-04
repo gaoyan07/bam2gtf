@@ -549,8 +549,8 @@ int comp_ad_sg(ad_t *ad, SG *sg)
     if (ad->tid < sg->tid) return -1;
     else if (ad->tid > sg->tid) return 1;
     else {
-        if (ad->start < sg->start) return -1;
-        else if (ad->end > sg->end) return 1;
+        if (ad->end < sg->start) return -1;
+        else if (ad->start > sg->end) return 1;
         else return 0; // fully fall in OR share at one junction
     }
 }
@@ -692,7 +692,10 @@ int iso_cal_cnt(iso_group *iso_g, ad_t *ad_group, int ad_n, SG_group *sg_g)
             for (asm_i = 0; asm_i < sg_iso_g->sg_asm_n; ++asm_i) {
                 iso = sg_iso_g->sg_asm_iso[asm_i];
                 node = sg->node;
-                if (comp_ad_iso(ad, iso, sg) < 0) break;
+                comp_res = comp_ad_iso(ad, iso, sg);
+                if (comp_res < 0) break;
+                else if (comp_res > 0) continue;
+
                 for (iso_i = 0; iso_i < iso->iso_n; ++iso_i) {
                     // check if ad is consistent with iso->node
                     if (check_consis_ad(ad, node, iso->node_id[iso_i], iso->node_n[iso_i])) {
