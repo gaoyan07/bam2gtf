@@ -18,9 +18,11 @@ OBJS    =	$(SOURCE:.c=.o)
 
 BIN     =	$(BIN_DIR)/gtools
 
+RMATS       =   $(BIN_DIR)/rmats_gtools
 GDB_DEBUG   =   $(BIN_DIR)/gdb_gtools
 NOR_DEBUG   =   $(BIN_DIR)/debug_gtools
 DMARCRO 	=	-D __DEBUG__
+RMARCRO     =   -D _RMATS_
 COMP_GTF	= 	$(BIN_DIR)/comp-gtf
 GDB_COMP	=   $(BIN_DIR)/gdb_comp-gtf
 COMP_D		=	-D COMP_MAIN
@@ -41,6 +43,8 @@ $(HTS_ALL):
 $(BIN): $(OBJS)
 		$(CC) $(OBJS) -o $@ $(LIB)
 
+$(RMATS):
+		$(CC) $(CFLAGS) $(SOURCE) $(RMARCRO) -o $@ $(LIB)
 $(GDB_DEBUG):
 		$(CC) $(DFLAGS) $(SOURCE) $(DMARCRO) -o $@ $(LIB)
 $(NOR_DEBUG):

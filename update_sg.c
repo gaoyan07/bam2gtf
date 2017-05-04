@@ -9,27 +9,6 @@
     ed.uniq_c = sj->uniq_c; \
     ed.multi_c = sj->multi_c; \
     ed.max_over = sj->max_over; \
-    ed.uniq_anc = (anc_t*)_err_malloc(sj->uniq_c * sizeof(anc_t)); \
-    ed.multi_anc = (anc_t*)_err_malloc(sj->multi_c * sizeof(anc_t)); \
-    int _i; \
-    for (_i = 0; _i < sj->uniq_c; ++_i) {   \
-        ed.uniq_anc[_i].bid = sj->uniq_anc[_i].bid;   \
-        ed.uniq_anc[_i].left_anc_len = sj->uniq_anc[_i].left_anc_len;   \
-        ed.uniq_anc[_i].right_anc_len = sj->uniq_anc[_i].right_anc_len;   \
-        ed.uniq_anc[_i].left_sj_len = sj->uniq_anc[_i].left_sj_len;   \
-        ed.uniq_anc[_i].right_sj_len = sj->uniq_anc[_i].right_sj_len;   \
-        ed.uniq_anc[_i].left_hard = sj->uniq_anc[_i].left_hard;   \
-        ed.uniq_anc[_i].right_hard = sj->uniq_anc[_i].right_hard;   \
-    }   \
-    for (_i = 0; _i < sj->multi_c; ++_i) {   \
-        ed.multi_anc[_i].bid = sj->multi_anc[_i].bid;   \
-        ed.multi_anc[_i].left_anc_len = sj->multi_anc[_i].left_anc_len;   \
-        ed.multi_anc[_i].right_anc_len = sj->multi_anc[_i].right_anc_len;   \
-        ed.multi_anc[_i].left_sj_len = sj->multi_anc[_i].left_sj_len;   \
-        ed.multi_anc[_i].right_sj_len = sj->multi_anc[_i].right_sj_len;   \
-        ed.multi_anc[_i].left_hard = sj->multi_anc[_i].left_hard;   \
-        ed.multi_anc[_i].right_hard = sj->multi_anc[_i].right_hard;   \
-    }   \
 }
 
 // XXX update based on splice-junction OR alignment-detail

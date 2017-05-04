@@ -34,64 +34,6 @@ int asm2ase_usage(void)
     return 1;
 }
 
-// XXX only uniq-read are used here
-// XXX handle multi-junction reads (more than 2 junctions)
-#define _count_sj_read(ed, pre, next, cnt) { \
-    int _left_l = _node_len(pre), _right_l = _node_len(next);   \
-    int _is_init = pre.is_init, _is_termi = next.is_termi; \
-    int _l, _left, _right; \
-    for (_l = 0; _l < ed.uniq_c; ++_l) {    \
-        _left = 0, _right=0;  \
-        anc_t _anc = ed.uniq_anc[_l];   \
-        if (_is_init) _left=1;  \
-        else {  \
-            if (_anc.left_hard) {    \
-                if (_anc.left_anc_len == _left_l) _left=1; \
-            } else if (_anc.left_anc_len <= _left_l) _left=1;  \
-        }   \
-        if (_is_termi) _right=1; \
-        else {  \
-            if (_anc.right_hard) {   \
-                if (_anc.right_anc_len == _right_l) _right=1;  \
-            } else if (_anc.right_anc_len <= _right_l) _right=1;   \
-        }   \
-        if (_left && _right) cnt++; \
-    }   \
-}
-
-// for sj1, if right_hard == 1, sj1 & sj2 should be in that read together
-// for sj2, if left_hard == 1, same to above
-#define _count_both_read(ed1, pre, sj1_c, ed2, next, sj2_c, cur, both_c) { \
-    int _sj1_l = cur.start - pre.end - 1, _sj2_l = next.start - cur.end - 1; \
-    int _right1_l = _node_len(cur), _left2_l = _node_len(cur);  \
-    int _l, _left, _right;  \
-    int32_t *_bid_up = (int32_t*)_err_calloc(2, sizeof(uint32_t)); int _bid_up_n=0, _bid_up_m=2, _hit, _hit_i;    \
-    for (_l = 0; _l < ed1.uniq_c; ++_l) { \
-        _right=0;    \
-        anc_t _anc = ed1.uniq_anc[_l];    \
-        if (_anc.right_hard) {   \
-            if (_anc.right_anc_len == _right1_l && _anc.right_sj_len == _sj2_l) _right=1; \
-        } else if (_anc.right_anc_len <= _right1_l) _right=1;  \
-        if (_right) {  \
-            sj1_c++;    \
-            _bin_insert(_anc.bid, _bid_up, _bid_up_n, _bid_up_m, int32_t)   \
-        }   \
-    }   \
-    for (_l = 0; _l < ed2.uniq_c; ++_l) {    \
-        _left = 0;    \
-        anc_t _anc = ed2.uniq_anc[_l];    \
-        if (_anc.left_hard) {    \
-            if (_anc.left_anc_len == _left2_l && _anc.left_sj_len == _sj1_l) _left=1;   \
-        } else if (_anc.left_anc_len <= _left2_l) _left=1;    \
-        if (_left) {    \
-            sj2_c++;   \
-            _bin_search(_anc.bid, _bid_up, _bid_up_n, int32_t, _hit, _hit_i)  \
-            if (_hit) both_c++; \
-        }   \
-    }  \
-    free(_bid_up);  \
-}
-
 #define add_asm_se(ase, up_e, se_e, down_e, up_c, down_c, both_c, skip_c, body_c, asm_i, sg_i) { \
     int _i, _flag=0;                         \
     for (_i = ase->se_n-1; _i >= 0; --_i) { \
@@ -138,9 +80,10 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
                     int ij2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next.s_site_id);
                     if ((use_multi == 1 || (sg->edge[ej_id].uniq_c > 0 && sg->edge[ij1_id].uniq_c > 0 && sg->edge[ij2_id].uniq_c > 0)) 
                     && (only_novel == 0 || ed[ej_id].is_anno == 0 || ed[ij1_id].is_anno == 0 || ed[ij2_id].is_anno == 0)) {
-                        int up_c=0, down_c=0, both_c=0, skip_c=0, body_c = cur.uniq_c;
-                        _count_both_read(ed[ij1_id], pre, up_c, ed[ij2_id], next, down_c, cur, both_c)
-                        _count_sj_read(ed[ej_id], pre, next, skip_c)
+                        int up_c=0, down_c=0, both_c=0, skip_c=0, body_c=0;
+                        // XXX count read cnt
+                        // transform se to 2 isoform
+                        // invoke: iso_cal_cnt(ad)
 
                         int up = pre.node_id, se = cur.node_id, down = next.node_id;
                         add_asm_se(ase, up, se, down, up_c, down_c, both_c, skip_c, body_c, asm_i, sg_i)
@@ -151,7 +94,7 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
     }
 }
 
-#define add_asm_a5ss(ase, shor_e, long_e, down_e, shor_c, lon_c, asm_i, sg_i) {  \
+#define add_asm_a5ss(ase, shor_e, long_e, down_e, shor_c, lon_c, pj_c, pl_both_c, body_c, asm_i, sg_i) {  \
     int _i, _flag=0;                           \
     for (_i = ase->a5ss_n-1; _i >= 0; --_i) { \
         if (ase->a5ss[_i].sg_i != sg_i) break;  \
@@ -166,13 +109,13 @@ void asm2se(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
         ase->a5ss[ase->a5ss_n].down = down_e;   \
         ase->a5ss[ase->a5ss_n].lon_c = lon_c;    \
         ase->a5ss[ase->a5ss_n].shor_c = shor_c;   \
+        ase->a5ss[ase->a5ss_n].pj_c = pj_c;   \
+        ase->a5ss[ase->a5ss_n].pl_both_c = pl_both_c;   \
+        ase->a5ss[ase->a5ss_n].body_c = body_c;   \
         ase->a5ss[ase->a5ss_n].asm_i = asm_i;   \
         ase->a5ss[ase->a5ss_n].sg_i = sg_i;     \
         ase->a5ss_n++;  \
     }   \
-}
-
-#define _count_pj_both(ed, shor, lon, cur, pj_c, lon_c, pl_both_c) { \
 }
 
 void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, int only_novel)
@@ -197,12 +140,11 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                         int sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0)) 
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
-                                int lon_c=0, shor_c=0;
-                                _count_sj_read(ed[sj1_id], cur, next1, lon_c)
-                                _count_sj_read(ed[sj2_id], cur, next2, shor_c)
+                                int lon_c=0, shor_c=0, pj_c=0, pl_both_c=0, body_c=0;
+                                // XXX count read cnt
 
                                 int up = cur.node_id, lon = next1.node_id, shor = next2.node_id;
-                                add_asm_a5ss(ase, shor, lon, up, shor_c, lon_c, asm_i, sg_i)
+                                add_asm_a5ss(ase, shor, lon, up, shor_c, lon_c, pj_c, pl_both_c, body_c, asm_i, sg_i)
                         }
                     }
                 }
@@ -227,12 +169,10 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
                             int lon_c=0,  shor_c=0, pj_c=0, pl_both_c=0, body_c=0;
-                            _count_sj_read(ed[sj1_id], pre1, cur, shor_c)
-                            //_count_sj_read(ed[sj2_id], pre2, cur, lon_c)
-                            _count_pj_both(ed[sj2_id], pre1, pre2, cur, pj_c, lon_c, pl_both_c);
+                            // XXX count read cnt
 
                             int shor = pre1.node_id, lon = pre2.node_id, down = cur.node_id;
-                            add_asm_a5ss(ase, shor, lon, down, shor_c, lon_c, asm_i, sg_i)
+                            add_asm_a5ss(ase, shor, lon, down, shor_c, lon_c, pj_c, pl_both_c, body_c, asm_i, sg_i)
                         }
                     }
                 }
@@ -241,7 +181,7 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
     }
 }
 
-#define add_asm_a3ss(ase, up_e, long_e, shor_e, lon_c, shor_c, asm_i, sg_i) {  \
+#define add_asm_a3ss(ase, up_e, long_e, shor_e, lon_c, shor_c, pj_c, lp_both_c, body_c, asm_i, sg_i) {  \
     int _i, _flag=0;                           \
     for (_i = ase->a3ss_n-1; _i >= 0; --_i) { \
         if (ase->a3ss[_i].sg_i != sg_i) break;  \
@@ -256,6 +196,9 @@ void asm2a5ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
         ase->a3ss[ase->a3ss_n].shor = shor_e;  \
         ase->a3ss[ase->a3ss_n].lon_c = lon_c;    \
         ase->a3ss[ase->a3ss_n].shor_c = shor_c;  \
+        ase->a3ss[ase->a3ss_n].pj_c = pj_c;    \
+        ase->a3ss[ase->a3ss_n].lp_both_c = lp_both_c;  \
+        ase->a3ss[ase->a3ss_n].body_c = body_c;  \
         ase->a3ss[ase->a3ss_n].asm_i = asm_i;     \
         ase->a3ss[ase->a3ss_n].sg_i = sg_i;     \
         ase->a3ss_n++;  \
@@ -284,12 +227,11 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                         int sj2_id = _err_sg_bin_sch_edge(sg, pre2.e_site_id, cur.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
-                            int lon_c=0, shor_c=0;
-                            _count_sj_read(ed[sj1_id], pre1, cur, shor_c)
-                            _count_sj_read(ed[sj2_id], pre2, cur, lon_c)
+                            int lon_c=0, shor_c=0, pj_c=0, lp_both_c=0, body_c=0;
+                            // XXX count read cnt
 
                             int shor = pre1.node_id, lon = pre2.node_id, down = cur.node_id;
-                            add_asm_a3ss(ase, down, lon, shor, lon_c, shor_c, asm_i, sg_i)
+                            add_asm_a3ss(ase, down, lon, shor, lon_c, shor_c, pj_c, lp_both_c, body_c, asm_i, sg_i)
                         }
                     }
                 }
@@ -313,12 +255,11 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
                         int sj2_id = _err_sg_bin_sch_edge(sg, cur.e_site_id, next2.s_site_id);
                         if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0)) {
-                            int lon_c=0, shor_c=0;
-                            _count_sj_read(ed[sj1_id], cur, next1, lon_c)
-                            _count_sj_read(ed[sj2_id], cur, next2, shor_c)
+                            int lon_c=0, shor_c=0, pj_c=0, lp_both_c=0, body_c=0;
+                            // XXX count read cnt
 
                             int up = cur.node_id, lon = next1.node_id, shor = next2.node_id;
-                            add_asm_a3ss(ase, up, lon, shor, lon_c, shor_c, asm_i, sg_i)
+                            add_asm_a3ss(ase, up, lon, shor, lon_c, shor_c, pj_c, lp_both_c, body_c, asm_i, sg_i)
                         }
                     }
                 }
@@ -327,7 +268,7 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
     }
 }
 
-#define add_asm_mxe(ase, up_e, fir_e, sec_e, down_e, fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c, asm_i, sg_i) {  \
+#define add_asm_mxe(ase, up_e, fir_e, sec_e, down_e, fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c, fir_body_c, sec_body_c, asm_i, sg_i) {  \
     int _i, _flag=0;                           \
     for (_i = ase->mxe_n-1; _i >= 0; --_i) { \
         if (ase->mxe[_i].sg_i != sg_i) break;  \
@@ -347,6 +288,8 @@ void asm2a3ss(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, 
         ase->mxe[ase->mxe_n].sec_up_c = sec_up_c;     \
         ase->mxe[ase->mxe_n].sec_down_c = sec_down_c;     \
         ase->mxe[ase->mxe_n].sec_both_c = sec_both_c;     \
+        ase->mxe[ase->mxe_n].fir_body_c = fir_body_c;     \
+        ase->mxe[ase->mxe_n].sec_body_c = sec_body_c;     \
         ase->mxe[ase->mxe_n].asm_i = asm_i; \
         ase->mxe[ase->mxe_n].sg_i = sg_i; \
         ase->mxe_n++;   \
@@ -380,12 +323,11 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
                                     int sj4_id = _err_sg_bin_sch_edge(sg, mx2.e_site_id, next.s_site_id);
                                     if ((use_multi == 1 || (ed[sj1_id].uniq_c > 0 && ed[sj2_id].uniq_c > 0 && ed[sj3_id].uniq_c > 0 && ed[sj4_id].uniq_c > 0))
                                     && (only_novel == 0 ||  ed[sj1_id].is_anno == 0 || ed[sj2_id].is_anno == 0 || ed[sj3_id].is_anno == 0 || ed[sj4_id].is_anno == 0)){
-                                        int fir_up_c=0,fir_down_c=0,fir_both_c=0,sec_up_c=0,sec_down_c=0,sec_both_c=0;
-                                        _count_both_read(ed[sj1_id], pre, fir_up_c, ed[sj3_id], next, fir_down_c, mx1, fir_both_c)
-                                        _count_both_read(ed[sj2_id], pre, sec_up_c, ed[sj4_id], next, sec_down_c, mx2, sec_both_c)
+                                        int fir_up_c=0,fir_down_c=0,fir_both_c=0,sec_up_c=0,sec_down_c=0,sec_both_c=0, fir_body_c=0, sec_body_c=0;
+                                        // XXX count read cnt
 
                                         int up = pre.node_id, fir = mx1.node_id, sec = mx2.node_id, down = next.node_id;
-                                        add_asm_mxe(ase, up, fir, sec, down, fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c, asm_i, sg_i)
+                                        add_asm_mxe(ase, up, fir, sec, down, fir_up_c, fir_down_c, fir_both_c, sec_up_c, sec_down_c, sec_both_c, fir_body_c, sec_body_c, asm_i, sg_i)
                                     }
                                 }
                             }
@@ -397,7 +339,7 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
     }
 }
 
-#define add_asm_ri(ase, up_e, down_e, in_e, ej_c, asm_i, sg_i) {  \
+#define add_asm_ri(ase, up_e, down_e, in_e, ej_c, pj1_c, pj2_c, pj_both_c, body_c, asm_i, sg_i) {  \
     int _i, _flag=0;                           \
     for (_i = ase->ri_n-1; _i >= 0; --_i) { \
         if (ase->ri[_i].sg_i != sg_i) break;  \
@@ -411,6 +353,10 @@ void asm2mxe(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, i
         ase->ri[ase->ri_n].down = down_e; \
         ase->ri[ase->ri_n].in = in_e; \
         ase->ri[ase->ri_n].ej_c = ej_c; \
+        ase->ri[ase->ri_n].pj1_c = pj1_c; \
+        ase->ri[ase->ri_n].pj2_c = pj2_c; \
+        ase->ri[ase->ri_n].pj_both_c = pj_both_c; \
+        ase->ri[ase->ri_n].body_c = body_c; \
         ase->ri[ase->ri_n].asm_i = asm_i; \
         ase->ri[ase->ri_n].sg_i = sg_i; \
         ase->ri_n++;    \
@@ -432,11 +378,11 @@ void asm2ri(SG *sg, SGasm *a, ASE_t *ase, int asm_i, int sg_i, int use_multi, in
                         int sj_id = _err_sg_bin_sch_edge(sg, pre.e_site_id, next.s_site_id);
                         if ((use_multi == 1 || (ed[sj_id].uniq_c > 0))
                         && (only_novel == 0 || ed[sj_id].is_anno == 0)) {
-                            int ej_c=0;
-                            _count_sj_read(ed[sj_id], pre, next, ej_c)
+                            int ej_c=0, pj1_c=0, pj2_c=0, pj_both_c=0, body_c=0;
+                            // XXX count read cnt
 
                             int up = pre.node_id, down = next.node_id, in = ri.node_id;
-                            add_asm_ri(ase, up, down, in, ej_c, asm_i, sg_i)
+                            add_asm_ri(ase, up, down, in, ej_c, pj1_c, pj2_c, pj_both_c, body_c, asm_i, sg_i)
                         }
                     }
                 }
@@ -723,13 +669,13 @@ int asm2ase(int argc, char *argv[])
         ad_m = 10000; ad_group = (ad_t*)_err_malloc(ad_m * sizeof(ad_t));
         // calculate number of junction-reads and exon-body reads
         //sj_n = bam2cnt_core(in, h, b, seq, seq_n, &sj_group, sj_m, sg_g, sgp);
-        sj_n = parse_bam_record(in, h, b, seq, seq_n, &ad_group, &ad_n, ad_m, &sj_group, &sj_n, sj_m, sg_g, sgp);
+        sj_n = parse_bam_record(in, h, b, seq, seq_n, &ad_group, &ad_n, ad_m, &sj_group, &sj_n, sj_m, sgp);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
 
         // update edge weight and add novel edge for GTF-SG
         update_SpliceGraph(sg_g, sj_group, sj_n, sgp);
 
-        free_sj_group(sj_group, sj_n); // free sj
+        free(sj_group); // free sj
 
         // generate ASM with short-read splice-graph
         SGasm_group *asm_g = gen_asm(sg_g, sgp);

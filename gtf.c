@@ -374,11 +374,13 @@ int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m)
 {
     char line[1024], ref[100]="\0";
     int sj_n = 0;
+    int _strand, _motif, _is_anno;
     while (fgets(line, 1024, sj_fp) != NULL) {
         if (sj_n == sj_m) _realloc(*sj_group, sj_m, sj_t)
         sj_t *sj = (*sj_group)+sj_n;
 
-        sscanf(line, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d", ref, &(sj->don), &(sj->acc), &(sj->strand), &(sj->motif), &(sj->is_anno), &(sj->uniq_c), &(sj->multi_c), &(sj->max_over));
+        sscanf(line, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d", ref, &(sj->don), &(sj->acc), &(_strand), &(_motif), &(_is_anno), &(sj->uniq_c), &(sj->multi_c), &(sj->max_over));
+        sj->strand = _strand, sj->motif = _motif, sj->is_anno = _is_anno;
         int tid = get_chr_id(cname, ref);
         (*sj_group)[sj_n++].tid = tid;
     }

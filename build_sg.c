@@ -109,13 +109,7 @@ void sg_free_site(SG *sg)
 void sg_free(SG *sg)
 {
     sg_free_node(sg); sg_free_site(sg); 
-    int i;
-    for (i = 0; i < sg->edge_n; ++i) {
-        free(sg->edge[i].uniq_anc);
-        free(sg->edge[i].multi_anc);
-    }
-    free(sg->edge);
-    free(sg);
+    free(sg->edge); free(sg);
 }
 
 void sg_free_group(SG_group *sg_g)

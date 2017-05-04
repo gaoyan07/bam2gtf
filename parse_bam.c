@@ -84,13 +84,6 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int tid, int don, int acc, uint8_t s
 {
     if (*sj_n == *sj_m) {
         _realloc(*sj, *sj_m, sj_t)
-        int i; for (i = *sj_n; i < *sj_m; ++i) {
-            ((*sj)+i)->uniq_anc = (anc_t*)_err_calloc(1, sizeof(anc_t));
-            ((*sj)+i)->uniq_anc_m = 1;
-            ((*sj)+i)->multi_anc = (anc_t*)_err_calloc(1, sizeof(anc_t));
-            ((*sj)+i)->multi_anc_m = 1;
-        }
-
     }
     (*sj)[*sj_n].tid = tid;
     (*sj)[*sj_n].don = don;
@@ -104,23 +97,10 @@ int add_sj(sj_t **sj, int *sj_n, int *sj_m, int tid, int don, int acc, uint8_t s
     return 0;
 }
 
-void free_sj_group(sj_t *sj_g, int sj_n)
-{
-    int i;
-    for (i = 0; i < sj_n; ++i) {
-        //if (sj_g[i].uniq_c != 0) 
-            free(sj_g[i].uniq_anc);
-        //if (sj_g[i].multi_c != 0) 
-            free(sj_g[i].multi_anc);
-    }
-    free(sj_g);
-}
-
 void free_ad_group(ad_t *ad, int ad_n)
 {
     int i; for (i = 0; i < ad_n; ++i) {
-        free(ad[i].intv_l); 
-        free(ad[i].intv_d);
+        free(ad[i].exon_end); free(ad[i].intr_end);
     }
     free(ad);
 }
@@ -159,35 +139,6 @@ int sj_sch_group(sj_t *SJ, int SJ_n, sj_t sj, int *hit)
     return 0;
 }
 
-void add_sj_anchor(sj_t *SJ, sj_t sj)
-{
-    if (sj.uniq_c > 0) {
-        if (SJ->uniq_c > SJ->uniq_anc_m) {
-            SJ->uniq_anc_m <<= 1;
-            SJ->uniq_anc = (anc_t*)_err_realloc(SJ->uniq_anc, SJ->uniq_anc_m * sizeof(anc_t));
-        }
-        SJ->uniq_anc[SJ->uniq_c-1].bid = sj.uniq_anc->bid;
-        SJ->uniq_anc[SJ->uniq_c-1].left_anc_len = sj.uniq_anc->left_anc_len;
-        SJ->uniq_anc[SJ->uniq_c-1].right_anc_len = sj.uniq_anc->right_anc_len;
-        SJ->uniq_anc[SJ->uniq_c-1].left_sj_len = sj.uniq_anc->left_sj_len;
-        SJ->uniq_anc[SJ->uniq_c-1].right_sj_len = sj.uniq_anc->right_sj_len;
-        SJ->uniq_anc[SJ->uniq_c-1].left_hard = sj.uniq_anc->left_hard;
-        SJ->uniq_anc[SJ->uniq_c-1].right_hard = sj.uniq_anc->right_hard;
-    } else {
-        if (SJ->multi_c > SJ->multi_anc_m) {
-            SJ->multi_anc_m <<= 1;
-            SJ->multi_anc = (anc_t*)_err_realloc(SJ->multi_anc, SJ->multi_anc_m * sizeof(anc_t));
-        }
-        SJ->multi_anc[SJ->multi_c-1].bid = sj.multi_anc->bid;
-        SJ->multi_anc[SJ->multi_c-1].left_anc_len = sj.multi_anc->left_anc_len;
-        SJ->multi_anc[SJ->multi_c-1].right_anc_len = sj.multi_anc->right_anc_len;
-        SJ->multi_anc[SJ->multi_c-1].left_sj_len = sj.multi_anc->left_sj_len;
-        SJ->multi_anc[SJ->multi_c-1].right_sj_len = sj.multi_anc->right_sj_len;
-        SJ->multi_anc[SJ->multi_c-1].left_hard = sj.multi_anc->left_hard;
-        SJ->multi_anc[SJ->multi_c-1].right_hard = sj.multi_anc->right_hard;
-    }
-}
-
 int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
 {
     if (sj_n + *SJ_n > *SJ_m) _realloc(*SJ_group, *SJ_m, sj_t)
@@ -208,14 +159,10 @@ int sj_update_group(sj_t **SJ_group, int *SJ_n, int *SJ_m, sj_t *sj, int sj_n)
             (*SJ_group)[sj_i].is_anno = sj[i].is_anno;
             (*SJ_group)[sj_i].uniq_c = sj[i].uniq_c;
             (*SJ_group)[sj_i].multi_c = sj[i].multi_c;
-            (*SJ_group)[sj_i].uniq_anc_m = 10; (*SJ_group)[sj_i].uniq_anc = (anc_t*)_err_calloc(10, sizeof(anc_t));
-            (*SJ_group)[sj_i].multi_anc_m = 10; (*SJ_group)[sj_i].multi_anc = (anc_t*)_err_calloc(10, sizeof(anc_t));
-            add_sj_anchor((*SJ_group)+sj_i, sj[i]);
         } else {
             (*SJ_group)[sj_i].uniq_c += sj[i].uniq_c;
             (*SJ_group)[sj_i].multi_c += sj[i].multi_c;
             if ((*SJ_group)[sj_i].strand != sj[i].strand) (*SJ_group)[sj_i].strand = 0; // undefined
-            add_sj_anchor((*SJ_group)+sj_i, sj[i]);
         }
     }
     return 0;
@@ -241,12 +188,12 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
     return seq;
 }
 
-int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, int32_t bid, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
+int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, kseq_t *seq, int seq_n, sj_t **sj, int *sj_m, sg_para *sgp)
 {
     int end = start - 1; /* 1-base */
     uint8_t strand, motif_i;
     
-    int i; int min_intr_len = sgp->intron_len, sj_n = 0, last_sj_l;
+    int i; int min_intr_len = sgp->intron_len, sj_n = 0;
 
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
@@ -254,33 +201,9 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, int32_
             case BAM_CREF_SKIP: // N(0 1)
                 if (l >= min_intr_len) {
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
+                    // XXX filter with anchor length
                     add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq); 
-                    if (is_uniq) {
-                        (*sj)[sj_n-1].uniq_anc[0].left_anc_len = end-start+1;
-                        (*sj)[sj_n-1].uniq_anc[0].bid = bid;
-                        (*sj)[sj_n-1].uniq_anc[0].left_hard = 0, (*sj)[sj_n-1].uniq_anc[0].right_hard = 0;
-                        if (sj_n > 1) {
-                            (*sj)[sj_n-1].uniq_anc[0].left_hard = 1;
-                            (*sj)[sj_n-1].uniq_anc[0].left_sj_len = last_sj_l;
-                            (*sj)[sj_n-2].uniq_anc[0].right_anc_len = end-start+1;
-                            (*sj)[sj_n-2].uniq_anc[0].right_hard = 1;
-                            (*sj)[sj_n-2].uniq_anc[0].right_sj_len = l;
-                        }
-                    } else {
-                        (*sj)[sj_n-1].multi_anc[0].left_anc_len = end-start+1;
-                        (*sj)[sj_n-1].multi_anc[0].bid = bid;
-                        (*sj)[sj_n-1].multi_anc[0].left_hard = 0, (*sj)[sj_n-1].multi_anc[0].right_hard = 0;
-                        if (sj_n > 1) {
-                            (*sj)[sj_n-1].multi_anc[0].left_hard = 1;
-                            (*sj)[sj_n-1].multi_anc[0].left_sj_len = last_sj_l;
-                            (*sj)[sj_n-2].multi_anc[0].right_anc_len = end-start+1;
-                            (*sj)[sj_n-2].multi_anc[0].right_hard = 1;
-                            (*sj)[sj_n-2].multi_anc[0].right_sj_len = l;
-                        }
-
-                    }
                     start = end+l+1;
-                    last_sj_l = l;
                 }
                 end += l;
                 break;
@@ -303,25 +226,21 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, int32_
                 break;
         }
     }
-    if (sj_n > 0) {
-        if (is_uniq) (*sj)[sj_n-1].uniq_anc[0].right_anc_len = end-start+1;
-        else  (*sj)[sj_n-1].multi_anc[0].right_anc_len = end-start+1;
-    }
 
     return sj_n;
 }
 
-int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, int bid, uint8_t is_uniq, kseq_t *seq, int seq_n, int *intv_n, int **intv_l, int **intv_d, sj_t **sj, int *_sj_n, int *sj_m, sg_para *sgp)
+int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uint8_t is_uniq, kseq_t *seq, int seq_n, ad_t *ad, sj_t **sj, int *_sj_n, int *sj_m, sg_para *sgp)
 {
-    int N_n =  bam_cigar_opn(n_cigar, c, BAM_CREF_SKIP); 
+    int N_n =  bam_cigar_opn(n_cigar, c, BAM_CREF_SKIP);
     int end = start - 1; /* 1-base */
     uint8_t strand, motif_i;
-    
-    int i; int min_intr_len = sgp->intron_len, sj_n = 0, last_sj_l;
 
-    *intv_n = 0;
-    (*intv_l) = (int*)_err_malloc((N_n+1) * sizeof(int));
-    (*intv_d) = (int*)_err_malloc(N_n * sizeof(int));
+    int i; int min_intr_len = sgp->intron_len, sj_n = 0;
+
+    ad->intv_n = 0;
+    ad->exon_end = (int*)_err_malloc((N_n+1) * sizeof(int));
+    ad->intr_end = (int*)_err_malloc(N_n * sizeof(int));
 
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
@@ -331,33 +250,9 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, int
                     // sj
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
                     add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq); 
-                    if (is_uniq) {
-                        (*sj)[sj_n-1].uniq_anc[0].left_anc_len = end-start+1;
-                        (*sj)[sj_n-1].uniq_anc[0].bid = bid;
-                        (*sj)[sj_n-1].uniq_anc[0].left_hard = 0, (*sj)[sj_n-1].uniq_anc[0].right_hard = 0;
-                        if (sj_n > 1) {
-                            (*sj)[sj_n-1].uniq_anc[0].left_hard = 1;
-                            (*sj)[sj_n-1].uniq_anc[0].left_sj_len = last_sj_l;
-                            (*sj)[sj_n-2].uniq_anc[0].right_anc_len = end-start+1;
-                            (*sj)[sj_n-2].uniq_anc[0].right_hard = 1;
-                            (*sj)[sj_n-2].uniq_anc[0].right_sj_len = l;
-                        }
-                    } else {
-                        (*sj)[sj_n-1].multi_anc[0].left_anc_len = end-start+1;
-                        (*sj)[sj_n-1].multi_anc[0].bid = bid;
-                        (*sj)[sj_n-1].multi_anc[0].left_hard = 0, (*sj)[sj_n-1].multi_anc[0].right_hard = 0;
-                        if (sj_n > 1) {
-                            (*sj)[sj_n-1].multi_anc[0].left_hard = 1;
-                            (*sj)[sj_n-1].multi_anc[0].left_sj_len = last_sj_l;
-                            (*sj)[sj_n-2].multi_anc[0].right_anc_len = end-start+1;
-                            (*sj)[sj_n-2].multi_anc[0].right_hard = 1;
-                            (*sj)[sj_n-2].multi_anc[0].right_sj_len = l;
-                        }
-                    }
-                    last_sj_l = l;
                     // ad
-                    (*intv_d)[*intv_n] = l;
-                    (*intv_l)[(*intv_n)++] = end-start+1;
+                    ad->intr_end[ad->intv_n] = end+l;
+                    ad->exon_end[(ad->intv_n)++] = end;
 
                     start = end+l+1;
                 }
@@ -369,52 +264,51 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, int
                 end += l;
                 break;
             case BAM_CDEL : // D(0 1)
-                // return 0; // XXX for rMATS
+#ifdef _RMATS_
+                return 0; // XXX for rMATS, only M&N allowed
+#else
                 end += l;
-                break; // XXX only M&N allowed
+#endif
+                break;
             case BAM_CINS: // 1 0
             case BAM_CSOFT_CLIP:
             case BAM_CHARD_CLIP:
             case BAM_CPAD: // 0 0
             case BAM_CBACK:
-                // return 0; // XXX for rMATS
-                break; // XXX only M&N allowed
+#ifdef _RMATS_
+                return 0; // XXX for rMATS, only M&N allowed
+#endif
+                break; 
             default:
                 err_printf("Error: unknown cigar type: %d.\n", bam_cigar_op(c[i]));
                 break;
         }
     }
-    // sj
-    if (sj_n > 0) {
-        if (is_uniq) (*sj)[sj_n-1].uniq_anc[0].right_anc_len = end-start+1;
-        else  (*sj)[sj_n-1].multi_anc[0].right_anc_len = end-start+1;
-    }
     // ad
-    (*intv_l)[(*intv_n)++] = end-start+1;
+    ad->exon_end[(ad->intv_n)++] = end;
 
     *_sj_n = sj_n;
     *_end = end;
-    return *intv_n;
+    return ad->intv_n;
 }
 
 // parse alignment details via BAM cigar
-int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, ad_t **AD_group, int *AD_n, int AD_m, sj_t **SJ_group, int *SJ_n, int SJ_m, SG_group *sg_g, sg_para *sgp)
+int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, ad_t **AD_group, int *AD_n, int AD_m, sj_t **SJ_group, int *SJ_n, int SJ_m, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] parsing bam records...\n", __func__);
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
-    // exon-body
-    int i, j, last_sg_i = 0;
     // junction
     int _SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
+    // alignment detail
     int _AD_n = 0;
-    sj->uniq_anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->uniq_anc_m = 1;
-    sj->multi_anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->multi_anc_m = 1;
-    int32_t bid=0;
     // read bam record
     while (sam_read1(in, h, b) >= 0) {
         if (bam_unmap(b)) continue; // unmap (0)
         is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
+#ifdef _RMATS_
+        if (is_uniq == 0) continue;
+#endif
         if (bam_is_prop(b) != 1 && sgp->read_type == PAIR_T) continue; // prop-pair (2)
 
         tid = b->core.tid; n_cigar = b->core.n_cigar; cigar = bam_get_cigar(b);
@@ -422,79 +316,41 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
         // alignment details
         if (_AD_n == AD_m) _realloc(*AD_group, AD_m, ad_t)
         ad_t *ad = (*AD_group)+(_AD_n);
-        if (parse_bam(tid, bam_start, &bam_end, n_cigar, cigar, bid, is_uniq, seq, seq_n, &(ad->intv_n), &(ad->intv_l), &(ad->intv_d), &sj, &sj_n, &sj_m, sgp) == 0) continue;
+        if ((ad->intv_n = parse_bam(tid, bam_start, &bam_end, n_cigar, cigar, is_uniq, seq, seq_n, ad, &sj, &sj_n, &sj_m, sgp)) == 0) continue;
         ad->tid = tid; ad->start = bam_start; ad->end = bam_end;
+        ad->is_uniq = is_uniq; ad->is_splice = (ad->intv_n > 1);
         _AD_n++;
         // junction read
         if (sj_n > 0) sj_update_group(SJ_group, &_SJ_n, &SJ_m, sj, sj_n);
-        // exon-body read
-        if (last_sg_i == sg_g->SG_n) continue;
-        for (i = last_sg_i; i < sg_g->SG_n; ++i) {
-            SG *sg = sg_g->SG[i];
-            int tid = sg->tid, start = sg->start, end = sg->end;
-            if (tid < b->core.tid || start == MAX_SITE || end == 0 || (tid == b->core.tid && end <= bam_start)) {
-                if (i == last_sg_i) last_sg_i++; continue;
-            } else if (tid > b->core.tid || (tid == b->core.tid && start >= bam_end)) break;
-            else {
-                for (j = 0; j < sg->node_n; ++j) {
-                    if (sg->node[j].start <= bam_start && sg->node[j].end >= bam_end) {
-                        if (is_uniq) sg->node[j].uniq_c++;
-                        else sg->node[j].multi_c++;
-                    }
-                }
-            }
-        }
-        bid++;
     }
-    free_sj_group(sj, sj_m);
+    free(sj);
     print_format_time(stderr); err_printf("[%s] parsing bam records done!\n", __func__);
 
     *SJ_n = _SJ_n; *AD_n = _AD_n;
     return *SJ_n;
 }
 
-int bam2cnt_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, SG_group *sg_g, sg_para *sgp) {
+int bam2cnt_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, sg_para *sgp) {
     print_format_time(stderr); err_printf("[%s] calculating junction- and exon-body-read count ...\n", __func__);
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
-    // exon-body
-    int i, j, last_sg_i = 0;
     // junction
     int SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
-    sj->uniq_anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->uniq_anc_m = 1;
-    sj->multi_anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->multi_anc_m = 1;
-    int32_t bid=0;
     // read bam record
     while (sam_read1(in, h, b) >= 0) {
         if (bam_unmap(b)) continue; // unmap (0)
         is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
+#ifdef _RMATS_
+        if (is_uniq == 0) continue;
+#endif
         if (bam_is_prop(b) != 1 && sgp->read_type == PAIR_T) continue; // prop-pair (2)
 
         tid = b->core.tid; n_cigar = b->core.n_cigar, cigar = bam_get_cigar(b);
         bam_start = b->core.pos+1, bam_end = b->core.pos+bam_cigar2rlen(n_cigar, cigar);
         // junction read
-        if ((sj_n = gen_sj(is_uniq, tid, bam_start, n_cigar, cigar, bid, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
-        bid++;
-        // exon-body read
-        if (last_sg_i == sg_g->SG_n) continue;
-        for (i = last_sg_i; i < sg_g->SG_n; ++i) {
-            SG *sg = sg_g->SG[i];
-            int tid = sg->tid, start = sg->start, end = sg->end;
-            if (tid < b->core.tid || start == MAX_SITE || end == 0 || (tid == b->core.tid && end <= bam_start)) {
-                if (i == last_sg_i) last_sg_i++; continue;
-            } else if (tid > b->core.tid || (tid == b->core.tid && start >= bam_end)) break;
-            else {
-                for (j = 0; j < sg->node_n; ++j) {
-                    if (sg->node[j].start <= bam_start && sg->node[j].end >= bam_end) {
-                        if (is_uniq) sg->node[j].uniq_c++;
-                        else sg->node[j].multi_c++;
-                    }
-                }
-            }
-        }
-        // pseudo-junction read
+        if ((sj_n = gen_sj(is_uniq, tid, bam_start, n_cigar, cigar, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
     }
-    free_sj_group(sj, sj_m);
+    free(sj);
     print_format_time(stderr); err_printf("[%s] calculating junction- and exon-body-read count done!\n", __func__);
 
     return SJ_n;
@@ -506,26 +362,25 @@ int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
     int SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
-    sj->uniq_anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->uniq_anc_m = 1;
-    sj->multi_anc = (anc_t*)_err_calloc(1, sizeof(anc_t)); sj->multi_anc_m = 1;
-    uint64_t bid=0;
     while (sam_read1(in, h, b) >= 0) {
         if (bam_unmap(b)) continue; // unmap (0)
         is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
+#ifdef _RMATS_
+        if (is_uniq == 0) continue;
+#endif
         if (bam_is_prop(b) != 1 && sgp->read_type == PAIR_T) continue; // prop-pair (2)
 
         tid = b->core.tid; n_cigar = b->core.n_cigar, cigar = bam_get_cigar(b);
         bam_start = b->core.pos+1, bam_end = b->core.pos+bam_cigar2rlen(n_cigar, cigar);
-        if ((sj_n = gen_sj(is_uniq, tid, bam_start, n_cigar, cigar, bid, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
-        bid++;
+        if ((sj_n = gen_sj(is_uniq, tid, bam_start, n_cigar, cigar, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
     }
-    free_sj_group(sj, sj_m);
+    free(sj);
     print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
 
     return SJ_n;
 }
 
-int sj_filter(sj_t *sj_group, int sj_n, sg_para *sgp, SG_group *sg_g)
+/*int sj_filter(sj_t *sj_group, int sj_n, sg_para *sgp, SG_group *sg_g)
 {
     print_format_time(stderr); err_printf("[%s] filtering splice-junctions ...\n", __func__);
 
@@ -560,7 +415,7 @@ FILTER:
             anc_len = sgp->anchor_len[0];
         } else {  // novel
             sj->is_anno = 0;
-            anc_len = sgp->anchor_len[(sj->motif+3)+2];// 0->1, 1,2->2, 3,4->3, 5,6->4 
+            anc_len = sgp->anchor_len[(sj->motif+3)/2];// 0->1, 1,2->2, 3,4->3, 5,6->4 
         }
         // 1. anchor-len
         int filter_out=0;
@@ -581,7 +436,7 @@ FILTER:
 
     print_format_time(stderr); err_printf("[%s] filtering splice-junctions done!\n", __func__);
     return sj_n;
-}
+}*/
 
 void print_sj(sj_t *sj_group, int sj_n, FILE *out, char **cname)
 {
@@ -657,12 +512,12 @@ int bam2sj(int argc, char *argv[])
 
     sj_t *sj_group = (sj_t*)_err_malloc(10000 * sizeof(sj_t)); int sj_m = 10000;
     int sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
-    sj_filter(sj_group, sj_n, sgp, sg_g);
+    //sj_filter(sj_group, sj_n, sgp, sg_g);
 
     print_sj(sj_group, sj_n, stdout, h->target_name);
 
     bam_destroy1(b); sam_close(in); bam_hdr_destroy(h); 
-    sg_free_para(sgp); free_sj_group(sj_group, sj_n);
+    sg_free_para(sgp); free(sj_group);
     int i; for (i = 0; i < seq_n; ++i) { free(seq[i].name.s); free(seq[i].seq.s); } free(seq);
     return 0;
 }

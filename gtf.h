@@ -48,18 +48,9 @@ typedef struct {
 } exon_t;
 
 typedef struct {
-    int32_t bid:30, left_hard:1, right_hard:1;   // id of junction read, hard-anchor
-    int32_t left_anc_len:16, right_anc_len:16; // anchor length
-    int32_t left_sj_len, right_sj_len;   // if hard==1, sj length of left/right side
-} anc_t;
-
-typedef struct {
-    int32_t tid; uint8_t strand; // 0:undefined, 1:+, 2:-
-    int32_t don, acc;
-    uint8_t motif, is_anno;
+    int32_t tid; int32_t don, acc;
+    uint8_t strand:2, is_anno:2, motif:4;// strand: 0:undefined, 1:+, 2:-
     int uniq_c, multi_c, max_over;
-    anc_t *uniq_anc; int uniq_anc_m; // for each uniq-map-junction
-    anc_t *multi_anc; int multi_anc_m; // for each mult-mqp-junction
 } sj_t;
 
 
@@ -79,14 +70,14 @@ typedef struct {
     char tname[100];
     char gname[100];
     int novel_gene_flag, cov;
-    uint8_t full, lfull, lnoth, rfull, rnoth; 
-    uint8_t novel, all_novel, all_iden;
+    uint8_t lfull:2, lnoth:2, rfull:2, rnoth:2; 
+    uint8_t full:2, novel:2, all_novel:2, all_iden:2;
 } trans_t;
 
 typedef struct {
-    int tid; uint8_t is_rev;
+    int tid;
     int start, end; //1-based, ref
-    uint8_t is_canon, is_anno;
+    uint8_t is_rev:2,is_canon:2, is_anno:4;
     int uniq_c, multi_c;
 } intron_t;
 

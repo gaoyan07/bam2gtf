@@ -116,30 +116,6 @@ int sg_update_edge_pred(SG *sg, sj_t sj, int don_site_id, int acc_site_id)
         else sg->edge[e_i].is_rev = sj.strand - 1; // 0:+, 1:-, 2:undefined
         sg->edge[e_i].motif = sj.motif, sg->edge[e_i].is_anno = sj.is_anno;
         sg->edge[e_i].uniq_c = sj.uniq_c, sg->edge[e_i].multi_c = sj.multi_c, sg->edge[e_i].max_over = sj.max_over;
-        sg->edge[e_i].uniq_anc = (anc_t*)_err_calloc(sj.uniq_c, sizeof(anc_t));
-        sg->edge[e_i].multi_anc = (anc_t*)_err_calloc(sj.multi_c, sizeof(anc_t));
-        int i;
-        if (sj.uniq_c > 0) {
-            for (i = 0; i < sj.uniq_c; ++i) {
-                sg->edge[e_i].uniq_anc[i].bid = sj.uniq_anc[i].bid;
-                sg->edge[e_i].uniq_anc[i].left_anc_len = sj.uniq_anc[i].left_anc_len;
-                sg->edge[e_i].uniq_anc[i].right_anc_len = sj.uniq_anc[i].right_anc_len;
-                sg->edge[e_i].uniq_anc[i].left_hard= sj.uniq_anc[i].left_hard;
-                sg->edge[e_i].uniq_anc[i].right_hard = sj.uniq_anc[i].right_hard;
-                sg->edge[e_i].uniq_anc[i].left_sj_len = sj.uniq_anc[i].left_sj_len;
-                sg->edge[e_i].uniq_anc[i].right_sj_len = sj.uniq_anc[i].right_sj_len;
-            }
-        } else {
-            for (i = 0; i < sj.multi_c; ++i) {
-                sg->edge[e_i].multi_anc[i].bid = sj.multi_anc[i].bid;
-                sg->edge[e_i].multi_anc[i].left_anc_len = sj.multi_anc[i].left_anc_len;
-                sg->edge[e_i].multi_anc[i].right_anc_len = sj.multi_anc[i].right_anc_len;
-                sg->edge[e_i].multi_anc[i].left_hard= sj.multi_anc[i].left_hard;
-                sg->edge[e_i].multi_anc[i].right_hard = sj.multi_anc[i].right_hard;
-                sg->edge[e_i].multi_anc[i].left_sj_len = sj.multi_anc[i].left_sj_len;
-                sg->edge[e_i].multi_anc[i].right_sj_len = sj.multi_anc[i].right_sj_len;
-            }
-        }
     }
     return 0;
 }
@@ -407,7 +383,7 @@ int pred_sg(int argc, char *argv[])
         free(seq[i].name.s); free(seq[i].seq.s);
     } free(seq);
     sg_free_group(sg_g); sg_free_group(sr_sg_g); gzclose(genome_fp); sg_free_para(sgp);
-    free_sj_group(sj_group, sj_n);
+    free(sj_group);
     return 0;
 }
 #endif

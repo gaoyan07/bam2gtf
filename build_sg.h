@@ -8,10 +8,10 @@
 
 #define _node_len(n) ((n).end-(n).start+1)
 
-// XXX ad->is_uniq
 typedef struct {
-    int tid, start, end;
-    int intv_n, *intv_l, *intv_d; // intv_l[intv_n]: exonic, intv_d[intv_n-1]: intronic
+    int32_t tid:16, intv_n:14, is_uniq:1, is_splice:1;
+    int32_t start, end;
+    int32_t *exon_end, *intr_end; // exon_end[intv_n]: exonic, intr_end[intv_n-1]: intronic
 } ad_t;   // alignment details: start, end, intv_n, intv[]
 
 typedef struct {
@@ -59,9 +59,10 @@ typedef struct {
 
 typedef struct {
     int node_id, s_site_id, e_site_id; // unique id in corresponding gene-locus
-    int start, end; /* real exon */ exon_t node_e;    // node in splice-graph
-    uint8_t is_init, is_termi;
-    uint8_t is_asm; int uniq_c, multi_c;
+    int start, end; // real exon
+    exon_t node_e;  // node in splice-graph
+    uint8_t is_init:1, is_termi:1, is_asm:1;
+    int uniq_c, multi_c;
     int *next_id, next_n, next_m;
     int *pre_id, pre_n, pre_m;
     int *pre_domn, pre_domn_n, pre_domn_m;
@@ -76,10 +77,8 @@ typedef struct {
 
 typedef struct {
     int don_site_id, acc_site_id;
-    uint8_t is_rev;
-    uint8_t motif, is_anno;
+    uint8_t is_rev:2, is_anno:2, motif:4;
     int uniq_c, multi_c, max_over;
-    anc_t *uniq_anc, *multi_anc; // for each uniq-junction
 } SGedge; // edge of splicing-graph, splice junction
 
 typedef struct {
@@ -130,9 +129,8 @@ typedef struct {
 typedef struct {
     int sam_n, tol_rep_n, *rep_n;
     char **in_name;
-    int no_novel_sj, no_novel_com, only_novel;
-    int use_multi, read_type, intron_len;
-    int merge_out;
+    uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1;
+    int intron_len;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int uniq_min[5];   // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int all_min[5];    // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
@@ -148,7 +146,6 @@ int comp_sj_sg(sj_t sj, SG sg);
     ed[ei].don_site_id = _don_site_id, ed[ei].acc_site_id = _acc_site_id,   \
     ed[ei].is_rev = _is_rev; ed[ei].is_anno = _is_anno;  \
     ed[ei].motif=0; ed[ei].uniq_c=0; ed[ei].multi_c=0; ed[ei].max_over=0; \
-    ed[ei].uniq_anc=NULL; ed[ei].multi_anc=NULL; \
 }
 
 #define PAIR "paried"
