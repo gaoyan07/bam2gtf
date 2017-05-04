@@ -107,7 +107,7 @@ typedef struct {
     int iso_n, iso_m;
     int *node_n; int **node_id;
     int *edge_n; int **edge_id;
-    int *uniq_sj_c, *uniq_tot_c, *multi_sj_c, *multi_tot_c; // XXX multi_c
+    int *uniq_sj_c, *uniq_tot_c, *multi_sj_c, *multi_tot_c;
 } SGiso; // each ASM has one SGiso
 
 typedef struct {
@@ -119,6 +119,11 @@ typedef struct {
     SGiso **sg_asm_iso;
     int sg_asm_n, sg_asm_m;
 } SGiso_group;
+
+typedef struct {
+    SGiso_group **sg_iso_g;
+    int sg_n;
+} iso_group;
  
 typedef struct {
     SG **SG;

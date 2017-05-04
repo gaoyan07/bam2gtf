@@ -159,6 +159,15 @@ SGiso_group *sg_init_iso_group(void)
     return iso_g;
 }
 
+iso_group *iso_init_group(int sg_n)
+{
+    iso_group *iso_g = (iso_group*)_err_malloc(sizeof(iso_group));
+    iso_g->sg_n = sg_n;
+    iso_g->sg_iso_g = (SGiso_group**)_err_malloc(sg_n * sizeof(SGiso_group*));
+    int i; for (i = 0; i < sg_n; ++i) iso_g->sg_iso_g[i] = sg_init_iso_group();
+    return iso_g;
+}
+
 SGiso_group *sg_realloc_iso_group(SGiso_group *iso_g)
 {
     iso_g->sg_asm_m <<= 1;
@@ -168,12 +177,18 @@ SGiso_group *sg_realloc_iso_group(SGiso_group *iso_g)
     return iso_g;
 }
 
-void sg_free_iso_group(SGiso_group *iso_g)
+void sg_free_iso_group(iso_group *iso_g)
 {
-    int i; for (i = 0; i < iso_g->sg_asm_m; ++i) {
-        sg_free_iso(iso_g->sg_asm_iso[i]);
+    int i, j; 
+    for (i = 0; i < iso_g->sg_n; ++i) {
+        for (j = 0; j < iso_g->sg_iso_g[i]->sg_asm_m; ++j) {
+            sg_free_iso(iso_g->sg_iso_g[i]->sg_asm_iso[j]);
+        }
+        free(iso_g->sg_iso_g[i]->sg_asm_iso); 
+        free(iso_g->sg_iso_g[i]);
     }
-    free(iso_g->sg_asm_iso); free(iso_g);
+    free(iso_g->sg_iso_g);
+    free(iso_g);
 }
 
 void sg_free_tmp_iso_group(SGiso_group *iso_g)
@@ -449,16 +464,18 @@ SGasm_group *gen_asm(SG_group *sg_g, sg_para *sgp)
     return asm_g;
 }
 
-SGiso_group *gen_asm_iso(SG_group *sg_g, sg_para *sgp)
+iso_group *gen_asm_iso(SG_group *sg_g, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] generating candidate isoforms of alternative-splice-module ...\n", __func__);
     int only_novel = sgp->only_novel, use_multi = sgp->use_multi;
     int entry_n, exit_n; int *entry, *exit;
     int sg_i, asm_i=0;
-    SGiso_group *iso_g = sg_init_iso_group();
+    iso_group *iso_g = iso_init_group(sg_g->SG_n);
+    SGiso_group *sg_iso;
 
     for (sg_i = 0; sg_i < sg_g->SG_n; ++sg_i) {
         SG *sg = sg_g->SG[sg_i];
+        sg_iso = iso_g->sg_iso_g[sg_i];
         cal_cand_node(*sg, &entry, &exit, &entry_n, &exit_n);
         if (entry_n == 0 || exit_n == 0) goto END;
 
@@ -480,7 +497,7 @@ SGiso_group *gen_asm_iso(SG_group *sg_g, sg_para *sgp)
                     SGiso *iso = iso_tmp_g->sg_asm_iso[0];
                     if ((only_novel == 0 || check_novel_iso(sg, iso) == 1)
                     && (use_multi == 1 || check_uniq_iso(sg, iso) == 1)) {
-                        sg_iso_group_add(iso_g, iso);
+                        sg_iso_group_add(sg_iso, iso);
                         asm_i++;
                     }
                     sg_free_tmp_iso_group(iso_tmp_g);
@@ -525,6 +542,17 @@ int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
     }
     print_format_time(stderr); err_printf("[%s] calculating read count for AS exons done!\n", __func__);
     return 0;
+}
+
+int comp_ad_sg(ad_t *ad, SG *sg)
+{
+    if (ad->tid < sg->tid) return -1;
+    else if (ad->tid > sg->tid) return 1;
+    else {
+        if (ad->start < sg->start) return -1;
+        else if (ad->end > sg->end) return 1;
+        else return 0; // fully fall in OR share at one junction
+    }
 }
 
 int comp_ad_iso(ad_t *ad, SGiso *iso, SG *sg)
@@ -645,32 +673,36 @@ int check_consis_ad(ad_t *ad, SGnode *node, int *node_id, int node_n)
     return check_consis_ad_core(ad, ad_i, node, node_id, node_n, node_i);
 }
 
-int iso_cal_cnt(SGiso_group *iso_g, ad_t *ad_group, int ad_n, SG_group *sg_g)
+int iso_cal_cnt(iso_group *iso_g, ad_t *ad_group, int ad_n, SG_group *sg_g)
 {
-    int ad_i = 0, last_asm_i = 0, asm_i, iso_i;
-    SGiso *iso; SG *sg; SGnode *node; ad_t *ad;
-    while (ad_i < ad_n && last_asm_i < iso_g->sg_asm_n) {
-        iso = iso_g->sg_asm_iso[last_asm_i];
-        sg = sg_g->SG[iso->SG_id];
+    int ad_i = 0, last_sg_i=0, sg_i, asm_i, iso_i;
+    SGiso_group *sg_iso_g; SGiso *iso; SG *sg; SGnode *node; ad_t *ad;
+    int comp_res;
+    while (ad_i < ad_n && last_sg_i < iso_g->sg_n) {
+        sg = sg_g->SG[last_sg_i]; 
         ad = ad_group+ad_i;
-        int comp_res = comp_ad_iso(ad, iso, sg);
+        comp_res = comp_ad_sg(ad, sg);
         if (comp_res < 0) { ++ad_i; continue; }
-        else if (comp_res > 0) { ++last_asm_i; continue; }
+        else if (comp_res > 0) { ++last_sg_i; continue; }
         // comp_res == 0
-        for (asm_i = last_asm_i; asm_i < iso_g->sg_asm_n; ++asm_i) {
-            iso = iso_g->sg_asm_iso[asm_i];
-            sg = sg_g->SG[iso->SG_id];
-            node = sg->node;
-            if (comp_ad_iso(ad, iso, sg) < 0) break;
-            for (iso_i = 0; iso_i < iso->iso_n; ++iso_i) {
-                // check if ad is consistent with iso->node
-                if (check_consis_ad(ad, node, iso->node_id[iso_i], iso->node_n[iso_i])) {
-                    if (ad->is_uniq) {
-                        if (ad->is_splice) iso->uniq_sj_c[iso_i]++;
-                        iso->uniq_tot_c[iso_i]++;
-                    } else {
-                        if (ad->is_splice) iso->multi_sj_c[iso_i]++;
-                        iso->multi_tot_c[iso_i]++;
+        for (sg_i = last_sg_i; sg_i < iso_g->sg_n; ++sg_i) {
+            sg = sg_g->SG[sg_i];
+            if (comp_ad_sg(ad, sg) < 0) break;
+            sg_iso_g = iso_g->sg_iso_g[sg_i];
+            for (asm_i = 0; asm_i < sg_iso_g->sg_asm_n; ++asm_i) {
+                iso = sg_iso_g->sg_asm_iso[asm_i];
+                node = sg->node;
+                if (comp_ad_iso(ad, iso, sg) < 0) break;
+                for (iso_i = 0; iso_i < iso->iso_n; ++iso_i) {
+                    // check if ad is consistent with iso->node
+                    if (check_consis_ad(ad, node, iso->node_id[iso_i], iso->node_n[iso_i])) {
+                        if (ad->is_uniq) {
+                            if (ad->is_splice) iso->uniq_sj_c[iso_i]++;
+                            iso->uniq_tot_c[iso_i]++;
+                        } else {
+                            if (ad->is_splice) iso->multi_sj_c[iso_i]++;
+                            iso->multi_tot_c[iso_i]++;
+                        }
                     }
                 }
             }
@@ -735,7 +767,7 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
     return 0;
 }
 
-int iso_output(char *in_fn, char *prefix, SG_group *sg_g, SGiso_group *iso_g, sg_para *sgp)
+int iso_output(char *in_fn, char *prefix, SG_group *sg_g, iso_group *iso_g, sg_para *sgp)
 {
     int i, j, out_n=2;
     char suf[2][10] = { ".IsoCnt" , ".IsoExon" };
@@ -761,22 +793,25 @@ int iso_output(char *in_fn, char *prefix, SG_group *sg_g, SGiso_group *iso_g, sg
     fprintf(out_fp[0], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tSTART_ES\tSTART_EE\tEND_ES\tEND_EE\tUNIQ_SJ_CNT\tUNIQ_TOT_COUNT\tMULTI_SJ_COUNT\tMULTI_TOT_CNT\n");
     fprintf(out_fp[1], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tISO_EXON\n");
     
-    int iso_i = 0;
-    for (i = 0; i < iso_g->sg_asm_n; ++i) {
-        SGiso *a = iso_g->sg_asm_iso[i];
-        int asm_i = a->ASM_id, sg_i = a->SG_id; SG *sg = sg_g->SG[sg_i]; 
-        SGnode *node = sg->node;
-        int vs = a->v_start, ve = a->v_end;
+    int iso_i = 0, sg_i;
+    for (sg_i = 0; sg_i < iso_g->sg_n; ++sg_i) {
+        SGiso_group *sg_iso_g = iso_g->sg_iso_g[sg_i];
+        for (i = 0; i < sg_iso_g->sg_asm_n; ++i) {
+            SGiso *a = sg_iso_g->sg_asm_iso[i];
+            int asm_i = a->ASM_id, sg_i = a->SG_id; SG *sg = sg_g->SG[sg_i]; 
+            SGnode *node = sg->node;
+            int vs = a->v_start, ve = a->v_end;
 
-        for (j = 0; j < a->iso_n; ++j) {
-            fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j], node[vs].start, node[vs].end, node[ve].start, node[ve].end, a->uniq_sj_c[j], a->uniq_tot_c[j], a->multi_sj_c[j], a->multi_tot_c[j]);
-            fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j]);
-            int k;
-            for (k = 0; k < a->node_n[j]; ++k) {
-                fprintf(out_fp[1], "\t%d\t%d", node[a->node_id[j][k]].start,node[a->node_id[j][k]].end);
+            for (j = 0; j < a->iso_n; ++j) {
+                fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j], node[vs].start, node[vs].end, node[ve].start, node[ve].end, a->uniq_sj_c[j], a->uniq_tot_c[j], a->multi_sj_c[j], a->multi_tot_c[j]);
+                fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j]);
+                int k;
+                for (k = 0; k < a->node_n[j]; ++k) {
+                    fprintf(out_fp[1], "\t%d\t%d", node[a->node_id[j][k]].start,node[a->node_id[j][k]].end);
+                }
+                fprintf(out_fp[1], "\n");
+                iso_i++;
             }
-            fprintf(out_fp[1], "\n");
-            iso_i++;
         }
     }
     
@@ -862,7 +897,7 @@ int pred_asm(int argc, char *argv[])
     err_fclose(gtf_fp); chr_name_free(cname);
 
     SGasm_group **asm_g_rep = (SGasm_group**)_err_malloc(sgp->tol_rep_n * sizeof(SGasm_group*));
-    SGiso_group **iso_g_rep = (SGiso_group**)_err_malloc(sgp->tol_rep_n * sizeof(SGiso_group*));
+    iso_group **iso_g_rep = (iso_group**)_err_malloc(sgp->tol_rep_n * sizeof(iso_group*));
     for (i = 0; i < sgp->tol_rep_n; ++i) {
         char *in_name = sgp->in_name[i];
         // get splice-junction
@@ -884,7 +919,7 @@ int pred_asm(int argc, char *argv[])
 
         // generate ASM with short-read splice-graph
         //SGasm_group *asm_g = gen_asm(sg_g, sgp);
-        SGiso_group *iso_g = gen_asm_iso(sg_g, sgp);
+        iso_group *iso_g = gen_asm_iso(sg_g, sgp);
 
         // calculate read count for each isoform
         iso_cal_cnt(iso_g, ad_group, ad_n, sg_g);
