@@ -605,30 +605,15 @@ int ad_bin_sch_node(ad_t *ad, int *ad_i, SGnode *node, int *node_id, int node_n,
     return 0;
 }
 
-#ifdef _RMATS_
-int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int node_n, int node_i)
-{
-    int ad_i, n_i;
-    int ad_pos; SGnode n;
-    for (ad_i = _ad_i, n_i = node_i; ad_i < ad->intv_n-1 && n_i < node_n-1; ++ad_i, ++n_i) {
-        // check exon end
-        ad_pos = ad->exon_end[ad_i];
-        n = node[node_id[n_i]];
-        if (ad_pos != n.end) return 0;
-        // check exon start
-        ad_pos = ad->intr_end[ad_i]+1;
-        n = node[node_id[n_i+1]];
-        if (ad_pos != n.start) return 0;
-    }
-    return 1;
-}
-#else
 int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int node_n, int node_i)
 {
     int ad_i, n_i;
     int ad_pos; SGnode n;
     for (ad_i = _ad_i, n_i = node_i; ad_i < ad->intv_n && n_i < node_n; ++ad_i, ++n_i) {
         n = node[node_id[n_i]];
+#ifdef _RMATS_
+        if (n_i != 0) {
+#endif
         if (ad_i != 0) { // check exon start
             ad_pos = ad->intr_end[ad_i-1] + 1;
             if (ad_pos != n.start) return 0;
@@ -636,16 +621,22 @@ int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int no
             ad_pos = ad->start;
             if (ad_pos < n.start) return 0; 
         }
+#ifdef _RMATS_
+        }
+        if (n_i != node_n-1) {
+#endif
         ad_pos = ad->exon_end[ad_i];
         if (ad_i != ad->intv_n-1) { // check exon end
             if (ad_pos != n.end) return 0;
         } else {
             if (ad_pos > n.end) return 0;
         }
+#ifdef _RMATS_
+        }
+#endif
     }
     return 1;
 }
-#endif
 
 int check_consis_ad(ad_t *ad, SGnode *node, int *node_id, int node_n)
 {
