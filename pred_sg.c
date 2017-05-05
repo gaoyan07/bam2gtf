@@ -234,8 +234,8 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                         _bin_insert(don_id, don_site[don_site_id].exon_id, don_site[don_site_id].exon_n, don_site[don_site_id].exon_m, int)
                         // update v_start
                         if (sg_node[GTF_don_id].is_init == 1) {
-                            _bin_insert(don_id, node[0].next_id, node[0].next_n, node[0].next_m, int)
-                            _bin_insert(0, node[don_id].pre_id, node[don_id].pre_n, node[don_id].pre_m, int)
+                            _bin_insert(don_id, node[0].next_id, node[0].next_n, node[0].next_m, gec_t)
+                            _bin_insert(0, node[don_id].pre_id, node[don_id].pre_n, node[don_id].pre_m, gec_t)
                             node[don_id].is_init = 1;
                         }
                     }
@@ -248,8 +248,8 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                         _bin_insert(acc_id, acc_site[acc_site_id].exon_id, acc_site[acc_site_id].exon_n, acc_site[acc_site_id].exon_m, int)
                         // update v_end
                         if (sg_node[GTF_acc_id].is_termi == 1) {
-                            _bin_insert(acc_id, node[node_n-1].pre_id, node[node_n-1].pre_n, node[node_n-1].pre_m, int)
-                            _bin_insert((int)node_n-1, node[acc_id].next_id, node[acc_id].next_n, node[acc_id].next_m, int)
+                            _bin_insert(acc_id, node[node_n-1].pre_id, node[node_n-1].pre_n, node[node_n-1].pre_m, gec_t)
+                            _bin_insert((gec_t)node_n-1, node[acc_id].next_id, node[acc_id].next_n, node[acc_id].next_m, gec_t)
                             node[acc_id].is_termi = 1;
                         }
                     }
@@ -268,9 +268,9 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                             int m;
                             for (m = 0; m < sg_node[GTF_don_id].next_n; ++m) {
                                 if (GTF_acc_id == sg_node[GTF_don_id].next_id[m]) {
-                                    if (node[don_id].next_n == node[don_id].next_m) _realloc(node[don_id].next_id, node[don_id].next_m, int)
+                                    if (node[don_id].next_n == node[don_id].next_m) _realloc(node[don_id].next_id, node[don_id].next_m, gec_t)
                                         node[don_id].next_id[node[don_id].next_n++] = acc_id;
-                                    if (node[acc_id].pre_n == node[acc_id].pre_m) _realloc(node[acc_id].pre_id, node[acc_id].pre_m, int)
+                                    if (node[acc_id].pre_n == node[acc_id].pre_m) _realloc(node[acc_id].pre_id, node[acc_id].pre_m, gec_t)
                                         node[acc_id].pre_id[node[acc_id].pre_n++] = don_id;
                                     node[don_id].e_site_id = don_site_id;
                                     node[acc_id].s_site_id = acc_site_id;
@@ -278,9 +278,9 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                                 }
                             }
                         } else {
-                            if (node[don_id].next_n == node[don_id].next_m) _realloc(node[don_id].next_id, node[don_id].next_m, int)
+                            if (node[don_id].next_n == node[don_id].next_m) _realloc(node[don_id].next_id, node[don_id].next_m, gec_t)
                                 node[don_id].next_id[node[don_id].next_n++] = acc_id;
-                            if (node[acc_id].pre_n == node[acc_id].pre_m) _realloc(node[acc_id].pre_id, node[acc_id].pre_m, int)
+                            if (node[acc_id].pre_n == node[acc_id].pre_m) _realloc(node[acc_id].pre_id, node[acc_id].pre_m, gec_t)
                                 node[acc_id].pre_id[node[acc_id].pre_n++] = don_id;
                             node[don_id].e_site_id = don_site_id;
                             node[acc_id].s_site_id = acc_site_id;

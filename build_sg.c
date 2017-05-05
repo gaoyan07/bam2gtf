@@ -27,13 +27,13 @@ SG *sg_init_node(SG *sg)
         sg->node[i].node_id = i; sg->node[i].s_site_id = sg->node[i].e_site_id = -1;
         sg->node[i].is_asm = 0; sg->node[i].uniq_c = 0; sg->node[i].multi_c = 0; sg->node[i].is_init = 0; sg->node[i].is_termi = 0;
         sg->node[i].next_n = 0; sg->node[i].next_m = 1;
-        sg->node[i].next_id = (int*)_err_malloc(sizeof(int));
+        sg->node[i].next_id = (gec_t*)_err_malloc(sizeof(gec_t));
         sg->node[i].pre_n = 0; sg->node[i].pre_m = 1;
-        sg->node[i].pre_id = (int*)_err_malloc(sizeof(int));
+        sg->node[i].pre_id = (gec_t*)_err_malloc(sizeof(gec_t));
         sg->node[i].pre_domn_n = 1; sg->node[i].pre_domn_m = 2;
-        sg->node[i].pre_domn = (int*)_err_malloc(2 * sizeof(int)); sg->node[i].pre_domn[0] = i;
+        sg->node[i].pre_domn = (gec_t*)_err_malloc(2 * sizeof(gec_t)); sg->node[i].pre_domn[0] = i;
         sg->node[i].post_domn_n = 1; sg->node[i].post_domn_m = 2;
-        sg->node[i].post_domn = (int*)_err_malloc(2 * sizeof(int)); sg->node[i].post_domn[0] = i;
+        sg->node[i].post_domn = (gec_t*)_err_malloc(2 * sizeof(gec_t)); sg->node[i].post_domn[0] = i;
     }
     return sg;
 }
@@ -280,8 +280,8 @@ int sg_update_edge(SG *sg, int don_id, int acc_id, int don_site_id, int acc_site
         sg_add_edge(sg->edge, e_i, (sg->edge_n), (sg->edge_m), don_site_id, acc_site_id, is_rev, is_anno)
     }
     // set next/pre
-    _bin_insert(acc_id, sg->node[don_id].next_id, sg->node[don_id].next_n, sg->node[don_id].next_m, int)
-    _bin_insert(don_id, sg->node[acc_id].pre_id, sg->node[acc_id].pre_n, sg->node[acc_id].pre_m, int)
+    _bin_insert(acc_id, sg->node[don_id].next_id, sg->node[don_id].next_n, sg->node[don_id].next_m, gec_t)
+    _bin_insert(don_id, sg->node[acc_id].pre_id, sg->node[acc_id].pre_n, sg->node[acc_id].pre_m, gec_t)
     // set site
     _bin_insert(don_id, sg->don_site[don_site_id].exon_id, sg->don_site[don_site_id].exon_n, sg->don_site[don_site_id].exon_m, int)
     _bin_insert(acc_id, sg->acc_site[acc_site_id].exon_id, sg->acc_site[acc_site_id].exon_n, sg->acc_site[acc_site_id].exon_m, int)
@@ -289,7 +289,7 @@ int sg_update_edge(SG *sg, int don_id, int acc_id, int don_site_id, int acc_site
 }
 
 // order: 1, pre; 2, post
-void intersect_domn(int **com, int *new_domn, int *com_n, int new_n, int order)
+void intersect_domn(gec_t **com, gec_t *new_domn, gec_t *com_n, gec_t new_n, int order)
 {
     int i, j, domn_i=0;
     for (i=0, j=0; i<*com_n && j<new_n; ) {
@@ -313,15 +313,15 @@ void cal_pre_domn(SG *sg)
     for (i = 0; i < sg->node_n; ++i) {
         if (sg->node[i].pre_n == 0) continue;
 
-        int com_n = sg->node[sg->node[i].pre_id[0]].pre_domn_n, com_m = sg->node[sg->node[i].pre_id[0]].pre_domn_m;
-        int *com = (int*)_err_malloc(com_m * sizeof(int));
+        gec_t com_n = sg->node[sg->node[i].pre_id[0]].pre_domn_n, com_m = sg->node[sg->node[i].pre_id[0]].pre_domn_m;
+        gec_t *com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
         for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].pre_id[0]].pre_domn[j];
         for (j = 1; j < sg->node[i].pre_n; ++j) {
             intersect_domn(&com, sg->node[sg->node[i].pre_id[j]].pre_domn, &com_n, sg->node[sg->node[i].pre_id[j]].pre_domn_n, 1);
         }
         if (com_n+1 > sg->node[i].pre_domn_m) {
             sg->node[i].pre_domn_m = com_n+1; 
-            sg->node[i].pre_domn = (int*)_err_realloc(sg->node[i].pre_domn, (com_n+1) * sizeof(int));
+            sg->node[i].pre_domn = (gec_t*)_err_realloc(sg->node[i].pre_domn, (com_n+1) * sizeof(gec_t));
         }
         for (j = 0; j < com_n; ++j) sg->node[i].pre_domn[j+1] = com[j];
         sg->node[i].pre_domn_n = 1+com_n;
@@ -335,14 +335,14 @@ void cal_post_domn(SG *sg)
     for (i = sg->node_n-1; i >= 0; --i) {
         if (sg->node[i].next_n == 0) continue;
 
-        int com_n = sg->node[sg->node[i].next_id[0]].post_domn_n, com_m = sg->node[sg->node[i].next_id[0]].post_domn_m;
-        int *com = (int*)_err_malloc(com_m * sizeof(int));
+        gec_t com_n = sg->node[sg->node[i].next_id[0]].post_domn_n, com_m = sg->node[sg->node[i].next_id[0]].post_domn_m;
+        gec_t *com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
         for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].next_id[0]].post_domn[j];
         for (j = 1; j < sg->node[i].next_n; ++j) 
             intersect_domn(&com, sg->node[sg->node[i].next_id[j]].post_domn, &com_n, sg->node[sg->node[i].next_id[j]].post_domn_n, 2);
         if (com_n+1 > sg->node[i].post_domn_m) {
             sg->node[i].post_domn_m = com_n+1; 
-            sg->node[i].post_domn = (int*)_err_realloc(sg->node[i].post_domn, (com_n+1) * sizeof(int));
+            sg->node[i].post_domn = (gec_t*)_err_realloc(sg->node[i].post_domn, (com_n+1) * sizeof(gec_t));
         }
         for (j = 0; j < com_n; ++j) sg->node[i].post_domn[j+1] = com[j];
         sg->node[i].post_domn_n = com_n+1;
@@ -388,8 +388,8 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             sg->node[don_id].e_site_id = don_site_id;
 
             // set next_id of v_start
-            _bin_insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, int)
-            _bin_insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, int)
+            _bin_insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, gec_t)
+            _bin_insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, gec_t)
 
             sg->node[don_id].is_init = 1;
 
@@ -412,8 +412,8 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                 don_id = acc_id;
             }
             // set pre_id of v_end
-            _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, int)
-            _bin_insert((int)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, int)
+            _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, gec_t)
+            _bin_insert((gec_t)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, gec_t)
 
             sg->node[acc_id].is_termi = 1;
         }
@@ -427,8 +427,8 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
             sg->node[acc_id].e_site_id = -1;
             sg->node[acc_id].s_site_id = acc_site_id;
             // set pre_id of v_end
-            _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, int)
-            _bin_insert((int)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, int)
+            _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, gec_t)
+            _bin_insert((gec_t)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, gec_t)
 
             sg->node[acc_id].is_termi = 1;
 
@@ -451,8 +451,8 @@ void construct_SpliceGraph_core(SG *sg, gene_t gene)
                 acc_id = don_id;
             }
             // set next_id of v_start
-            _bin_insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, int)
-            _bin_insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, int)
+            _bin_insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, gec_t)
+            _bin_insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, gec_t)
 
             sg->node[don_id].is_init = 1;
         }

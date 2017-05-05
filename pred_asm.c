@@ -43,7 +43,7 @@ SGasm *sg_init_asm(int sg_id, int v_start, int v_end)
     sg_asm->v_start = v_start; sg_asm->v_end = v_end;
     sg_asm->start = MAX_SITE; sg_asm->end = 0;
     sg_asm->node_n = 0; sg_asm->node_m = 1;
-    sg_asm->node_id = (int*)_err_malloc(sizeof(int));
+    sg_asm->node_id = (gec_t*)_err_malloc(sizeof(gec_t));
     sg_asm->edge_n = 0; sg_asm->edge_m = 1;
     sg_asm->edge_id = (int*)_err_malloc(sizeof(int));
     return sg_asm;
@@ -94,8 +94,8 @@ SGiso *sg_init_tmp_iso(int asm_id, int sg_id, int v_start, int v_end)
     sg_iso->ASM_id = asm_id; sg_iso->SG_id = sg_id;
     sg_iso->v_start = v_start; sg_iso->v_end = v_end;
     sg_iso->iso_n = 0; sg_iso->iso_m = 10;
-    sg_iso->node_n = (int*)_err_calloc(10, sizeof(int));
-    sg_iso->node_id = (int**)_err_malloc(10 * sizeof(int*));
+    sg_iso->node_n = (gec_t*)_err_calloc(10, sizeof(gec_t));
+    sg_iso->node_id = (gec_t**)_err_malloc(10 * sizeof(gec_t*));
     sg_iso->edge_n = (int*)_err_calloc(10, sizeof(int));
     sg_iso->edge_id = (int**)_err_malloc(10 * sizeof(int*));
     return sg_iso;
@@ -145,7 +145,7 @@ SGiso_group *sg_init_tmp_iso_group(int asm_id, int sg_id, int v_start, int v_end
     s_iso->iso_n = 0;
     e_iso->iso_n = 1;
     e_iso->node_n[0] = 1; iso_g->sg_asm_iso[end]->edge_n[0] = 0;
-    e_iso->node_id[0] = (int*)_err_malloc(sizeof(int));
+    e_iso->node_id[0] = (gec_t*)_err_malloc(sizeof(gec_t));
     e_iso->node_id[0][0] = v_end;
     return iso_g;
 }
@@ -231,7 +231,7 @@ void sg_update_asm_edge(SG *sg, SGasm *sg_asm, int pre_id, int cur_id)
 
 void sg_update_asm(SG *sg, SGasm *sg_asm, int pre_id, int cur_id)
 {
-    _bin_insert(cur_id, sg_asm->node_id, sg_asm->node_n, sg_asm->node_m, int)
+    _bin_insert(cur_id, sg_asm->node_id, sg_asm->node_n, sg_asm->node_m, gec_t)
     if (sg->node[cur_id].node_e.start < sg_asm->start) sg_asm->start = sg->node[cur_id].node_e.start;
     if (sg->node[cur_id].node_e.end > sg_asm->end) sg_asm->end = sg->node[cur_id].node_e.end;
     sg->node[cur_id].is_asm = 1;
@@ -287,8 +287,8 @@ void sg_update_iso(SG *sg, SGiso *iso, SGiso *next_iso, int cur_id, int next_id)
 {
     if (iso->iso_n + next_iso->iso_n > iso->iso_m) {
         iso->iso_m = iso->iso_n + next_iso->iso_n;
-        iso->node_n = (int*)_err_realloc(iso->node_n, iso->iso_m * sizeof(int));
-        iso->node_id = (int**)_err_realloc(iso->node_id, iso->iso_m * sizeof(int*));
+        iso->node_n = (gec_t*)_err_realloc(iso->node_n, iso->iso_m * sizeof(gec_t));
+        iso->node_id = (gec_t**)_err_realloc(iso->node_id, iso->iso_m * sizeof(gec_t*));
         iso->edge_n = (int*)_err_realloc(iso->edge_n, iso->iso_m * sizeof(int));
         iso->edge_id = (int**)_err_realloc(iso->edge_id, iso->iso_m * sizeof(int*));
     }
@@ -297,7 +297,7 @@ void sg_update_iso(SG *sg, SGiso *iso, SGiso *next_iso, int cur_id, int next_id)
     for (i = 0; i < next_iso->iso_n; ++i) {
         // add cur_id
         iso->node_n[iso->iso_n+i] = next_iso->node_n[i]+1;
-        iso->node_id[iso->iso_n+i] = (int*)_err_malloc((next_iso->node_n[i]+1) * sizeof(int));
+        iso->node_id[iso->iso_n+i] = (gec_t*)_err_malloc((next_iso->node_n[i]+1) * sizeof(gec_t));
         iso->node_id[iso->iso_n+i][0] = cur_id;
         for (j = 0; j < next_iso->node_n[i]; ++j)
             iso->node_id[iso->iso_n+i][j+1] = next_iso->node_id[i][j];
@@ -308,20 +308,20 @@ void sg_update_iso(SG *sg, SGiso *iso, SGiso *next_iso, int cur_id, int next_id)
     iso->iso_n += next_iso->iso_n;
 }
 
-int sg_asm_gen_iso(SG *sg, int *node_visit, SGiso_group *iso_g, int cur_id, int s_id, int e_id)
+void sg_asm_gen_iso(SG *sg, int *node_visit, SGiso_group *iso_g, int cur_id, int s_id, int e_id)
 {
     SGiso *iso = iso_g->sg_asm_iso[cur_id-s_id];
     if (node_visit[cur_id] > 0) {
         node_visit[cur_id]++;
-        return iso->iso_n;
+        return;
     } else node_visit[cur_id] = 1;
-    if (cur_id == e_id) return 1;
+    if (cur_id == e_id) return;
 
     iso->iso_n = 0;
-    int iso_n = 0, i;
+    int i;
     for (i = 0; i < sg->node[cur_id].next_n; ++i) {
         int next_id = sg->node[cur_id].next_id[i];
-        iso_n += sg_asm_gen_iso(sg, node_visit, iso_g, next_id, s_id, e_id);
+        sg_asm_gen_iso(sg, node_visit, iso_g, next_id, s_id, e_id);
 
         SGiso *next_iso = iso_g->sg_asm_iso[next_id-s_id];
         sg_update_iso(sg, iso, next_iso, cur_id, next_id);
@@ -331,8 +331,6 @@ int sg_asm_gen_iso(SG *sg, int *node_visit, SGiso_group *iso_g, int cur_id, int 
             iso_g->sg_asm_iso[next_id-s_id] = NULL;
         }
     }
-
-    return iso_n;
 }
 
 int sg_asm_group_add(SGasm_group *asm_g, SGasm *sg_asm)
@@ -342,7 +340,7 @@ int sg_asm_group_add(SGasm_group *asm_g, SGasm *sg_asm)
 
     a->SG_id = sg_asm->SG_id;
     a->v_start = sg_asm->v_start; a->v_end = sg_asm->v_end;
-    if (sg_asm->node_n > a->node_m) a->node_id = (int*)_err_realloc(a->node_id, sg_asm->node_n * sizeof(int));
+    if (sg_asm->node_n > a->node_m) a->node_id = (gec_t*)_err_realloc(a->node_id, sg_asm->node_n * sizeof(gec_t));
     if (sg_asm->edge_n > a->edge_m) a->edge_id = (int*)_err_realloc(a->edge_id, sg_asm->edge_n * sizeof(int));
     a->node_n = a->node_m = sg_asm->node_n; a->edge_n = a->edge_m = sg_asm->edge_n;
     int i;
@@ -363,8 +361,8 @@ int sg_iso_group_add(SGiso_group *iso_g, SGiso *sg_iso)
     a->ASM_id = sg_iso->ASM_id; a->SG_id = sg_iso->SG_id;
     a->v_start = sg_iso->v_start; a->v_end = sg_iso->v_end;
     a->iso_n = sg_iso->iso_n;
-    a->node_n = (int*)_err_malloc(a->iso_n * sizeof(int));
-    a->node_id = (int**)_err_malloc(a->iso_n * sizeof(int*));
+    a->node_n = (gec_t*)_err_malloc(a->iso_n * sizeof(gec_t));
+    a->node_id = (gec_t**)_err_malloc(a->iso_n * sizeof(gec_t*));
     a->edge_n = (int*)_err_malloc(a->iso_n * sizeof(int));
     a->edge_id = (int**)_err_malloc(a->iso_n * sizeof(int*));
     a->uniq_sj_c = (int*)_err_calloc(a->iso_n, sizeof(int));
@@ -373,7 +371,7 @@ int sg_iso_group_add(SGiso_group *iso_g, SGiso *sg_iso)
     a->multi_tot_c = (int*)_err_calloc(a->iso_n, sizeof(int));
     for (i = 0; i < a->iso_n; ++i) {
         a->node_n[i] = sg_iso->node_n[i];
-        a->node_id[i] = (int*)_err_malloc(a->node_n[i] * sizeof(int));
+        a->node_id[i] = (gec_t*)_err_malloc(a->node_n[i] * sizeof(gec_t));
         for (j = 0; j < a->node_n[i]; ++j)
             a->node_id[i][j] = sg_iso->node_id[i][j];
         a->edge_n[i] = sg_iso->edge_n[i];
@@ -572,32 +570,11 @@ int comp_ad_iso(ad_t *ad, SGiso *iso, SG *sg)
     }
 }
 
-// XXX for ASE
-int check_consis_ad_core_sim(ad_t *ad, SGnode *node, int *node_id, int node_n, int node_i)
-{
-    int ad_i = 0, n_i = node_i;
-    int ad_pos;
-    // check for intv_l
-    ad_pos = ad->start;
-    for (ad_i = 0, n_i = node_i; ad_i < ad->intv_n && n_i < node_n; ++ad_i, ++n_i) {
-        if (ad_i != 0) { // check intv start
-            ad_pos = ad->intr_end[ad_i-1] + 1;
-            if (ad_pos != node[node_id[n_i]].start) return 0;
-        }
-        if (ad_i != ad->intv_n-1) { // check intv end
-            ad_pos = ad->exon_end[ad_i];
-            if (ad_pos != node[node_id[n_i]].end) return 0;
-        }
-    }
-    if (ad_i != ad->intv_n) return 0;
-    return 1;
-}
-
 // return value:
 // 0: not consistent
 //  fully fall in iso: overlap with intronic region
 //  NOT fully fall in iso: no shared junction
-int ad_bin_sch_node(ad_t *ad, int *ad_i, SGnode *node, int *node_id, int node_n, int *node_i)
+int ad_bin_sch_node(ad_t *ad, int *ad_i, SGnode *node, gec_t *node_id, int node_n, int *node_i)
 {
     if (ad->start >= node[node_id[0]].start) {
         *ad_i = 0;
@@ -639,7 +616,7 @@ int ad_bin_sch_node(ad_t *ad, int *ad_i, SGnode *node, int *node_id, int node_n,
     return 0;
 }
 
-int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int node_n, int node_i)
+int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, gec_t *node_id, int node_n, int node_i)
 {
     int ad_i, n_i;
     int ad_pos; SGnode n;
@@ -672,7 +649,7 @@ int check_consis_ad_core(ad_t *ad, int _ad_i, SGnode *node, int *node_id, int no
     return 1;
 }
 
-int check_consis_ad(ad_t *ad, SGnode *node, int *node_id, int node_n)
+int check_consis_ad(ad_t *ad, SGnode *node, gec_t *node_id, gec_t node_n)
 {
     int ad_i, node_i;
     if (ad_bin_sch_node(ad, &ad_i, node, node_id, node_n, &node_i) == 0) return 0;
@@ -681,6 +658,7 @@ int check_consis_ad(ad_t *ad, SGnode *node, int *node_id, int node_n)
 
 int iso_cal_cnt(iso_group *iso_g, ad_t *ad_group, int ad_n, SG_group *sg_g)
 {
+    print_format_time(stderr); err_printf("[%s] calculating read count for each isoform ...\n", __func__);
     int ad_i = 0, last_sg_i=0, sg_i, asm_i, iso_i;
     SGiso_group *sg_iso_g; SGiso *iso; SG *sg; SGnode *node; ad_t *ad;
     int comp_res;
@@ -718,6 +696,7 @@ int iso_cal_cnt(iso_group *iso_g, ad_t *ad_group, int ad_n, SG_group *sg_g)
         }
         ad_i++;
     }
+    print_format_time(stderr); err_printf("[%s] calculating read count for each isoform done!\n", __func__);
     return 0;
 }
 

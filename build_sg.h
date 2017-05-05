@@ -5,6 +5,10 @@
 #include "gtf.h"
 #include "utils.h"
 
+//XXX uint16_t for exon-number
+// exon-number should not exceed pow(2,16) (65536)
+#define gtf_exon_cnt_t uint16_t
+#define gec_t gtf_exon_cnt_t
 
 #define _node_len(n) ((n).end-(n).start+1)
 
@@ -63,10 +67,10 @@ typedef struct {
     exon_t node_e;  // node in splice-graph
     uint8_t is_init:1, is_termi:1, is_asm:1;
     int uniq_c, multi_c;
-    int *next_id, next_n, next_m;
-    int *pre_id, pre_n, pre_m;
-    int *pre_domn, pre_domn_n, pre_domn_m;
-    int *post_domn, post_domn_n, post_domn_m;
+    gec_t *next_id, next_n; int next_m;
+    gec_t *pre_id, pre_n; int pre_m;
+    gec_t *pre_domn, pre_domn_n; int pre_domn_m;
+    gec_t *post_domn, post_domn_n; int post_domn_m;
 } SGnode; // node of splicing-graph
 
 typedef struct {
@@ -96,17 +100,17 @@ typedef struct {
 typedef struct {
     int SG_id;
     int v_start, v_end; // virtual start and end node
-    int *node_id; int node_n, node_m;
-    int *edge_id; int edge_n, edge_m;
+    gec_t *node_id, node_n; int node_m;
+    int *edge_id, edge_n; int edge_m;
     int start, end;
 } SGasm;
 
 typedef struct {
     int ASM_id, SG_id;
-    int v_start, v_end; // virtual start and end node
+    gec_t v_start:16, v_end:16; // virtual start and end node
     int iso_n, iso_m;
-    int *node_n; int **node_id;
-    int *edge_n; int **edge_id;
+    gec_t *node_n, **node_id;
+    int *edge_n, **edge_id;
     int *uniq_sj_c, *uniq_tot_c, *multi_sj_c, *multi_tot_c;
 } SGiso; // each ASM has one SGiso
 
