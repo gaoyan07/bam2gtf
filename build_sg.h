@@ -139,6 +139,7 @@ typedef struct {
     char **in_name;
     uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1;
     int intron_len;
+    int iso_exon_n, iso_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int uniq_min[5];   // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int all_min[5];    // [anno, non-canonical, GT/AG, GC/AG, AT/AC]

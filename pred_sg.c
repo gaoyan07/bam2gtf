@@ -6,6 +6,7 @@
 #include "build_sg.h"
 #include "parse_bam.h"
 #include "kstring.h"
+#include "pred_asm.h"
 
 extern const char PROG[20];
 int pred_sg_usage(void)
@@ -30,6 +31,7 @@ sg_para *sg_init_para(void)
     sgp->sam_n = 0; sgp->tol_rep_n = 0;
     sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = 0; // 1: pair, 0: single
+    sgp->iso_exon_n = ISO_EXON_MAX; sgp->iso_cnt_min = ISO_CNT_MIN;
     sgp->intron_len = INTRON_MIN_LEN;
     sgp->merge_out = 0;
     sgp->anchor_len[0] = ANCHOR_MIN_LEN, sgp->anchor_len[1] = NON_ANCHOR, sgp->anchor_len[2] = ANCHOR1, sgp->anchor_len[3] = ANCHOR2, sgp->anchor_len[4] = ANCHOR3;

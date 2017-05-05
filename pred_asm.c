@@ -29,6 +29,8 @@ int pred_asm_usage(void)
     err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
 
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
+    err_printf("         -e --iso-exon             maximum number of exons for ASM to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
+    err_printf("         -c --iso-cnt              minimum number of read count for candidate isoforms. [%d]\n", ISO_CNT_MIN); 
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT. [in.bam/sj]\n");
     err_printf("                                   prefix.ASM & prefix.JCNT & prefix.ECNT\n");
 	err_printf("\n");
@@ -106,8 +108,10 @@ void sg_free_iso(SGiso *sg_iso)
             free(sg_iso->node_id[i]);
         }
         free(sg_iso->node_id); free(sg_iso->node_n);
-        free(sg_iso->uniq_sj_c); free(sg_iso->multi_sj_c);
-        free(sg_iso->uniq_tot_c); free(sg_iso->multi_tot_c);
+        free(sg_iso->uniq_sj_c); free(sg_iso->uniq_tot_c); 
+#ifdef _RMATS_
+        free(sg_iso->multi_sj_c); free(sg_iso->multi_tot_c);
+#endif
     }
     free(sg_iso);
 }
@@ -289,8 +293,10 @@ void sg_iso_group_init_malloc(SGiso_group *iso_g, SGiso *tmp_iso_g)
     a->node_id = (gec_t**)_err_malloc(a->iso_n * sizeof(gec_t*));
     a->uniq_sj_c = (int*)_err_calloc(a->iso_n, sizeof(int));
     a->uniq_tot_c = (int*)_err_calloc(a->iso_n, sizeof(int));
+#ifdef _RMATS_
     a->multi_sj_c = (int*)_err_calloc(a->iso_n, sizeof(int));
     a->multi_tot_c = (int*)_err_calloc(a->iso_n, sizeof(int));
+#endif
     for (i = 0; i < a->iso_n; ++i) {
         a->node_n[i] = tmp_iso_g->node_n[i];
         a->node_id[i] = (gec_t*)_err_malloc(a->node_n[i] * sizeof(gec_t));
@@ -324,9 +330,9 @@ void sg_asm_gen_iso(SG *sg, int *node_visit, SGiso_group *iso_group, SGiso_group
     //            build counter index
     gec_t **id_idx = (gec_t**)_err_malloc(sg->node_n * sizeof(gec_t*));
     int i; for (i = 0; i < sg->node_n; ++i) id_idx[i] = NULL;
-    sg_asm_cal_iso_n(sg, node_visit, id_idx, tmp_iso_g, cur_id, s_id, e_id);
+    sg_asm_cal_iso_n(sg, node_visit, id_idx, tmp_iso_g, cur_id, s_id, e_id); // 2.6G
     // 2nd round: malloc iso[iso_n * node_n]
-    sg_iso_group_init_malloc(iso_group, tmp_iso_g->sg_asm_iso[0]);
+    sg_iso_group_init_malloc(iso_group, tmp_iso_g->sg_asm_iso[0]); // 23G (229,173,153 iso)
     // 3rd round: fill node_id by column
     memset(node_visit, 0, sg->node_n * sizeof(int));
     sg_iso_fill_col(iso_group->sg_asm_iso[iso_group->sg_asm_n-1], tmp_iso_g, id_idx, node_visit, s_id);
@@ -415,7 +421,7 @@ SGasm_group *gen_asm(SG_group *sg_g, sg_para *sgp)
     return asm_g;
 }
 
-iso_group *gen_asm_iso(SG_group *sg_g)
+iso_group *gen_asm_iso(SG_group *sg_g, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] generating candidate isoforms of alternative-splice-module ...\n", __func__);
     int entry_n, exit_n; int *entry, *exit;
@@ -438,7 +444,7 @@ iso_group *gen_asm_iso(SG_group *sg_g)
                 if (post_domn_n > 1 && pre_domn_n > 1 
                         && sg->node[entry[i]].post_domn[1] == exit[j] 
                         && sg->node[exit[j]].pre_domn[1] == entry[i]) {
-                    if (exit[j] - entry[i] > 2) continue;
+                    if (exit[j] - entry[i] >= sgp->iso_exon_n) continue;
                     int *node_visit = (int*)_err_calloc(sg->node_n, sizeof(int));
                     SGiso_group *iso_tmp_g = sg_init_tmp_iso_group(asm_i, sg_i, entry[i], exit[j]);
                     //sub_splice_graph(sg, &node_visit, sg_asm, entry[i], exit[j]);
@@ -625,13 +631,17 @@ int iso_cal_cnt(iso_group *iso_g, ad_t *ad_group, int ad_n, SG_group *sg_g)
                 for (iso_i = 0; iso_i < iso->iso_n; ++iso_i) {
                     // check if ad is consistent with iso->node
                     if (check_consis_ad(ad, node, iso->node_id[iso_i], iso->node_n[iso_i])) {
+#ifndef _RMATS_
                         if (ad->is_uniq) {
+#endif
                             if (ad->is_splice) iso->uniq_sj_c[iso_i]++;
                             iso->uniq_tot_c[iso_i]++;
+#ifndef _RMATS_
                         } else {
                             if (ad->is_splice) iso->multi_sj_c[iso_i]++;
                             iso->multi_tot_c[iso_i]++;
                         }
+#endif
                     }
                 }
             }
@@ -720,7 +730,7 @@ int iso_output(char *in_fn, char *prefix, SG_group *sg_g, iso_group *iso_g, sg_p
     for (i = 0; i < out_n; ++i) out_fp[i] = xopen(out_fn[i], "w");
 
     chr_name_t *cname = sg_g->cname;
-    fprintf(out_fp[0], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tSTART_ES\tSTART_EE\tEND_ES\tEND_EE\tUNIQ_SJ_CNT\tUNIQ_TOT_COUNT\tMULTI_SJ_COUNT\tMULTI_TOT_CNT\n");
+    fprintf(out_fp[0], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tSTART_ES\tSTART_EE\tEND_ES\tEND_EE\tUNIQ_SJ_CNT\tUNIQ_TOT_COUNT\n");
     fprintf(out_fp[1], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tISO_EXON\n");
     
     int iso_i = 0, sg_i;
@@ -733,7 +743,8 @@ int iso_output(char *in_fn, char *prefix, SG_group *sg_g, iso_group *iso_g, sg_p
             int vs = a->v_start, ve = a->v_end;
 
             for (j = 0; j < a->iso_n; ++j) {
-                fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j], node[vs].start, node[vs].end, node[ve].start, node[ve].end, a->uniq_sj_c[j], a->uniq_tot_c[j], a->multi_sj_c[j], a->multi_tot_c[j]);
+                if (a->uniq_tot_c[j] < sgp->iso_cnt_min) continue;
+                fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j], node[vs].start, node[vs].end, node[ve].start, node[ve].end, a->uniq_sj_c[j], a->uniq_tot_c[j]);
                 fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j]);
                 int k;
                 for (k = 0; k < a->node_n[j]; ++k) {
@@ -760,6 +771,8 @@ const struct option asm_long_opt [] = {
     { "anchor-len", 1, NULL, 'a' },
     { "intron-len", 1, NULL, 'i' },
     { "genome-file", 1, NULL, 'g' },
+    { "iso-exon", 1, NULL, 'e' },
+    { "iso-cnt", 1, NULL, 'c' },
     { "use-multi", 0, NULL, 'm' },
     { "output", 1, NULL, 'o' },
 
@@ -770,13 +783,15 @@ int pred_asm(int argc, char *argv[])
 {
     int c, i; char out_fn[1024]="", ref_fn[1024]="", *p;
     sg_para *sgp = sg_init_para();
-	while ((c = getopt_long(argc, argv, "nNlmMpa:U:A:i:g:G:o:", asm_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "nNlmMe:c:pa:U:A:i:g:G:o:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'N': sgp->no_novel_com = 0; break;
             case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'm': sgp->use_multi = 1; break;
             case 'M': sgp->merge_out = 1; break;
+            case 'e': sgp->iso_exon_n = atoi(optarg); break;
+            case 'c': sgp->iso_cnt_min = atoi(optarg); break;
             case 'p': sgp->read_type = PAIR_T; break;
             case 'a': sgp->anchor_len[0] = strtol(optarg, &p, 10);
                       if (*p != 0) sgp->anchor_len[1] = strtol(p+1, &p, 10); else return pred_asm_usage();
@@ -849,7 +864,7 @@ int pred_asm(int argc, char *argv[])
 
         // generate ASM with short-read splice-graph
         //SGasm_group *asm_g = gen_asm(sg_g, sgp);
-        iso_group *iso_g = gen_asm_iso(sg_g);
+        iso_group *iso_g = gen_asm_iso(sg_g, sgp);
 
         // calculate read count for each isoform
         iso_cal_cnt(iso_g, ad_group, ad_n, sg_g);
