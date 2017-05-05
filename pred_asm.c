@@ -730,7 +730,7 @@ int iso_output(char *in_fn, char *prefix, SG_group *sg_g, iso_group *iso_g, sg_p
     for (i = 0; i < out_n; ++i) out_fp[i] = xopen(out_fn[i], "w");
 
     chr_name_t *cname = sg_g->cname;
-    fprintf(out_fp[0], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tSTART_ES\tSTART_EE\tEND_ES\tEND_EE\tUNIQ_SJ_CNT\tUNIQ_TOT_COUNT\n");
+    fprintf(out_fp[0], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tSTART_EXON\tEND_EXON\tUNIQ_SJ_CNT\tUNIQ_TOT_COUNT\n");
     fprintf(out_fp[1], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tISO_EXON\n");
     
     int iso_i = 0, sg_i;
@@ -744,7 +744,7 @@ int iso_output(char *in_fn, char *prefix, SG_group *sg_g, iso_group *iso_g, sg_p
 
             for (j = 0; j < a->iso_n; ++j) {
                 if (a->uniq_tot_c[j] < sgp->iso_cnt_min) continue;
-                fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j], node[vs].start, node[vs].end, node[ve].start, node[ve].end, a->uniq_sj_c[j], a->uniq_tot_c[j]);
+                fprintf(out_fp[0], "%d\t%d\t%d\t%c\t%s\t%d\t%d,%d\t%d,%d\t%d\t%d\n", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j], node[vs].start, node[vs].end, node[ve].start, node[ve].end, a->uniq_sj_c[j], a->uniq_tot_c[j]);
                 fprintf(out_fp[1], "%d\t%d\t%d\t%c\t%s\t%d", iso_i, asm_i, sg_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], a->node_n[j]);
                 int k;
                 for (k = 0; k < a->node_n[j]; ++k) {
