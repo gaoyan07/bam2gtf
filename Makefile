@@ -19,9 +19,11 @@ OBJS    =	$(SOURCE:.c=.o)
 BIN     =	$(BIN_DIR)/gtools
 
 RMATS       =   $(BIN_DIR)/rmats_gtools
+RGDB_DEBUG   =   $(BIN_DIR)/rgdb_gtools
 GDB_DEBUG   =   $(BIN_DIR)/gdb_gtools
 NOR_DEBUG   =   $(BIN_DIR)/debug_gtools
 DMARCRO 	=	-D __DEBUG__
+RDMARCRO    =   -D __DEBUG__ -D _RMATS_
 RMARCRO     =   -D _RMATS_
 COMP_GTF	= 	$(BIN_DIR)/comp-gtf
 GDB_COMP	=   $(BIN_DIR)/gdb_comp-gtf
@@ -33,6 +35,7 @@ COMP_D		=	-D COMP_MAIN
 #all:       $(SOURCE) $(BIN) 
 all:       $(HTS_ALL) $(BIN) 
 gdb_gtools: $(SOURCE) $(GDB_DEBUG) 
+rgdb_gtools: $(SOURCE) $(RGDB_DEBUG) 
 debug_gtools: $(SOURCE) $(NOR_DEBUG)
 comp-gtf:	$(COMP_GTF)
 gdb_comp-gtf: $(GDB_COMP)
@@ -47,6 +50,8 @@ $(RMATS):
 		$(CC) $(CFLAGS) $(SOURCE) $(RMARCRO) -o $@ $(LIB)
 $(GDB_DEBUG):
 		$(CC) $(DFLAGS) $(SOURCE) $(DMARCRO) -o $@ $(LIB)
+$(RGDB_DEBUG):
+		$(CC) $(DFLAGS) $(SOURCE) $(RDMARCRO) -o $@ $(LIB)
 $(NOR_DEBUG):
 		$(CC) $(CFLAGS) $(SOURCE) $(DMARCRO) -o $@ $(LIB)
 $(COMP_GTF):
@@ -59,4 +64,4 @@ clean:
 		rm -f $(SRC_DIR)/*.o $(BIN)
 
 clean_debug:
-		rm -f $(SRC_DIR)/*.o $(GDB_DEBUG) $(NOR_DEBUG) $(GDB_COMP)
+		rm -f $(SRC_DIR)/*.o $(GDB_DEBUG) $(RGDB_DEBUG) $(NOR_DEBUG) $(GDB_COMP)

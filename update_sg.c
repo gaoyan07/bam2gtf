@@ -11,9 +11,8 @@
     ed.max_over = sj->max_over; \
 }
 
-// XXX update based on splice-junction OR alignment-detail
-// XXX discard edge whose weight == 0?
-int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
+// update based on splice-junction
+int update_SpliceGraph_edge(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] updating splice-graph with splice-junctions ...\n", __func__);
     int no_novel_sj = sgp->no_novel_sj; //, no_novel_com = sgp->no_novel_com; // XXX no need for no_novel_com
@@ -63,7 +62,10 @@ int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
     return 0;
 }
 
-int update_SpliceGraph_ad(SG_group *sg_g, ad_t *ad_group, int ad_n, sg_para *sgp)
+int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 {
+    update_SpliceGraph_edge(sg_g, sj_group, sj_n, sgp);
+    // remove_SpliceGraph_edge(sg_g);
     return 0;
 }
+

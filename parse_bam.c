@@ -72,11 +72,11 @@ uint8_t bam_is_uniq_NH(bam1_t *b)
     return (bam_aux2i(p) == 1);
 }
 
-int bam_cigar_opn(int n_cigar, const uint32_t *cigar, uint32_t op)
+int bam_cigar_opn(int n_cigar, const uint32_t *cigar, uint32_t op, uint32_t len)
 {
     int i, j;
     for (i = j = 0; i < n_cigar; ++i)
-        if (bam_cigar_op(cigar[i]) == op) ++j;
+        if (bam_cigar_op(cigar[i]) == op && bam_cigar_oplen(cigar[i]) >= len) ++j;
     return j;
 }
 
@@ -231,18 +231,25 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, kseq_t
     return sj_n;
 }
 
-int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uint8_t is_uniq, kseq_t *seq, int seq_n, ad_t *ad, sj_t **sj, int *_sj_n, int *sj_m, sg_para *sgp)
+// only junction-read are kept in AD_T
+int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uint8_t is_uniq, kseq_t *seq, int seq_n, ad_t **ad_g, int *ad_n, int *ad_m, sj_t **sj, int *sj_n, int *sj_m, sg_para *sgp)
 {
-    int N_n =  bam_cigar_opn(n_cigar, c, BAM_CREF_SKIP);
+    int i, min_intr_len = sgp->intron_len, SJ_n, sj_i = 0;
+    SJ_n = bam_cigar_opn(n_cigar, c, BAM_CREF_SKIP, min_intr_len);
     int end = start - 1; /* 1-base */
     uint8_t strand, motif_i;
 
-    int i; int min_intr_len = sgp->intron_len, sj_n = 0;
-
-    ad->intv_n = 0;
-    ad->exon_end = (int*)_err_malloc((N_n+1) * sizeof(int));
-    ad->intr_end = N_n>0? (int*)_err_malloc(N_n * sizeof(int)) : NULL;
-
+    ad_t *ad;
+    if (SJ_n > 0) {
+        if (*ad_n == *ad_m) _realloc(*ad_g, *ad_m, ad_t)
+        ad = (*ad_g)+(*ad_n);
+        ad->intv_n = 0;
+        ad->exon_end = (int*)_err_malloc((SJ_n+1) * sizeof(int));
+        ad->intr_end = (int*)_err_malloc(SJ_n * sizeof(int));
+        ad->tid = tid; ad->start = start;
+        ad->is_uniq = is_uniq; ad->is_splice = 1;
+        (*ad_n)++;
+    }
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
         switch (bam_cigar_op(c[i])) {
@@ -250,7 +257,7 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
                 if (l >= min_intr_len) {
                     // sj
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
-                    add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq); 
+                    add_sj(sj, &sj_i, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq); 
                     // ad
                     ad->intr_end[ad->intv_n] = end+l;
                     ad->exon_end[(ad->intv_n)++] = end;
@@ -266,18 +273,18 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
                 break;
             case BAM_CDEL : // D(0 1)
 #ifdef _RMATS_
-                return 0; // XXX for rMATS, only M&N allowed
+                return 0; // for rMATS, only M&N allowed
 #else
                 end += l;
-#endif
                 break;
+#endif
             case BAM_CINS: // 1 0
             case BAM_CSOFT_CLIP:
             case BAM_CHARD_CLIP:
             case BAM_CPAD: // 0 0
             case BAM_CBACK:
 #ifdef _RMATS_
-                return 0; // XXX for rMATS, only M&N allowed
+                return 0; // for rMATS, only M&N allowed
 #endif
                 break; 
             default:
@@ -285,24 +292,28 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
                 break;
         }
     }
-    // ad
-    ad->exon_end[(ad->intv_n)++] = end;
+    *sj_n = SJ_n; *_end = end;
 
-    *_sj_n = sj_n;
-    *_end = end;
-    return ad->intv_n;
+    // ad
+    if (SJ_n > 0) {
+        ad->exon_end[(ad->intv_n)++] = end;
+        ad->end = end;
+    }
+    return SJ_n;
 }
 
 // parse alignment details via BAM cigar
-int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, ad_t **AD_group, int *AD_n, int AD_m, sj_t **SJ_group, int *SJ_n, int SJ_m, sg_para *sgp)
+// build sg_ad_index to calculate cnt
+int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, SG_group *sg_g, int *sg_ad_idx, ad_t **AD_group, int *AD_n, int AD_m, sj_t **SJ_group, int *SJ_n, int SJ_m, sg_para *sgp)
 {
     print_format_time(stderr); err_printf("[%s] parsing bam records...\n", __func__);
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
-    // junction
-    int _SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
     // alignment detail
-    int _AD_n = 0;
+    *AD_n = 0;
+    // junction
+    *SJ_n = 0; int sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
+    int last_sg_i = 0, sg_i, idx_sg_i = 0;
     // read bam record
     while (sam_read1(in, h, b) >= 0) {
         if (bam_unmap(b)) continue; // unmap (0)
@@ -315,19 +326,46 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
         tid = b->core.tid; n_cigar = b->core.n_cigar; cigar = bam_get_cigar(b);
         bam_start = b->core.pos+1;
         // alignment details
-        if (_AD_n == AD_m) _realloc(*AD_group, AD_m, ad_t)
-        ad_t *ad = (*AD_group)+(_AD_n);
-        if ((ad->intv_n = parse_bam(tid, bam_start, &bam_end, n_cigar, cigar, is_uniq, seq, seq_n, ad, &sj, &sj_n, &sj_m, sgp)) == 0) continue;
-        ad->tid = tid; ad->start = bam_start; ad->end = bam_end;
-        ad->is_uniq = is_uniq; ad->is_splice = (ad->intv_n > 1);
-        _AD_n++;
-        // junction read
-        if (sj_n > 0) sj_update_group(SJ_group, &_SJ_n, &SJ_m, sj, sj_n);
+        parse_bam(tid, bam_start, &bam_end, n_cigar, cigar, is_uniq, seq, seq_n, AD_group, AD_n, &AD_m, &sj, &sj_n, &sj_m, sgp);
+       
+        if (sj_n > 0) {
+            // junction read
+            sj_update_group(SJ_group, SJ_n, &SJ_m, sj, sj_n);
+            // set sg_ad_idx
+            while (idx_sg_i < sg_g->SG_n) {
+                if (bam_end >= sg_g->SG[idx_sg_i]->start && bam_start <= sg_g->SG[idx_sg_i]->end) {
+                    sg_ad_idx[idx_sg_i] = *AD_n; // 0: no idx
+                    idx_sg_i++;
+                } else if (bam_start > sg_g->SG[idx_sg_i]->end)
+                    idx_sg_i++;
+                else break; // bam_end < sg.start
+            }
+        } else {
+            // exon-body read
+            if (last_sg_i == sg_g->SG_n) continue;
+            for (sg_i = last_sg_i; sg_i < sg_g->SG_n; ++sg_i) {
+                SG *sg = sg_g->SG[sg_i];
+                int start = sg->start, end = sg->end;
+                int j;
+                if (sg->tid < tid || start == MAX_SITE || end == 0 || (sg->tid == tid && end <= bam_start)) {
+                    if (sg_i == last_sg_i) last_sg_i++; continue;
+                } else if (sg->tid > tid || (sg->tid == tid && start >= bam_end)) break;
+                else {
+                    for (j = 0; j < sg->node_n; ++j) {
+                        SGnode n = sg->node[j];
+                        if (n.start <= bam_start && n.end >= bam_end) {
+                            if (is_uniq) sg->node[j].uniq_c++;
+                            else sg->node[j].multi_c++;
+                        }
+                    }
+                }
+            }
+        }
+        
     }
     free(sj);
     print_format_time(stderr); err_printf("[%s] parsing bam records done!\n", __func__);
 
-    *SJ_n = _SJ_n; *AD_n = _AD_n;
     return *SJ_n;
 }
 

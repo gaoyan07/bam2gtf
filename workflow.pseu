@@ -154,15 +154,16 @@ Workflow 4:
 
 Workflow 5:
 1. Build GTF-SG
-2. Generate "alignment-details" sj and from BAM file
-3. for each sj
+2. Generate junction-included "alignment-details" AD and from BAM file
+3. Update exon-body count for each SG-node
+4. for each sj
     update weight / add edge / nothing(invalid sj)
-4. SG => ASM
-5. ASM => ASE (*optional)
-6. use "alignment-details" to update edge weight for ASM(ASE)
-    6.1 update ASM
+5. SG => ASM
+6. ASM => ASE (*optional)
+7. use "alignment-details" to update edge weight for ASM(ASE)
+    7.1 update ASM
         1. ASM2ISO: generate all candidate isoforms
         2. fill the "iso X read" matrix
-    6.2 update ASE
+    7.2 update ASE
         1. ASE2ISO: generate inclusive and exclusive isoforms
         2. fill the "in/ex X read" matrix

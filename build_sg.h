@@ -13,7 +13,7 @@
 #define _node_len(n) ((n).end-(n).start+1)
 
 typedef struct {
-    int32_t tid:16, intv_n:14, is_uniq:1, is_splice:1;
+    uint32_t tid:16, intv_n:14, is_uniq:1, is_splice:1;
     int32_t start, end;
     int32_t *exon_end, *intr_end; // exon_end[intv_n]: exonic, intr_end[intv_n-1]: intronic
 } ad_t;   // alignment details: start, end, intv_n, intv[]

@@ -667,9 +667,10 @@ int asm2ase(int argc, char *argv[])
         if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
         sj_m = 10000; sj_group = (sj_t*)_err_malloc(sj_m * sizeof(sj_t));
         ad_m = 10000; ad_group = (ad_t*)_err_malloc(ad_m * sizeof(ad_t));
+        int *sg_ad_idx = (int*)_err_calloc(sg_g->SG_n, sizeof(int));
         // calculate number of junction-reads and exon-body reads
         //sj_n = bam2cnt_core(in, h, b, seq, seq_n, &sj_group, sj_m, sg_g, sgp);
-        sj_n = parse_bam_record(in, h, b, seq, seq_n, &ad_group, &ad_n, ad_m, &sj_group, &sj_n, sj_m, sgp);
+        sj_n = parse_bam_record(in, h, b, seq, seq_n, sg_g, sg_ad_idx, &ad_group, &ad_n, ad_m, &sj_group, &sj_n, sj_m, sgp);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
 
         // update edge weight and add novel edge for GTF-SG
@@ -685,6 +686,7 @@ int asm2ase(int argc, char *argv[])
         asm2ase_core(sg_g, asm_g, ase, sgp);
 
         free_ad_group(ad_group, ad_n); // free ad
+        free(sg_ad_idx);
 
         // output asm
         asm_output(in_name, out_pre, sg_g, asm_g, sgp);
