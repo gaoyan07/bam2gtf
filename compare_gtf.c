@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
     comp_gtf_core(*T1, *T2, dis);
 
     read_trans_free(T1), read_trans_free(T2);
-    fclose(fp1), fclose(fp2);
+    err_fclose(fp1); err_fclose(fp2);
     return 0;
 }
 #endif

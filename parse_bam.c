@@ -80,20 +80,19 @@ int bam_cigar_opn(int n_cigar, const uint32_t *cigar, uint32_t op, uint32_t len)
     return j;
 }
 
-int add_sj(sj_t **sj, int *sj_n, int *sj_m, int tid, int don, int acc, uint8_t strand, uint8_t motif_i, uint8_t is_anno, uint8_t is_uniq)
+int add_sj(sj_t **sj, int sj_i, int *sj_m, int tid, int don, int acc, uint8_t strand, uint8_t motif_i, uint8_t is_anno, uint8_t is_uniq)
 {
-    if (*sj_n == *sj_m) {
+    if (sj_i == *sj_m) {
         _realloc(*sj, *sj_m, sj_t)
     }
-    (*sj)[*sj_n].tid = tid;
-    (*sj)[*sj_n].don = don;
-    (*sj)[*sj_n].acc = acc;
-    (*sj)[*sj_n].strand = strand;
-    (*sj)[*sj_n].motif = motif_i;
-    (*sj)[*sj_n].is_anno = is_anno;
-    (*sj)[*sj_n].uniq_c = is_uniq; 
-    (*sj)[*sj_n].multi_c = 1-is_uniq;
-    (*sj_n)++;
+    (*sj)[sj_i].tid = tid;
+    (*sj)[sj_i].don = don;
+    (*sj)[sj_i].acc = acc;
+    (*sj)[sj_i].strand = strand;
+    (*sj)[sj_i].motif = motif_i;
+    (*sj)[sj_i].is_anno = is_anno;
+    (*sj)[sj_i].uniq_c = is_uniq; 
+    (*sj)[sj_i].multi_c = 1-is_uniq;
     return 0;
 }
 
@@ -194,7 +193,7 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, kseq_t
     int end = start - 1; /* 1-base */
     uint8_t strand, motif_i;
     
-    int i; int min_intr_len = sgp->intron_len, sj_n = 0;
+    int i; int min_intr_len = sgp->intron_len, sj_i = 0;
 
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
@@ -203,7 +202,7 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, kseq_t
                 if (l >= min_intr_len) {
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
                     // XXX filter with anchor length
-                    add_sj(sj, &sj_n, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq); 
+                    add_sj(sj, sj_i, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq); ++sj_i;
                     start = end+l+1;
                 }
                 end += l;
@@ -228,13 +227,20 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, kseq_t
         }
     }
 
-    return sj_n;
+    return sj_i;
 }
 
 // only junction-read are kept in AD_T
 int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uint8_t is_uniq, kseq_t *seq, int seq_n, ad_t **ad_g, int *ad_n, int *ad_m, sj_t **sj, int *sj_n, int *sj_m, sg_para *sgp)
 {
     int i, min_intr_len = sgp->intron_len, SJ_n, sj_i = 0;
+#ifdef _RMATS_
+    for (i = 0; i  < n_cigar; ++i) {
+        uint32_t op = bam_cigar_op(c[i]);
+        if (op != BAM_CMATCH && op != BAM_CREF_SKIP) return -1;
+        //&& op != BAM_CEQUAL && op != BAM_CDIFF) return 0;
+    }
+#endif
     SJ_n = bam_cigar_opn(n_cigar, c, BAM_CREF_SKIP, min_intr_len);
     int end = start - 1; /* 1-base */
     uint8_t strand, motif_i;
@@ -248,7 +254,6 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
         ad->intr_end = (int*)_err_malloc(SJ_n * sizeof(int));
         ad->tid = tid; ad->start = start;
         ad->is_uniq = is_uniq; ad->is_splice = 1;
-        (*ad_n)++;
     }
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
@@ -257,7 +262,7 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
                 if (l >= min_intr_len) {
                     // sj
                     strand = intr_deri_str(seq, seq_n, tid, end+1, end+l, &motif_i);
-                    add_sj(sj, &sj_i, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq); 
+                    add_sj(sj, sj_i, sj_m, tid, end+1, end+l, strand, motif_i, 1, is_uniq); ++sj_i;
                     // ad
                     ad->intr_end[ad->intv_n] = end+l;
                     ad->exon_end[(ad->intv_n)++] = end;
@@ -298,6 +303,7 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
     if (SJ_n > 0) {
         ad->exon_end[(ad->intv_n)++] = end;
         ad->end = end;
+        (*ad_n)++;
     }
     return SJ_n;
 }
@@ -315,7 +321,12 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
     *SJ_n = 0; int sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
     int last_sg_i = 0, sg_i, idx_sg_i = 0;
     // read bam record
-    while (sam_read1(in, h, b) >= 0) {
+    int ret;
+    while (1) {
+        ret = sam_read1(in, h, b);
+        if (ret == -1) break;
+        else if (ret < 0) err_fatal_simple("bam file error!\n");
+
         if (bam_unmap(b)) continue; // unmap (0)
         is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
 #ifdef _RMATS_
@@ -326,7 +337,7 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
         tid = b->core.tid; n_cigar = b->core.n_cigar; cigar = bam_get_cigar(b);
         bam_start = b->core.pos+1;
         // alignment details
-        parse_bam(tid, bam_start, &bam_end, n_cigar, cigar, is_uniq, seq, seq_n, AD_group, AD_n, &AD_m, &sj, &sj_n, &sj_m, sgp);
+        if (parse_bam(tid, bam_start, &bam_end, n_cigar, cigar, is_uniq, seq, seq_n, AD_group, AD_n, &AD_m, &sj, &sj_n, &sj_m, sgp) < 0) continue;
        
         if (sj_n > 0) {
             // junction read
@@ -361,7 +372,6 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
                 }
             }
         }
-        
     }
     free(sj);
     print_format_time(stderr); err_printf("[%s] parsing bam records done!\n", __func__);
@@ -376,7 +386,12 @@ int bam2cnt_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, s
     // junction
     int SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
     // read bam record
-    while (sam_read1(in, h, b) >= 0) {
+    int ret;
+    while (1) {
+        ret = sam_read1(in, h, b);
+        if (ret == -1) break;
+        else if (ret < 0) err_fatal_simple("bam file error!\n");
+
         if (bam_unmap(b)) continue; // unmap (0)
         is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
 #ifdef _RMATS_
@@ -401,7 +416,13 @@ int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
     int SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
-    while (sam_read1(in, h, b) >= 0) {
+
+    int ret;
+    while (1) {
+        ret = sam_read1(in, h, b);
+        if (ret == -1) break;
+        else if (ret < 0) err_fatal_simple("bam file error!\n");
+
         if (bam_unmap(b)) continue; // unmap (0)
         is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
 #ifdef _RMATS_
@@ -531,7 +552,7 @@ int bam2sj(int argc, char *argv[])
         gzFile genome_fp = gzopen(ref_fn, "r");
         if (genome_fp == NULL) { err_fatal(__func__, "Can not open genome file. %s\n", ref_fn); }
         seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
-        gzclose(genome_fp); 
+        err_gzclose(genome_fp); 
     }
     // set cname
     chr_name_t *cname = chr_name_init();

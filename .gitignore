@@ -25,6 +25,7 @@
 gtools
 gdb_gtools
 rmats_gtools
+rgdb_gtools
 comp-gtf
 gdb_comp-gtf
 *.exe

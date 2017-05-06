@@ -358,7 +358,7 @@ int pred_sg(int argc, char *argv[])
         gzFile genome_fp = gzopen(ref_fn, "r");
         if (genome_fp == NULL) { err_fatal(__func__, "Can not open genome file. %s\n", ref_fn); }
         seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
-        gzclose(genome_fp); 
+        err_gzclose(genome_fp); 
     }
 
     // build splice-graph with GTF
@@ -384,7 +384,7 @@ int pred_sg(int argc, char *argv[])
     int i; for (i = 0; i < seq_n; ++i) {
         free(seq[i].name.s); free(seq[i].seq.s);
     } free(seq);
-    sg_free_group(sg_g); sg_free_group(sr_sg_g); gzclose(genome_fp); sg_free_para(sgp);
+    sg_free_group(sg_g); sg_free_group(sr_sg_g); err_gzclose(genome_fp); sg_free_para(sgp);
     free(sj_group);
     return 0;
 }

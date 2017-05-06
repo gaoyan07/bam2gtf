@@ -117,7 +117,7 @@ int bam_filter(int argc, char *argv[])
     // read rRNA gtf
     FILE *fp = xopen(argv[optind+1], "r"); read_trans_t *r = read_trans_init();
     read_anno_trans(fp, h, r);
-    fclose(fp); 
+    err_fclose(fp); 
 
     if ((out = sam_open_format("-", "wb", NULL)) == NULL) err_fatal_simple("Cannot open \"-\"\n");
     if (sam_hdr_write(out, h) != 0) err_fatal_simple("Error in writing SAM header\n"); //sam header

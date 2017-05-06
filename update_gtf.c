@@ -591,6 +591,6 @@ int update_gtf(int argc, char *argv[])
 
     novel_read_trans_free(bam_T); novel_read_trans_free(anno_T); 
     read_trans_free(novel_T); intron_group_free(I);
-    bam_hdr_destroy(h); sam_close(in); fclose(gfp); if(full_gfp) fclose(full_gfp); if (intron_fp) fclose(intron_fp);
+    bam_hdr_destroy(h); sam_close(in); err_fclose(gfp); if(full_gfp) err_fclose(full_gfp); if (intron_fp) err_fclose(intron_fp);
     return 0;
 }

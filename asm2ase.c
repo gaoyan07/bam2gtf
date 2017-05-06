@@ -637,7 +637,7 @@ int asm2ase(int argc, char *argv[])
         gzFile genome_fp = gzopen(ref_fn, "r");
         if (genome_fp == NULL) { err_fatal(__func__, "Can not open genome file. %s\n", ref_fn); }
         seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
-        gzclose(genome_fp); 
+        err_gzclose(genome_fp); 
     }
 
     // parse input name
