@@ -153,7 +153,7 @@ void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char 
 void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 
 // for filtering splice-junction
-#define INTRON_MIN_LEN 25
+#define INTRON_MIN_LEN 3
 #define INTER_EXON_MIN_LEN 6
 #define SPLICE_DISTANCE 0
 #define MIN_INTRON_NUM 0

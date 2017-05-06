@@ -475,7 +475,8 @@ void sg_iso_ad_cnt(SG *sg, ad_t *ad_g, int ad_n, int ad_i, SGiso *iso)
     SGnode *node = sg->node;
     do {
         ad_t *ad = ad_g+ad_i;
-        if (ad->tid > sg->tid || ad->start >= node[iso->v_end].end) break;
+        if (ad->tid > sg->tid || (ad->tid == sg->tid && ad->start >= node[iso->v_end].end)) break;
+        else if (ad->tid < sg->tid) { ad_i++; continue; }
 
         int comp_res = comp_ad_iso(ad, iso, sg);
         if (comp_res > 0) break;

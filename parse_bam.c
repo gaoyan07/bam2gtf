@@ -344,10 +344,10 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
             sj_update_group(SJ_group, SJ_n, &SJ_m, sj, sj_n);
             // set sg_ad_idx
             while (idx_sg_i < sg_g->SG_n) {
-                if (bam_end >= sg_g->SG[idx_sg_i]->start && bam_start <= sg_g->SG[idx_sg_i]->end) {
+                if (tid == sg_g->SG[idx_sg_i]->tid && bam_end >= sg_g->SG[idx_sg_i]->start && bam_start <= sg_g->SG[idx_sg_i]->end) {
                     sg_ad_idx[idx_sg_i] = *AD_n; // 0: no idx
                     idx_sg_i++;
-                } else if (bam_start > sg_g->SG[idx_sg_i]->end)
+                } else if (tid > sg_g->SG[idx_sg_i]->tid || (tid == sg_g->SG[idx_sg_i]->tid && bam_start > sg_g->SG[idx_sg_i]->end))
                     idx_sg_i++;
                 else break; // bam_end < sg.start
             }
