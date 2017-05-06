@@ -35,6 +35,7 @@ COMP_D		=	-D COMP_MAIN
 #all:       $(SOURCE) $(BIN) 
 all:       $(HTS_ALL) $(BIN) 
 gdb_gtools: $(SOURCE) $(GDB_DEBUG) 
+rmats_gtools: $(SOURCE) $(RMATS)
 rgdb_gtools: $(SOURCE) $(RGDB_DEBUG) 
 debug_gtools: $(SOURCE) $(NOR_DEBUG)
 comp-gtf:	$(COMP_GTF)
@@ -61,7 +62,7 @@ $(GDB_COMP):
 
 
 clean:
-		rm -f $(SRC_DIR)/*.o $(BIN)
+		rm -f $(SRC_DIR)/*.o $(BIN) $(RMATS)
 
 clean_debug:
 		rm -f $(SRC_DIR)/*.o $(GDB_DEBUG) $(RGDB_DEBUG) $(NOR_DEBUG) $(GDB_COMP)

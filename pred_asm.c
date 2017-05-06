@@ -502,6 +502,21 @@ void sg_iso_ad_cnt(SG *sg, ad_t *ad_g, int ad_n, int ad_i, SGiso *iso)
     } while (ad_i < ad_n);
 }
 
+void sg_iso_eb_cnt(SG *sg, SGiso *iso)
+{
+    SGnode *node = sg->node;
+    int iso_i, n_i;
+    for (iso_i = 0; iso_i < iso->iso_n; ++iso_i) {
+        for (n_i = 0; n_i < iso->node_n[iso_i]; ++n_i) {
+            iso->uniq_tot_c[iso_i] += node[iso->node_id[iso_i][n_i]].uniq_c;
+#ifndef _RMATS_
+            iso->multi_tot_c[iso_i] += node[iso->node_id[iso_i][n_i]].multi_c;
+#endif
+        }
+    }
+
+}
+
 void sg_per_iso_output(FILE **out_fp, SG *sg, chr_name_t *cname, SGiso *iso, sg_para *sgp)
 {
     int asm_i = iso->ASM_id, sg_i = iso->SG_id, j;
@@ -548,6 +563,7 @@ int gen_asm_iso(SG_group *sg_g, int *sg_ad_idx, ad_t *ad_group, int ad_n, sg_par
                     // calculate iso cnt with sg_ad_idx
                     SGiso *iso = iso_g->sg_asm_iso[0];
                     sg_iso_ad_cnt(sg, ad_group, ad_n, sg_ad_idx[sg_i], iso);
+                    sg_iso_eb_cnt(sg, iso); // exon-body-cnt
                     // output read count and isoform exons
                     sg_per_iso_output(out_fp, sg, sg_g->cname, iso_g->sg_asm_iso[0], sgp);
                     free(node_visit);
