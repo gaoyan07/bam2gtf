@@ -108,8 +108,8 @@ typedef struct {
 typedef struct {
     int ASM_id, SG_id;
     gec_t v_start:16, v_end:16; // virtual start and end node
-    int iso_n, iso_m;
-    gec_t *node_n, **node_id;
+    int iso_n;
+    gec_t *node_n, *next_id_idx, *node_id;
     int *uniq_sj_c, *uniq_tot_c, *multi_sj_c, *multi_tot_c;
 } SGiso; // each ASM has one SGiso
 
