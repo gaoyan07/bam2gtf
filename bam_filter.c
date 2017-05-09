@@ -154,7 +154,7 @@ int bam_filter(int argc, char *argv[])
         if (sam_write1(out, h, best_b) < 0) err_fatal_simple("Error in writing SAM record\n");
         cnt++;
     }
-    print_format_time(stderr); err_printf("Filtered alignments: %d\n", cnt);
+    err_func_format_printf(__func__, "Filtered alignments: %d\n", cnt);
     bam_destroy1(b); bam_destroy1(best_b); bam_hdr_destroy(h); sam_close(in); sam_close(out);
     read_trans_free(r);    
     return 0;

@@ -185,7 +185,6 @@ int err_func_printf(const char *func, const char *format, ...)
 	va_end(arg);
 	if (done < 0) _err_fatal_simple("vfprintf(stderr)", strerror(saveErrno));
 	return done;
-
 }
 
 int err_printf(const char *format, ...) 
@@ -364,4 +363,18 @@ void print_format_time(FILE *out)
     info = localtime( &rawtime );
     strftime(buffer,80,"%m-%d-%Y %X", info);
     fprintf(out, "=== %s === ", buffer);
+}
+
+int err_func_format_printf(const char *func, const char *format, ...)
+{
+    print_format_time(stderr);
+    fprintf(stderr, "[%s] ", func);
+	va_list arg;
+	int done;
+	va_start(arg, format);
+	done = vfprintf(stderr, format, arg);
+	int saveErrno = errno;
+	va_end(arg);
+	if (done < 0) _err_fatal_simple("vfprintf(stderr)", strerror(saveErrno));
+	return done;
 }

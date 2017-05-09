@@ -173,7 +173,7 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
     int seq_n = 0, seq_m = 30;
     kseq_t *kseq = kseq_init(genome_fp), *seq = (kseq_t*)_err_malloc(30 * sizeof(kseq_t));
 
-    print_format_time(stderr); err_printf("[%s] loading genome fasta file ...\n", __func__);
+    err_func_format_printf(__func__, "loading genome fasta file ...\n");
     while (kseq_read(kseq) >= 0) {
         kseq_copy(seq+seq_n, *kseq);
         seq_n++;
@@ -182,7 +182,7 @@ kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m)
             seq = (kseq_t*)_err_realloc(seq, seq_m * sizeof(kseq_t));
         }
     }
-    print_format_time(stderr); err_printf("[%s] loading genome fasta file done!\n", __func__);
+    err_func_format_printf(__func__, "loading genome fasta file done!\n");
     kseq_destroy(kseq);
     *_seq_n = seq_n; *_seq_m = seq_m;
     return seq;
@@ -312,7 +312,7 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
 // build sg_ad_index to calculate cnt
 int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, SG_group *sg_g, int *sg_ad_idx, ad_t **AD_group, int *AD_n, int AD_m, sj_t **SJ_group, int *SJ_n, int SJ_m, sg_para *sgp)
 {
-    print_format_time(stderr); err_printf("[%s] parsing bam records...\n", __func__);
+    err_printf(__func__, "parsing bam records...\n");
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
     // alignment detail
@@ -374,13 +374,13 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
         }
     }
     free(sj);
-    print_format_time(stderr); err_printf("[%s] parsing bam records done!\n", __func__);
+    err_func_format_printf(__func__, "parsing bam records done!\n");
 
     return *SJ_n;
 }
 
 int bam2cnt_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, sg_para *sgp) {
-    print_format_time(stderr); err_printf("[%s] calculating junction- and exon-body-read count ...\n", __func__);
+    err_func_format_printf(__func__, "calculating junction- and exon-body-read count ...\n");
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
     // junction
@@ -405,14 +405,14 @@ int bam2cnt_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, s
         if ((sj_n = gen_sj(is_uniq, tid, bam_start, n_cigar, cigar, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
     }
     free(sj);
-    print_format_time(stderr); err_printf("[%s] calculating junction- and exon-body-read count done!\n", __func__);
+    err_func_format_printf(__func__, "calculating junction- and exon-body-read count done!\n");
 
     return SJ_n;
 }
 
 int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, sg_para *sgp)
 {
-    print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file ...\n", __func__);
+    err_func_format_printf(__func__, "generating splice-junction with BAM file ...\n");
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
     int SJ_n = 0, sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
@@ -435,14 +435,14 @@ int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj
         if ((sj_n = gen_sj(is_uniq, tid, bam_start, n_cigar, cigar, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
     }
     free(sj);
-    print_format_time(stderr); err_printf("[%s] generating splice-junction with BAM file done!\n", __func__);
+    err_func_format_printf(__func__, "generating splice-junction with BAM file done!\n");
 
     return SJ_n;
 }
 
 /*int sj_filter(sj_t *sj_group, int sj_n, sg_para *sgp, SG_group *sg_g)
 {
-    print_format_time(stderr); err_printf("[%s] filtering splice-junctions ...\n", __func__);
+    err_func_format_printf(__func__, "filtering splice-junctions ...\n");
 
     int sj_i = 0, last_sg_i = 0, sg_i;
     int known, hit;
@@ -494,7 +494,7 @@ FILTER:
         sj_i++;
     }
 
-    print_format_time(stderr); err_printf("[%s] filtering splice-junctions done!\n", __func__);
+    err_func_format_printf(__func__, "filtering splice-junctions done!\n");
     return sj_n;
 }*/
 

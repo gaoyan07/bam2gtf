@@ -31,6 +31,7 @@ sg_para *sg_init_para(void)
     sgp->sam_n = 0; sgp->tol_rep_n = 0;
     sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = 0; // 1: pair, 0: single
+    sgp->rm_edge = 0; sgp->edge_wt = 0;
     sgp->iso_exon_n = ISO_EXON_MAX; sgp->iso_cnt_min = ISO_CNT_MIN;
     sgp->intron_len = INTRON_MIN_LEN;
     sgp->merge_out = 0;
@@ -306,7 +307,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
 // sr_sg_g.SG_n == sg_g.SG_n
 SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 {
-    print_format_time(stderr); err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG ...\n", __func__);
+    err_func_format_printf(__func__, "predicting splice-graph with splice-junction and GTF-SG ...\n");
     SG_group *sr_sg_g = sg_init_group(sg_g.SG_n);
 
     int i;
@@ -319,7 +320,7 @@ SG_group *predict_SpliceGraph(SG_group sg_g, sj_t *sj_group, int sj_n, sg_para *
     for (i = 0; i < sr_sg_g->cname->chr_n; ++i) strcpy(sr_sg_g->cname->chr_name[i], sg_g.cname->chr_name[i]);
 
     predict_SpliceGraph_core(sg_g, sj_group, sj_n, sr_sg_g, sgp);
-    print_format_time(stderr); err_printf("[%s] predicting splice-graph with splice-junction and GTF-SG done!\n", __func__);
+    err_func_format_printf(__func__, "predicting splice-graph with splice-junction and GTF-SG done!\n");
     return sr_sg_g;
 }
 /****************************************************************/

@@ -83,18 +83,16 @@ typedef struct {
     int don_site_id, acc_site_id;
     uint8_t is_rev:2, is_anno:2, motif:4;
     int uniq_c, multi_c, max_over;
-} SGedge; // edge of splicing-graph, splice junction
+} SGedge; // edge of splicing-graph: splice junction
 
 typedef struct {
-    //SGnode v;  // virtual start and end node
     // virtual_start: node[0]; virtual_end: node[node_n-1]
     SGnode *node; int node_n, node_m; // sort by e.start and e.end 
     SGsite *don_site; int don_site_n, don_site_m; // sort by site
     SGsite *acc_site; int acc_site_n, acc_site_m; // sort by site
     SGedge *edge; int edge_n, edge_m; // sort by don_id and acc_id
     int tid; uint8_t is_rev;
-    // boundaries of splice-sites
-    int start, end; 
+    int start, end; // boundaries of splice-sites
 } SG;
 
 typedef struct {
@@ -107,8 +105,8 @@ typedef struct {
 
 typedef struct {
     int ASM_id, SG_id;
-    gec_t v_start:16, v_end:16; // virtual start and end node
-    int iso_n;
+    gec_t v_start, v_end; // virtual start and end node
+    uint64_t iso_n;
     gec_t *node_n, *next_id_idx, *node_id;
     int *uniq_sj_c, *uniq_tot_c, *multi_sj_c, *multi_tot_c;
 } SGiso; // each ASM has one SGiso
@@ -137,8 +135,8 @@ typedef struct {
 typedef struct {
     int sam_n, tol_rep_n, *rep_n;
     char **in_name;
-    uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1;
-    int intron_len;
+    uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
+    int intron_len, edge_wt;
     int iso_exon_n, iso_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int uniq_min[5];   // [anno, non-canonical, GT/AG, GC/AG, AT/AC]

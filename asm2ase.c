@@ -563,7 +563,7 @@ void ase_output(char *in_fn, char *prefix, SG_group *sg_g,  ASE_t *ase, sg_para 
 
 int asm2ase_core(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, sg_para *sgp)
 {
-    print_format_time(stderr); err_printf("[%s] generating alternative splice-events from alternative splice-modules ...\n", __func__);
+    err_func_format_printf(__func__, "generating alternative splice-events from alternative splice-modules ...\n");
     int i, use_multi = sgp->use_multi, only_novel = sgp->only_novel;
     for (i = 0; i < asm_g->sg_asm_n; ++i) {
         SGasm *sg_asm = asm_g->sg_asm[i];
@@ -574,7 +574,7 @@ int asm2ase_core(SG_group *sg_g, SGasm_group *asm_g, ASE_t *ase, sg_para *sgp)
         asm2mxe(sg, sg_asm, ase, i, sg_i, use_multi, only_novel);      // MXE
         asm2ri(sg, sg_asm, ase, i, sg_i, use_multi, only_novel);     // RI
     }
-    print_format_time(stderr); err_printf("[%s] generating alternative splice-events from alternative splice-modules done!\n", __func__);
+    err_func_format_printf(__func__, "generating alternative splice-events from alternative splice-modules done!\n");
     return ase->se_n+ase->a5ss_n+ase->a3ss_n+ase->mxe_n+ase->ri_n;
 }
 
