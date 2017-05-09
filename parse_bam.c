@@ -312,7 +312,7 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
 // build sg_ad_index to calculate cnt
 int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, SG_group *sg_g, int *sg_ad_idx, ad_t **AD_group, int *AD_n, int AD_m, sj_t **SJ_group, int *SJ_n, int SJ_m, sg_para *sgp)
 {
-    err_printf(__func__, "parsing bam records...\n");
+    err_func_format_printf(__func__, "parsing bam records...\n");
     int n_cigar; uint32_t *cigar;
     uint8_t is_uniq; int tid, bam_start, bam_end;
     // alignment detail
