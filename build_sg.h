@@ -114,16 +114,6 @@ typedef struct {
     SGasm **sg_asm;
     int sg_asm_n, sg_asm_m;
 } SGasm_group;
-
-typedef struct {
-    SGiso **sg_asm_iso;
-    int sg_asm_n, sg_asm_m;
-} SGiso_group;
-
-typedef struct {
-    SGiso_group **sg_iso_g;
-    int sg_n;
-} iso_group;
  
 typedef struct {
     SG **SG;

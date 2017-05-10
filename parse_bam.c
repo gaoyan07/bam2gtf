@@ -246,15 +246,15 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
     uint8_t strand, motif_i;
 
     ad_t *ad;
-    if (SJ_n > 0) {
-        if (*ad_n == *ad_m) _realloc(*ad_g, *ad_m, ad_t)
-        ad = (*ad_g)+(*ad_n);
-        ad->intv_n = 0;
-        ad->exon_end = (int*)_err_malloc((SJ_n+1) * sizeof(int));
-        ad->intr_end = (int*)_err_malloc(SJ_n * sizeof(int));
-        ad->tid = tid; ad->start = start;
-        ad->is_uniq = is_uniq; ad->is_splice = 1;
-    }
+    //if (SJ_n > 0) {
+    if (*ad_n == *ad_m) _realloc(*ad_g, *ad_m, ad_t)
+    ad = (*ad_g)+(*ad_n);
+    ad->intv_n = 0;
+    ad->exon_end = (int*)_err_malloc((SJ_n+1) * sizeof(int));
+    ad->intr_end = (int*)_err_malloc(SJ_n * sizeof(int));
+    ad->tid = tid; ad->start = start;
+    ad->is_uniq = is_uniq; ad->is_splice = 1;
+    //}
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
         switch (bam_cigar_op(c[i])) {
@@ -300,11 +300,11 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
     *sj_n = SJ_n; *_end = end;
 
     // ad
-    if (SJ_n > 0) {
+    //if (SJ_n > 0) {
         ad->exon_end[(ad->intv_n)++] = end;
         ad->end = end;
         (*ad_n)++;
-    }
+    //}
     return SJ_n;
 }
 
@@ -342,15 +342,6 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
         if (sj_n > 0) {
             // junction read
             sj_update_group(SJ_group, SJ_n, &SJ_m, sj, sj_n);
-            // set sg_ad_idx
-            while (idx_sg_i < sg_g->SG_n) {
-                if (tid == sg_g->SG[idx_sg_i]->tid && bam_end >= sg_g->SG[idx_sg_i]->start && bam_start <= sg_g->SG[idx_sg_i]->end) {
-                    sg_ad_idx[idx_sg_i] = *AD_n; // 0: no idx
-                    idx_sg_i++;
-                } else if (tid > sg_g->SG[idx_sg_i]->tid || (tid == sg_g->SG[idx_sg_i]->tid && bam_start > sg_g->SG[idx_sg_i]->end))
-                    idx_sg_i++;
-                else break; // bam_end < sg.start
-            }
         } else {
             // exon-body read
             if (last_sg_i == sg_g->SG_n) continue;
@@ -371,6 +362,15 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
                     }
                 }
             }
+        }
+        // set sg_ad_idx
+        while (idx_sg_i < sg_g->SG_n) {
+            if (tid == sg_g->SG[idx_sg_i]->tid && bam_end >= sg_g->SG[idx_sg_i]->start && bam_start <= sg_g->SG[idx_sg_i]->end) {
+                sg_ad_idx[idx_sg_i] = *AD_n; // 0: no idx
+                idx_sg_i++;
+            } else if (tid > sg_g->SG[idx_sg_i]->tid || (tid == sg_g->SG[idx_sg_i]->tid && bam_start > sg_g->SG[idx_sg_i]->end))
+                idx_sg_i++;
+            else break; // bam_end < sg.start
         }
     }
     free(sj);
