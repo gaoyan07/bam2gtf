@@ -106,8 +106,7 @@ typedef struct {
 typedef struct {
     int ASM_id, SG_id;
     gec_t v_start, v_end; // virtual start and end node
-    uint64_t iso_n;
-    gec_t *node_n, *next_id_idx, *node_id;
+    gec_t *node_id;
     int *uniq_sj_c, *uniq_tot_c, *multi_sj_c, *multi_tot_c;
 } SGiso; // each ASM has one SGiso
 
@@ -137,7 +136,7 @@ typedef struct {
     char **in_name;
     uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
     int intron_len, edge_wt;
-    int iso_exon_n, iso_cnt_min;
+    uint64_t iso_cnt_max; int asm_exon_max, iso_read_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int uniq_min[5];   // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int all_min[5];    // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
