@@ -600,19 +600,21 @@ void sg_per_iso_output(FILE **out_fp, SG *sg, chr_name_t *cname, SGiso *iso, uin
     }*/
     // iso-read map
     // ASM/ISO header
-    fprintf(out_fp[0], "ASM#%d\tREAD %lld\tISOFORM %lld\n", asm_i, (long long)iso_ad_n, (long long)iso_filt_n);
-    fprintf(out_fp[0], "ISO-READ-MAP");
-    for (iso_i=0, ISO_i=0; iso_i < iso_n; ++iso_i, ++ISO_i) {
-        if (iso->uniq_tot_c[iso_i] < sgp->iso_read_cnt_min) continue;
-        fprintf(out_fp[0], "\tISO#%lld", (long long)ISO_i);
-    }
-    fprintf(out_fp[0], "\n");
+    fprintf(out_fp[0], "ASM#%d\t%lld\t%lld\n", asm_i, (long long)iso_ad_n, (long long)iso_filt_n);
+    //fprintf(out_fp[0], "ISO-READ-MAP");
+    //for (iso_i=0, ISO_i=0; iso_i < iso_n; ++iso_i, ++ISO_i) {
+    //    if (iso->uniq_tot_c[iso_i] < sgp->iso_read_cnt_min) continue;
+    //    fprintf(out_fp[0], "\tISO#%lld", (long long)ISO_i);
+    //}
+    //fprintf(out_fp[0], "\n");
     uint64_t iso_ad_i, last_iso_ad_map_i = 0;
     for (iso_ad_i = 0; iso_ad_i < iso_ad_n; ++iso_ad_i) {
-        fprintf(out_fp[0], "READ#%lld\t", (long long)iso_ad_i);
-        for (iso_i=0, ISO_i=0; iso_i < iso_n; ++iso_i, ++ISO_i) {
+        //fprintf(out_fp[0], "READ#%lld\t", (long long)iso_ad_i);
+        for (iso_i=0, ISO_i=0; iso_i < iso_n; ++iso_i) {
             if (iso->uniq_tot_c[iso_i] < sgp->iso_read_cnt_min) continue;
-            fprintf(out_fp[0], "\t%d", iso_ad_map[last_iso_ad_map_i+ISO_i]);
+            if (ISO_i == 0) fprintf(out_fp[0], "%d", iso_ad_map[last_iso_ad_map_i+iso_i]);
+            else  fprintf(out_fp[0], "\t%d", iso_ad_map[last_iso_ad_map_i+iso_i]);
+            ISO_i++;
         }
         fprintf(out_fp[0], "\n");
         last_iso_ad_map_i += iso_n;
@@ -632,22 +634,26 @@ void sg_per_iso_output(FILE **out_fp, SG *sg, chr_name_t *cname, SGiso *iso, uin
 
     // iso exon coordinates
     // ASM exon heder
-    fprintf(out_fp[1], "ASM#%d\t%c\t%s\t%d\n", asm_i, "+-"[sg->is_rev], cname->chr_name[sg->tid], tot_exon_n-v_n);
+    fprintf(out_fp[1], "ASM#%d\t%d\t%lld\t%c\t%s\n", asm_i, tot_exon_n-v_n, (long long)ISO_i, "+-"[sg->is_rev], cname->chr_name[sg->tid]);
     int i; gec_t exon_i = 0;
-    fprintf(out_fp[1], "EXON\t");
+    //fprintf(out_fp[1], "EXON\t");
     for (i = 0; i < sg->node_n; ++i) {
         if (node_visit[i]) { 
-            fprintf(out_fp[1], "\t%d,%d", node[i].start, node[i].end);
+            if (exon_i == 0) fprintf(out_fp[1], "%d,%d", node[i].start, node[i].end);
+            else fprintf(out_fp[1], "\t%d,%d", node[i].start, node[i].end);
             node_visit[i] = ++exon_i;
         }
     } fprintf(out_fp[1], "\n");
     for (iso_i = 0; iso_i < iso_n; ++iso_i) {
-        fprintf(out_fp[1], "ISO#%lld\t%d", (long long)iso_i, node_n[iso_i]-v_n);
-        for (i = 0; i < node_n[iso_i]; ++i) {
-            if (node_visit[iso->node_id[last_i+i]] != 0)
-                fprintf(out_fp[1], "\t%d", node_visit[iso->node_id[last_i+i]]-1);
+        //fprintf(out_fp[1], "ISO#%lld\t%d", (long long)iso_i, node_n[iso_i]-v_n);
+        if (iso->uniq_tot_c[iso_i] >= sgp->iso_read_cnt_min) {
+            fprintf(out_fp[1], "%d", node_n[iso_i]-v_n);
+            for (i = 0; i < node_n[iso_i]; ++i) {
+                if (node_visit[iso->node_id[last_i+i]] != 0)
+                    fprintf(out_fp[1], "\t%d", node_visit[iso->node_id[last_i+i]]-1);
+            }
+            fprintf(out_fp[1], "\n");
         }
-        fprintf(out_fp[1], "\n");
         last_i += node_n[iso_i];
     }
     node_visit[0] = tmp1, node_visit[sg->node_n-1] = tmp2;
