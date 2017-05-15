@@ -167,3 +167,44 @@ Workflow 5:
     7.2 update ASE
         1. ASE2ISO: generate inclusive and exclusive isoforms
         2. fill the "in/ex X read" matrix
+
+Workflow 6: ( for multi-group and -replicate)
+1. Build GTF-SG
+2. Generate junction-group for each group-reps
+    a. sjs from all group-reps are collapsed together
+    b. filter sj 
+        i.  all normal filter criteria
+        ii. max count of each group-rep < T
+3. Update exon-body count for each SG-node
+    a. for each sj
+        update weight / add edge / nothing(invalid sj)
+    b. remove weak edge
+        max weight < T
+4. SG => ASM
+5. ASM => ASE (*optional)
+6. generate 
+7. use "alignment-details" to update edge weight for ASM(ASE)
+    7.1 update ASM
+        1. ASM2ISO: generate all candidate isoforms
+        2. fill the "iso X read" matrix
+    7.2 update ASE
+        1. ASE2ISO: generate inclusive and exclusive isoforms
+        2. fill the "in/ex X read" matrix
+
+Workflow 6: (for multi-group and -replicate, use mutli-threads)
+1. load chr_name, build GTF-SG --- 1 thread
+2. for m-thread: (total m group-reps):
+    Generate junction-group for each group-reps
+    filter sj:
+        a. all normal filter criteria
+3. merge sj
+    filter sj:
+        b. max count of sj < T
+4. Update splice-graph
+    a. add new edge for novel sj
+    b. nothing for invalid sj
+4. SG => ASM
+5. for m-thread: (total m group-reps):
+    a. generate alignment-detail for each group-reps
+    b. check if support isoform
+    c. generate matrix

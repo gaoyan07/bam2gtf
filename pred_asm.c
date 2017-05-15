@@ -901,7 +901,19 @@ int pred_asm(int argc, char *argv[])
     SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
-    SGasm_group **asm_g_rep = (SGasm_group**)_err_malloc(sgp->tol_rep_n * sizeof(SGasm_group*));
+    for (i = 0; i < sgp->tol_rep_n; ++i) {
+        char *in_name = sgp->in_name[i];
+        // get splice-junction
+        int sj_n, sj_m; sj_t *sj_group;
+        b = bam_init1(); 
+        if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
+        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
+        sj_m = 10000; sj_group = (sj_t*)_err_malloc(sj_m * sizeof(sj_t));
+        sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
+        // filter sj
+        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+    }
+ 
     for (i = 0; i < sgp->tol_rep_n; ++i) {
         char *in_name = sgp->in_name[i];
         // get splice-junction
@@ -934,7 +946,7 @@ int pred_asm(int argc, char *argv[])
     for (i = 0; i < sgp->tol_rep_n; ++i) {
         //sg_free_asm_group(asm_g_rep[i]); 
     }
-    free(asm_g_rep); sg_free_group(sg_g);
+    sg_free_group(sg_g);
 
     // output to one file
     sg_free_para(sgp);
