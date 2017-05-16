@@ -27,6 +27,7 @@ int pred_sg_usage(void)
 sg_para *sg_init_para(void)
 {
     sg_para *sgp = (sg_para*)_err_malloc(sizeof(sg_para));
+    sgp->n_threads = 1;
     sgp->rep_n = NULL; sgp->in_name = NULL;
     sgp->sam_n = 0; sgp->tol_rep_n = 0;
     sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;

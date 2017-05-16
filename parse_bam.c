@@ -3,6 +3,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <ctype.h>
+#include <pthread.h>
 #include "htslib/htslib/sam.h"
 #include "bam2gtf.h"
 #include "parse_bam.h"
@@ -60,6 +61,17 @@ const struct option bam2sj_long_opt [] = {
 
     { 0, 0, 0, 0}
 };
+
+int comp_sj(sj_t sj1, sj_t sj2)
+{
+    if (sj1.tid < sj2.tid) return -1;
+    else if (sj1.tid > sj2.tid) return 1;
+    else if (sj1.don < sj2.don) return -1;
+    else if (sj1.don > sj2.don) return 1;
+    else if (sj1.acc < sj2.acc) return -1;
+    else if (sj1.acc > sj2.acc) return 1;
+    else return 0;
+}
 
 // bam operation
 uint8_t bam_is_uniq_NH(bam1_t *b)
@@ -438,6 +450,144 @@ int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj
     err_func_format_printf(__func__, "generating splice-junction with BAM file done!\n");
 
     return SJ_n;
+}
+
+int generate_SpliceJunction_core(sj_t **sj_group, const char *in_name, kseq_t *seq, int seq_n, sg_para *sgp)
+{
+    // open bam file
+    samFile *in; bam_hdr_t *h; bam1_t *b;
+    b = bam_init1(); 
+    if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
+
+    // parse bam record
+    int n_cigar; uint32_t *cigar;
+    uint8_t is_uniq; int tid, bam_start, bam_end;
+    int SJ_n = 0, SJ_m = 10000; sj_t **SJ_group = (sj_t**)_err_malloc(sizeof(sj_t*)); 
+    *SJ_group = (sj_t*)_err_malloc(SJ_m * sizeof(sj_t));
+    int sj_n, sj_m = 1; sj_t *sj = (sj_t*)_err_malloc(sizeof(sj_t));
+
+    int ret;
+    while (1) {
+        ret = sam_read1(in, h, b);
+        if (ret == -1) break;
+        else if (ret < 0) err_fatal_simple("bam file error!\n");
+
+        if (bam_unmap(b)) continue; // unmap (0)
+        is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
+#ifdef _RMATS_
+        if (is_uniq == 0) continue;
+#endif
+        if (bam_is_prop(b) != 1 && sgp->read_type == PAIR_T) continue; // prop-pair (2)
+
+        tid = b->core.tid; n_cigar = b->core.n_cigar, cigar = bam_get_cigar(b);
+        bam_start = b->core.pos+1, bam_end = b->core.pos+bam_cigar2rlen(n_cigar, cigar);
+        if ((sj_n = gen_sj(is_uniq, tid, bam_start, n_cigar, cigar, seq, seq_n, &sj, &sj_m, sgp)) > 0) sj_update_group(SJ_group, &SJ_n, &SJ_m, sj, sj_n);
+    }
+    free(sj); bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
+    (*sj_group) = *SJ_group;
+    return SJ_n;
+}
+
+typedef struct {
+    int tid;
+    kseq_t *seq; int seq_n;
+    sg_para *sgp;
+    int *rep_sj_group_n;
+    sj_t **rep_sj_group;
+} gen_sj_aux_t;
+
+int REP_I;
+pthread_rwlock_t RWLOCK;
+
+sj_t *merge_filter_sj(gen_sj_aux_t *aux, sg_para *sgp, int *sj_group_n)
+{
+    int i, sj_n = 0, sj_m = 10000;
+    sj_t *sj_group = (sj_t*)_err_malloc(sj_m * sizeof(sj_t));
+    int *rep_cur_sj_i = (int*)_err_calloc(sgp->tol_rep_n, sizeof(int));
+    int rep_max_cnt, min_rep_sj_i, hit=0, cur_sj_i;
+    sj_t **rep_sj_group = aux->rep_sj_group;
+    int *rep_sj_group_n = aux->rep_sj_group_n;
+    while (hit < aux->sgp->tol_rep_n) {
+        hit = 0;
+        // find min
+        min_rep_sj_i = 0; sj_t min_sj = rep_sj_group[0][0];
+        for (i = 1; i < sgp->tol_rep_n; ++i) {
+            if (rep_cur_sj_i[i] >= rep_sj_group_n[i]) continue;
+            cur_sj_i = rep_cur_sj_i[i];
+            if (comp_sj(min_sj, rep_sj_group[i][cur_sj_i]) < 0) {
+                min_rep_sj_i = i;
+                min_sj = rep_sj_group[i][cur_sj_i];
+            }
+        }
+        // merge, update rep_cur_sj_i
+        rep_max_cnt = 0;
+        for (i = 0; i < sgp->tol_rep_n; ++i) {
+            if (rep_cur_sj_i[i] >= rep_sj_group_n[i]) continue;
+            cur_sj_i = rep_cur_sj_i[i];
+            if (comp_sj(min_sj, rep_sj_group[i][cur_sj_i]) == 0) {
+                if (rep_sj_group[i][cur_sj_i].uniq_c > rep_max_cnt) rep_max_cnt = rep_sj_group[i][cur_sj_i].uniq_c;
+                if (rep_sj_group_n[i] == ++(rep_cur_sj_i[i])) hit++;
+            }
+        }
+        // filter with max-sj-cnt
+        if (rep_max_cnt >= sgp->edge_wt) sj_update_group(&sj_group, &sj_n, &sj_m, &min_sj, 1);
+    }
+    *sj_group_n = sj_n;
+    return sj_group;
+}
+
+static void *thread_generate_SpliceJunction(void *a)
+{
+    gen_sj_aux_t *aux = (gen_sj_aux_t*)a;
+    int rep_i;
+    while (1) {
+        pthread_rwlock_wrlock(&RWLOCK);
+        rep_i = REP_I++; 
+        pthread_rwlock_unlock(&RWLOCK);
+        if (rep_i >= aux->sgp->tol_rep_n) break;
+        aux->rep_sj_group_n[rep_i] = generate_SpliceJunction_core(&(aux->rep_sj_group[rep_i]), aux->sgp->in_name[rep_i], aux->seq, aux->seq_n, aux->sgp);
+    }
+    return 0;
+}
+
+// for multi-group-reps
+sj_t *generate_SpliceJunction(sg_para* sgp, kseq_t *seq, int seq_n, int *sj_group_n)
+{
+    err_func_format_printf(__func__, "generating splice-junctions with each BAM file ...\n");
+    // generate for each group/rep
+    int i, t = sgp->n_threads;
+    if (t < 1) t = 1;
+    gen_sj_aux_t *aux = (gen_sj_aux_t*)_err_calloc(t, sizeof(gen_sj_aux_t));
+    sj_t **rep_sj_group = (sj_t**)_err_malloc(sgp->tol_rep_n * sizeof(sj_t*));
+    int *rep_sj_group_n = (int*)_err_malloc(sgp->tol_rep_n * sizeof(int));
+    for (i = 0; i < t; ++i) {
+        aux[i].tid = i; aux[i].sgp = sgp;
+        aux[i].seq = seq; aux[i].seq_n = seq_n;
+        aux[i].rep_sj_group = rep_sj_group;
+        aux[i].rep_sj_group_n = rep_sj_group_n;
+    }
+
+    REP_I = 0;
+    pthread_t *tid = (pthread_t*)_err_calloc(t, sizeof(pthread_t));
+    pthread_attr_t attr; pthread_attr_init(&attr); pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+    for (i = 0; i < t; ++i) {
+        pthread_create(&tid[i], &attr, thread_generate_SpliceJunction, aux+i);
+    }
+    for (i = 0; i < t; ++i) pthread_join(tid[i], 0);
+    err_func_format_printf(__func__, "generating splice-junctions with each BAM file done!\n");
+
+    err_func_format_printf(__func__, "merging splice-junctions ...\n");
+    // merge sj
+    int _sj_group_n;
+    sj_t *sj_group = merge_filter_sj(aux, sgp, &_sj_group_n);
+    *sj_group_n = _sj_group_n;
+
+    for (i = 0; i < sgp->tol_rep_n; ++i) free(rep_sj_group[i]);
+    free(rep_sj_group_n); free(rep_sj_group);
+    free(tid); free(aux);
+    err_func_format_printf(__func__, "merging splice-junctions done!\n");
+    return sj_group;
 }
 
 /*int sj_filter(sj_t *sj_group, int sj_n, sg_para *sgp, SG_group *sg_g)

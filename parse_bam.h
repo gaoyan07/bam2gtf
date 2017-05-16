@@ -19,4 +19,6 @@ void free_sj_group(sj_t *sj_g, int sj_n);
 void free_ad_group(ad_t *ad_g, int ad_n);
 uint8_t bam_is_uniq_NH(bam1_t *b);
 
+sj_t *generate_SpliceJunction(sg_para* sgp, kseq_t *seq, int seq_n, int *sj_group_n);
+
 #endif

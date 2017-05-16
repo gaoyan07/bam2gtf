@@ -122,6 +122,7 @@ typedef struct {
 } SG_group;
 
 typedef struct {
+    int n_threads;
     int sam_n, tol_rep_n, *rep_n;
     char **in_name;
     uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;

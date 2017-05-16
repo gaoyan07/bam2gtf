@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include <pthread.h>
 #include "pred_asm.h"
 #include "utils.h"
 #include "gtf.h"
@@ -15,6 +16,8 @@ KDQ_INIT(int)
 #define kdq_gec_t kdq_t(int)
 
 const struct option asm_long_opt [] = {
+    { "thread", 1, NULL, 't' },
+
     { "novel-sj", 0, NULL, 'n' },
     { "novel-com", 0, NULL, 'N' },
     { "proper-pair", 1, NULL, 'p' },
@@ -44,6 +47,7 @@ int pred_asm_usage(void)
     err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
     err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
     err_printf("Options:\n\n");
+    err_printf("         -t --thread               number of threads to use. [1]\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -N --novel-com            allow novel combination of known exons in the ASM. [False]\n");
     err_printf("         -p --prop-pair            set -p to force to filter out reads mapped in improper pair. [False]\n");
@@ -659,7 +663,7 @@ void sg_per_iso_output(FILE **out_fp, SG *sg, chr_name_t *cname, SGiso *iso, uin
     node_visit[0] = tmp1, node_visit[sg->node_n-1] = tmp2;
 }
 
-int gen_asm_iso(SG_group *sg_g, int *sg_ad_idx, ad_t *ad_group, int ad_n, sg_para *sgp, FILE **out_fp, int f_n)
+int gen_asm_iso(SG_group *sg_g, int *sg_ad_idx, ad_t *ad_group, int ad_n, sg_para *sgp, FILE **out_fp)
 {
     err_func_format_printf(__func__, "generating candidate isoforms of alternative-splice-module ...\n");
     int entry_n, exit_n; int *entry, *exit;
@@ -715,12 +719,11 @@ int gen_asm_iso(SG_group *sg_g, int *sg_ad_idx, ad_t *ad_group, int ad_n, sg_par
 END: free(entry); free(exit); free(node_visit); free(iso_n); free(node_n);
     }
     int i;
-    for (i = 0; i < f_n; ++i) err_fclose(out_fp[i]);
+    for (i = 0; i < sgp->tol_rep_n+1; ++i) err_fclose(out_fp[i]);
     free(out_fp);
     err_func_format_printf(__func__, "generating candidate isoforms of alternative-splice-module done!\n");
     return asm_i;
 }
-
 int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b)
 {
     err_func_format_printf(__func__, "calculating read count for AS exons ...\n");
@@ -808,41 +811,165 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
     return 0;
 }
 
-FILE **iso_header_output(char *in_fn, char *prefix, int *fn)
+FILE **iso_output(sg_para *sgp, char *prefix)
 {
-    int i, out_n=2;
-    char suf[2][20] = { ".IsoMatrix" , ".IsoExon" };
-    char suff[20] = "";
+    // .IsoMatrix && .IsoExon
+    int i, out_n = sgp->tol_rep_n+1;
+    char mat_suf[20] = { ".IsoMatrix" };
+    char exon_suf[20] = { ".IsoExon" };
+    //char suff[20] = "";
     //if (sgp->use_multi==1) strcat(suff, ".multi");
     //if (sgp->no_novel_sj==1) strcat(suff, ".anno");
     //if (sgp->only_novel==1) strcat(suff, ".novel");
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
     if (strlen(prefix) == 0) {
-        for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(in_fn)+30); strcpy(out_fn[i], in_fn); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+        for (i = 0; i < out_n-1; ++i) {
+            out_fn[i] = (char*)_err_malloc(strlen(sgp->in_name[i])+30); strcpy(out_fn[i], sgp->in_name[i]); strcat(out_fn[i], mat_suf);
         }
+        out_fn[i] = (char*)_err_malloc(strlen(sgp->in_name[i])+30); strcpy(out_fn[i], sgp->in_name[i]); strcat(out_fn[i], exon_suf);
     } else {
-        for (i = 0; i < out_n; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(prefix)+30); strcpy(out_fn[i], prefix); strcat(out_fn[i], suff); strcat(out_fn[i], suf[i]);
+        for (i = 0; i < out_n-1; ++i) {
+            out_fn[i] = (char*)_err_malloc(strlen(prefix)+30); strcpy(out_fn[i], prefix); strcat(out_fn[i], mat_suf);
         }
+        out_fn[i] = (char*)_err_malloc(strlen(prefix)+30); strcpy(out_fn[i], prefix); strcat(out_fn[i], exon_suf);
     }
 
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
     for (i = 0; i < out_n; ++i) out_fp[i] = xopen(out_fn[i], "w");
-    //fprintf(out_fp[0], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tSTART_EXON\tEND_EXON\tUNIQ_SJ_CNT\tUNIQ_TOT_COUNT\n");
-    //fprintf(out_fp[1], "ISO_ID\tASM_ID\tSG_ID\tSTRAND\tCHR\tEXON_CNT\tISO_EXON\n");
-    *fn = out_n;
     for (i = 0; i < out_n; ++i) free(out_fn[i]); free(out_fn);
+
     return out_fp;
 }
+
+int generate_ASMISO_core(SG_group *sg_g, const char *in_name, sg_para *sgp, FILE *out_fp)
+{
+    // open bam file
+    samFile *in; bam_hdr_t *h; bam1_t *b;
+    b = bam_init1(); 
+    if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
+    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
+
+    // generate 
+    int entry_n, exit_n; int *entry, *exit;
+    int sg_i, asm_i=0;
+
+    for (sg_i = 0; sg_i < sg_g->SG_n; ++sg_i) {
+        SG *sg = sg_g->SG[sg_i];
+        gec_t *node_visit = (gec_t*)_err_malloc(sg->node_n * sizeof(gec_t));
+        uint64_t *iso_n = (uint64_t*)_err_malloc(sg->node_n * sizeof(uint64_t));
+        gec_t **node_n = (gec_t**)_err_malloc(sg->node_n * sizeof(gec_t*));
+        cal_cand_node(*sg, &entry, &exit, &entry_n, &exit_n);
+        if (entry_n == 0 || exit_n == 0) goto END;
+
+        int i, j, hit;
+        for (i = 0; i < entry_n; ++i) {
+            hit = 0;
+            for (j = 0; j < exit_n; ++j) {
+                int post_domn_n = sg->node[entry[i]].post_domn_n;
+                int pre_domn_n = sg->node[exit[j]].pre_domn_n;
+                if (post_domn_n > 1 && pre_domn_n > 1 
+                        && sg->node[entry[i]].post_domn[1] == exit[j] 
+                        && sg->node[exit[j]].pre_domn[1] == entry[i]) {
+                    memset(node_visit, 0, sg->node_n * sizeof(gec_t));
+                    int tot_exon_n;
+                    if ((tot_exon_n = sg_asm_filt(sg, node_visit, iso_n, entry[i], exit[j], sgp)) < 0) continue;
+
+                    err_func_format_printf(__func__, "SG: %d\tASM: %d\tVS: %d\tVE: %d\t", sg_i, asm_i, entry[i], exit[j]);
+                    // generate isoforms
+                    SGiso *iso = sg_init_iso(asm_i, sg_i, entry[i], exit[j]);
+                    sg_asm_gen_iso(sg, iso, iso_n, node_n, entry[i], exit[j]);
+                    // calculate iso cnt with sg_ad_idx
+                    uint64_t iso_ad_m = 100000; uint8_t *iso_ad_map = (uint8_t*)_err_calloc(iso_ad_m * iso_n[entry[i]], sizeof(uint8_t));
+                    uint64_t iso_filt_n, iso_ad_n;
+                    iso_ad_n = sg_iso_ad_cnt(sg, ad_group, ad_n, sg_ad_idx[sg_i], iso, iso_n[entry[i]], node_n[entry[i]], &iso_ad_map, iso_ad_m, sgp, &iso_filt_n);
+                    //sg_iso_eb_cnt(sg, iso, iso_n[entry[i]], node_n[entry[i]]); // exon-body-cnt
+                    // output read count and isoform exons
+                    // XXX check novel, check uniq
+                    if (iso_ad_n > 0 && iso_filt_n > 0) {
+                        sg_per_iso_output(out_fp, sg, sg_g->cname, iso, iso_n[entry[i]], iso_filt_n, node_n[entry[i]], iso_ad_map, iso_ad_n, node_visit, tot_exon_n, sgp);
+                        asm_i++;
+                    }
+                    free(iso_ad_map);
+                    sg_free_iso(iso);
+                    int n; for (n = 0; n < sg->node_n; ++n) {
+                        if (node_visit[n]) free(node_n[n]);
+                    }
+
+                    hit = 1; break;
+                }
+            }
+            if (hit) continue;
+        }
+END: free(entry); free(exit); free(node_visit); free(iso_n); free(node_n);
+    }
+    int i;
+    for (i = 0; i < f_n; ++i) err_fclose(out_fp[i]);
+    free(out_fp);
+    err_func_format_printf(__func__, "generating candidate isoforms of alternative-splice-module done!\n");
+    return asm_i;
+}
+
+typedef struct {
+    int tid;
+    SG_group *sg_g;
+    sg_para *sgp;
+    FILE **out_fp;
+} asm_iso_aux_t;
+
+int REP_I;
+pthread_rwlock_t RWLOCK;
+
+static void *thread_generate_ASMISO(void *a)
+{
+    asm_iso_aux_t *aux = (asm_iso_aux_t*)a;
+    int rep_i;
+    while (1) {
+        pthread_rwlock_wrlock(&RWLOCK);
+        rep_i = REP_I++; 
+        pthread_rwlock_unlock(&RWLOCK);
+        if (rep_i >= aux->sgp->tol_rep_n) break;
+        generate_ASMISO_core(aux->sg_g, aux->sgp->in_name[rep_i], aux->sgp, aux->out_fp[rep_i]);
+    }
+    return 0;
+}
+
+int generate_ASMISO(SG_group *sg_g, sg_para *sgp, char *out_fn)
+{
+    FILE **out_fp = iso_output(sgp, out_fn);
+    err_func_format_printf(__func__, "generating candidate isoforms of alternative-splice-module ...\n");
+    int i, t = sgp->n_threads;
+    if (t < 1) t = 1;
+    asm_iso_aux_t *aux = (asm_iso_aux_t*)_err_calloc(t, sizeof(asm_iso_aux_t));
+    for (i = 0; i < t; ++i) {
+        aux[i].tid = i;
+        aux[i].sg_g = sg_g;
+        aux[i].sgp = sgp;
+        aux[i].out_fp = out_fp;
+    }
+
+    REP_I = 0;
+    pthread_t *tid = (pthread_t*)_err_calloc(t, sizeof(pthread_t));
+    pthread_attr_t attr; pthread_attr_init(&attr); pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    for (i = 0; i < t; ++i) {
+        pthread_create(&tid[i], &attr, thread_generate_ASMISO, aux+i);
+    }
+    for (i = 0; i < t; ++i) pthread_join(tid[i], 0);
+
+    free(aux); free(tid);
+    err_func_format_printf(__func__, "generating candidate isoforms of alternative-splice-module done!\n");
+    return 0;
+}
+
 
 /*****************************/
 int pred_asm(int argc, char *argv[])
 {
     int c, i; char out_fn[1024]="", ref_fn[1024]="", *p;
     sg_para *sgp = sg_init_para();
-	while ((c = getopt_long(argc, argv, "nNpa:i:g:w:lme:c:C:o:M:U:A:", asm_long_opt, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "t:nNpa:i:g:w:lme:c:C:o:M:U:A:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
+            case 't': sgp->n_threads = atoi(optarg); break;
             case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
             case 'N': sgp->no_novel_com = 0; break;
             case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
@@ -889,31 +1016,29 @@ int pred_asm(int argc, char *argv[])
     // parse input name
     if (sg_par_input(sgp, argv[optind+1]) <= 0) return pred_asm_usage();
     
-    // set cname
+    // 1. set cname --- 1 thread
     chr_name_t *cname = chr_name_init();
     samFile *in; bam_hdr_t *h; bam1_t *b;
     if ((in = sam_open(sgp->in_name[0], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", sgp->in_name[0]);
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
     bam_set_cname(h, cname);
     bam_hdr_destroy(h); sam_close(in);
-    // build splice-graph
+    // 2. build splice-graph --- 1 thread
     FILE *gtf_fp = xopen(argv[optind], "r");
     SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
-    for (i = 0; i < sgp->tol_rep_n; ++i) {
-        char *in_name = sgp->in_name[i];
-        // get splice-junction
-        int sj_n, sj_m; sj_t *sj_group;
-        b = bam_init1(); 
-        if ((in = sam_open(in_name, "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", in_name);
-        if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", in_name);
-        sj_m = 10000; sj_group = (sj_t*)_err_malloc(sj_m * sizeof(sj_t));
-        sj_n = bam2sj_core(in, h, b, seq, seq_n, &sj_group, sj_m, sgp);
-        // filter sj
-        bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
-    }
- 
+    // 3. generate sj --- rep_n threads
+    //    a. generate sj for each group/rep
+    //    b. merege and filter
+    int sj_group_n;  sj_t *sj_group;
+    sj_group = generate_SpliceJunction(sgp, seq, seq_n, &sj_group_n);
+    // 4. update sg --- 1 thread
+    update_SpliceGraph(sg_g, sj_group, sj_group_n, sgp);
+    free(sj_group);
+    // 5. generate isoforms, output isoMatrix and isoExon -- rep_n threads
+    generate_ASMISO(sg_g, sgp, out_fn);
+
     for (i = 0; i < sgp->tol_rep_n; ++i) {
         char *in_name = sgp->in_name[i];
         // get splice-junction
@@ -925,7 +1050,7 @@ int pred_asm(int argc, char *argv[])
         ad_m = 10000; ad_group = (ad_t*)_err_malloc(ad_m * sizeof(ad_t));
         int *sg_ad_idx = (int*)_err_calloc(sg_g->SG_n, sizeof(int));
         // calculate number of junction-reads and exon-body reads
-        //sj_n = bam2cnt_core(in, h, b, seq, seq_n, &sj_group, sj_m, sg_g, sgp);
+        // sj_n = bam2cnt_core(in, h, b, seq, seq_n, &sj_group, sj_m, sg_g, sgp);
         sj_n = parse_bam_record(in, h, b, seq, seq_n, sg_g, sg_ad_idx, &ad_group, &ad_n, ad_m, &sj_group, &sj_n, sj_m, sgp);
         bam_destroy1(b); bam_hdr_destroy(h); sam_close(in);
 
@@ -933,23 +1058,17 @@ int pred_asm(int argc, char *argv[])
         update_SpliceGraph(sg_g, sj_group, sj_n, sgp);
         free(sj_group); // free sj
 
-        int fn; 
-        FILE **out_fp = iso_header_output(in_name, out_fn, &fn);
-        gen_asm_iso(sg_g, sg_ad_idx, ad_group, ad_n, sgp, out_fp, fn);
+        FILE **out_fp = iso_output(sgp, out_fn);
+        gen_asm_iso(sg_g, sg_ad_idx, ad_group, ad_n, sgp, out_fp);
 
         free_ad_group(ad_group, ad_n); // free ad
         free(sg_ad_idx);
         // output asm
-        //asm_output(in_name, out_fn, sg_g, asm_g, sgp);
-        //asm_g_rep[i] = asm_g; 
+        // asm_output(in_name, out_fn, sg_g, asm_g, sgp);
+        // asm_g_rep[i] = asm_g; 
     }
-    for (i = 0; i < sgp->tol_rep_n; ++i) {
-        //sg_free_asm_group(asm_g_rep[i]); 
-    }
-    sg_free_group(sg_g);
 
-    // output to one file
-    sg_free_para(sgp);
+    sg_free_group(sg_g); sg_free_para(sgp);
     if (seq_n > 0) {
         for (i = 0; i < seq_n; ++i)  
             free(seq[i].name.s), free(seq[i].seq.s);
