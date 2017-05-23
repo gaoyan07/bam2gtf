@@ -209,3 +209,16 @@ Workflow 6: (for multi-group and -replicate, use mutli-threads)
     a. generate alignment-detail for each group-reps
     b. check if support isoform
     c. generate matrix
+
+Workflow 7: (parse bam bundle by bundle)
+1. load chr_name --- 1 thread
+2. build GTF-SG  --- 1 thread (optional in future, use bam to infer intron-exon boundaries)
+3. for m-thread: (total m group-reps):
+    3.1 Read bam-record for this SG
+    3.2 Update SG-edge for this SG  --- 1 thread
+    OR
+    3.2 Build infered SG
+    3.3 Read-Exon compatible array
+    3.4 Candidate isoforms by Flow decomposition
+    3.5 output Read-Isoform compatible matrix
+
