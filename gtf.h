@@ -109,6 +109,7 @@ typedef struct {
 exon_t *exon_init(int n);
 void exon_free(exon_t *e);
 
+
 chr_name_t *chr_name_init(void);
 void chr_name_free(chr_name_t *cname);
 int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m);
@@ -116,6 +117,7 @@ int bam_set_cname(bam_hdr_t *h, chr_name_t *cname);
 
 trans_t *trans_init(int n);
 int add_exon(trans_t *t, int tid, int start, int end, uint8_t is_rev);
+void sort_exon(trans_t *t);
 int set_trans(trans_t *t, char *qname);
 trans_t *exon_realloc(trans_t *t);
 void trans_free(trans_t *t);

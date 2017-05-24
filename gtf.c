@@ -6,6 +6,7 @@
 #include "htslib/htslib/sam.h"
 
 extern int gen_trans(bam1_t *b, trans_t *t, int exon_min);
+
 // exon
 exon_t *exon_init(int n) {
     exon_t *e = (exon_t*)_err_malloc(n * sizeof(exon_t));
@@ -32,24 +33,18 @@ int add_exon(trans_t *t, int tid, int start, int end, uint8_t is_rev)
     t->exon_n++;
     return 0;
 }
-
+int trans_exon_comp(const void *_a, const void *_b)
+{
+    exon_t *a = (exon_t*)_a, *b = (exon_t*)_b;
+    if (a->is_rev && !b->is_rev) return -1;
+    else if (a->is_rev == b->is_rev) return a->start - b->start;
+    else return a->end - b->end;
+}
 // '+': s->e => S->E
 // '-': S->E => s->e
-int sort_exon(trans_t *t)
+void sort_exon(trans_t *t)
 {
-    int i, j; exon_t e1, e2; int res=0;
-    for (i = 0; i < t->exon_n-1; ++i) {
-        for (j = i+1; j < t->exon_n; ++j) {
-            e1 = t->exon[i], e2 = t->exon[j];
-            if ((e1.is_rev == e2.is_rev && ((!e1.is_rev && e1.start > e2.start) || (e1.is_rev && e1.start < e2.start))) //same strand
-             || (e1.is_rev && !e2.is_rev)) { // '-' and '+'
-                exon_t tmp = e1;
-                t->exon[i] = t->exon[j];
-                t->exon[j] = tmp;
-            }
-        }
-    }
-    return res;
+    qsort(t->exon, t->exon_n, sizeof(exon_t), trans_exon_comp);
 }
 
 int check_iden(trans_t t1, trans_t t2, int dis)
@@ -155,13 +150,11 @@ void read_trans_free(read_trans_t *r)
 }
 
 // intron_group
-
 intron_t *intron_init(int n)
 {
     intron_t *i = (intron_t *)_err_malloc(n * sizeof(intron_t));
     return i;
 }
-
 
 intron_group_t *intron_group_init(void)
 {
@@ -278,7 +271,6 @@ void chr_name_free(chr_name_t *cname)
     free(cname->chr_name); free(cname);
 }
 
-
 gene_group_t *gene_group_realloc(gene_group_t *gg)
 {
     int i;
@@ -389,7 +381,24 @@ int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m)
     return sj_n;
 }
 
+void reverse_exon_order(gene_group_t *gg) {
+    int i, j, k; exon_t tmp;
+    for (i = 0; i < gg->gene_n; ++i) {
+        if (gg->g[i].is_rev == 0) continue;
+        for (j = 0; j < gg->g[i].trans_n; ++j) {
+            int exon_n = gg->g[i].trans[j].exon_n;
+            for (k = 0; k < (exon_n-1) >> 1; ++k) {
+                tmp = gg->g[i].trans[j].exon[k];
+                gg->g[i].trans[j].exon[k] = gg->g[i].trans[j].exon[exon_n-1-k];
+                gg->g[i].trans[j].exon[exon_n-1-k] = tmp;
+            }
+        }
+    }
+}
+
 // read all anno from GTF file
+// sorted with chr and start
+// exon sorted by start
 int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
 {
     char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[100], tname[100], tag[20];
@@ -426,6 +435,8 @@ int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
             cur_e->start = start; cur_e->end = end;
         }
     }
+    // reverse '-' transcript
+    reverse_exon_order(gg);
     // sort with cname
     qsort(gg->g, gg->gene_n, sizeof(gene_t), gene_group_comp);
     return gg->gene_n;

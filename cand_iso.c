@@ -961,7 +961,6 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, char *out_fn)
     return 0;
 }
 
-
 /*****************************/
 int cand_iso(int argc, char *argv[])
 {
@@ -1041,8 +1040,6 @@ int cand_iso(int argc, char *argv[])
     free(sj_group);
     // 5. generate isoforms, output isoMatrix and isoExon -- rep_n threads
     generate_ASMISO(sg_g, sgp, out_fn);
-
-    
 
     sg_free_group(sg_g); sg_free_para(sgp);
     if (seq_n > 0) {
