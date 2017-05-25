@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include "htslib/htslib/sam.h"
 #include "gtf.h"
 #include "build_sg.h"
 #include "parse_bam.h"
@@ -52,42 +53,6 @@ void sg_free_para(sg_para *sgp)
     }
     if (sgp->rep_n != NULL) free(sgp->rep_n);
     free(sgp);
-}
-
-// ':' separates samples, ',' separates replicates
-int sg_par_input(sg_para *sgp, char *in)
-{
-    ks_tokaux_t aux1, aux2; char *p1, *p2;
-    kstring_t *s1=(kstring_t*)_err_calloc(1, sizeof(kstring_t)),  *s2=(kstring_t*)_err_calloc(1, sizeof(kstring_t));
-    int sam_n = 0, rep_n = 0;
-    for (p1 = kstrtok(in, ":", &aux1); p1; p1 = kstrtok(0, 0, &aux1)) {
-        if (p1 != NULL) {
-            sam_n++;
-            kputsn(p1, aux1.p-p1, s1);
-            for (p2 = kstrtok(s1->s, ",", &aux2); p2; p2 = kstrtok(0, 0, &aux2))
-                rep_n++;
-            free(s1->s); ks_release(s1);
-        }
-    }
-    sgp->rep_n = (int*)_err_malloc(sam_n * sizeof(int));
-    sgp->in_name = (char**)_err_malloc(rep_n * sizeof(char*));
-    sgp->tol_rep_n = rep_n;
-    int i = 0;
-    for (p1 = kstrtok(in, ":", &aux1); p1; p1 = kstrtok(0, 0, &aux1)) {
-        if (p1 != NULL) {
-            kputsn(p1, aux1.p-p1, s1);
-            for (p2 = kstrtok(s1->s, ",", &aux2); p2; p2 = kstrtok(0, 0, &aux2)) {
-                kputsn(p2, aux2.p-p2, s2);
-                sgp->in_name[i++] = strdup(s2->s);
-                free(s2->s); ks_release(s2);
-                sgp->rep_n[sgp->sam_n]++;
-            }
-            free(s1->s); ks_release(s1);
-            sgp->sam_n++;
-        }
-    }
-    free(s1); free(s2);
-    return sgp->tol_rep_n;
 }
 
 int comp_sj_sg(sj_t sj, SG sg)

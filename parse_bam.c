@@ -5,12 +5,14 @@
 #include <ctype.h>
 #include <pthread.h>
 #include "htslib/htslib/sam.h"
+#include "htslib/htslib/hts.h"
 #include "bam2gtf.h"
 #include "parse_bam.h"
 #include "utils.h"
 #include "gtf.h"
 #include "kseq.h"
 #include "build_sg.h"
+#include "kstring.h"
 
 extern const char PROG[20];
 const int intron_motif_n = 6;
@@ -22,6 +24,115 @@ const char intron_motif[6][10] = {
 const int intron_motif_strand[6] = {
     1, 2, 1, 2, 1, 2
 };
+
+
+bam_aux_t *bam_aux_init() {
+    bam_aux_t *aux = ((bam_aux_t*)_err_malloc(sizeof(bam_aux_t)));
+    aux->idx = NULL;
+    aux->h = NULL;
+    aux->in = NULL;
+    aux->b = NULL;
+    aux->itr = NULL;
+    return aux;
+}
+void bam_aux_destroy(bam_aux_t *aux) {
+    if (aux->idx != NULL) hts_idx_destroy(aux->idx);
+    if (aux->h != NULL) bam_hdr_destroy(aux->h);
+    if (aux->in != NULL) sam_close(aux->in);
+    if (aux->b != NULL) bam_destroy1(aux->b);
+    if (aux->itr != NULL) hts_itr_destroy(aux->itr);
+    free(aux);
+}
+
+// 0. ':' separates samples, ',' separates replicates
+bam_aux_t **sg_par_input(sg_para *sgp, char *in) {
+    ks_tokaux_t aux1, aux2; char *p1, *p2;
+    kstring_t *s1=(kstring_t*)_err_calloc(1, sizeof(kstring_t)),  *s2=(kstring_t*)_err_calloc(1, sizeof(kstring_t));
+    int sam_n = 0, rep_n = 0;
+    for (p1 = kstrtok(in, ":", &aux1); p1; p1 = kstrtok(0, 0, &aux1)) {
+        if (p1 != NULL) {
+            sam_n++;
+            kputsn(p1, aux1.p-p1, s1);
+            for (p2 = kstrtok(s1->s, ",", &aux2); p2; p2 = kstrtok(0, 0, &aux2))
+                rep_n++;
+            free(s1->s); ks_release(s1);
+        }
+    }
+    sgp->rep_n = (int*)_err_malloc(sam_n * sizeof(int));
+    sgp->in_name = (char**)_err_malloc(rep_n * sizeof(char*));
+    sgp->tot_rep_n = rep_n;
+    int i = 0;
+    for (p1 = kstrtok(in, ":", &aux1); p1; p1 = kstrtok(0, 0, &aux1)) {
+        if (p1 != NULL) {
+            kputsn(p1, aux1.p-p1, s1);
+            for (p2 = kstrtok(s1->s, ",", &aux2); p2; p2 = kstrtok(0, 0, &aux2)) {
+                kputsn(p2, aux2.p-p2, s2);
+                sgp->in_name[i++] = strdup(s2->s);
+                free(s2->s); ks_release(s2);
+                sgp->rep_n[sgp->sam_n]++;
+            }
+            free(s1->s); ks_release(s1);
+            sgp->sam_n++;
+        }
+    }
+    free(s1); free(s2);
+    bam_aux_t **aux = (bam_aux_t**)_err_malloc(sgp->tot_rep_n * sizeof(bam_aux_t*));
+    for (i = 0; i < sgp->tot_rep_n; ++i) {
+        aux[i] = bam_aux_init();
+        strcpy(aux[i]->fn, sgp->in_name[i]);
+        err_sam_open(aux[i]->in, sgp->in_name[i]);
+        err_sam_hdr_read(aux[i]->h, aux[i]->in, sgp->in_name[i]);
+        err_sam_idx_read(aux[i]->idx, aux[i]->in, sgp->in_name[i]);
+    }
+    return aux;
+}
+
+// 1. take input bam list file
+// format:
+//   sample_N   {rep_N; {rep/rep/rep}} {rep_N; {rep/rep/rep}} ...
+//  sample num  ------- sample ------- ------- sample -------
+bam_aux_t **sg_par_input_list(sg_para *sgp, const char *list) {
+    FILE *fp = xopen(list, "r");
+    int sam_n = 0, rep_n = 0, tot_rep_n = 0, i;
+    char buff[1024];
+    fgets(buff, 1024, fp); 
+    if ((sgp->sam_n = atoi(buff)) <= 0) err_fatal_core(__func__, "wrong format of BAM list file.\n");
+
+    while (fgets(buff, 1024, fp) != NULL) {
+        if ((rep_n = atoi(buff)) <= 0) err_fatal_core(__func__, "wrong format of BAM list file.\n");
+        for (i = 0; i < rep_n; ++i) fgets(buff, 1024, fp);
+        tot_rep_n += rep_n;
+    }
+    sgp->tot_rep_n = tot_rep_n;
+    err_fclose(fp);
+
+    sgp->rep_n = (int*)_err_malloc(sgp->sam_n * sizeof(int));
+    sgp->in_name = (char**)_err_malloc(tot_rep_n * sizeof(char*));
+
+    fp = xopen(list, "r");
+    sam_n = 0, rep_n = 0, tot_rep_n = 0;
+    fgets(buff, 1024, fp);  // sam_n
+    while (fgets(buff, 1024, fp) != NULL) {
+        if ((rep_n = atoi(buff)) <= 0) err_fatal_core(__func__, "wrong format of BAM list file.\n");
+        for (i = 0; i < rep_n; ++i) {
+            fgets(buff, 1024, fp);
+            sgp->in_name[tot_rep_n+i] = strdup(buff);
+        }
+        sgp->rep_n[sam_n++] = rep_n;
+        tot_rep_n += rep_n;
+    }
+    err_fclose(fp);
+ 
+    bam_aux_t **aux = (bam_aux_t**)_err_malloc(sgp->tot_rep_n * sizeof(bam_aux_t*));
+    for (i = 0; i < sgp->tot_rep_n; ++i) {
+        aux[i] = bam_aux_init();
+        strcpy(aux[i]->fn, sgp->in_name[i]);
+        err_sam_open(aux[i]->in, sgp->in_name[i]);
+        err_sam_hdr_read(aux[i]->h, aux[i]->in, sgp->in_name[i]);
+        err_sam_idx_read(aux[i]->idx, aux[i]->in, sgp->in_name[i]);
+    }
+    return aux;
+}
 
 int bam2sj_usage(void)
 {
@@ -242,6 +353,7 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, kseq_t
     return sj_i;
 }
 
+
 // only junction-read are kept in AD_T
 int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uint8_t is_uniq, kseq_t *seq, int seq_n, ad_t **ad_g, int *ad_n, int *ad_m, sj_t **sj, int *sj_n, int *sj_m, sg_para *sgp)
 {
@@ -318,6 +430,89 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
         (*ad_n)++;
     //}
     return SJ_n;
+}
+
+int bam2ad(int tid, int start, uint8_t is_uniq, int n_cigar, const uint32_t *c, ad_t *ad, sg_para *sgp)
+{
+    int i, min_intr_len = sgp->intron_len, SJ_n;
+#ifdef _RMATS_
+    for (i = 0; i  < n_cigar; ++i) {
+        uint32_t op = bam_cigar_op(c[i]);
+        if (op != BAM_CMATCH && op != BAM_CREF_SKIP) return -1;
+        //&& op != BAM_CEQUAL && op != BAM_CDIFF) return 0;
+    }
+#endif
+    SJ_n = bam_cigar_opn(n_cigar, c, BAM_CREF_SKIP, min_intr_len);
+    int end = start - 1; /* 1-base */
+
+    ad->intv_n = 0;
+    ad->exon_end = (int*)_err_malloc((SJ_n+1) * sizeof(int));
+    ad->intr_end = (int*)_err_malloc(SJ_n * sizeof(int));
+    ad->tid = tid; ad->start = start;
+    ad->is_uniq = is_uniq; ad->is_splice = (SJ_n > 1);
+
+    // XXX use bam_endpos()
+    for (i = 0; i < n_cigar; ++i) {
+        int l = bam_cigar_oplen(c[i]);
+        switch (bam_cigar_op(c[i])) {
+            case BAM_CREF_SKIP: // N(0 1)
+                if (l >= min_intr_len) {
+                    // ad
+                    ad->intr_end[ad->intv_n] = end+l;
+                    ad->exon_end[(ad->intv_n)++] = end;
+
+                    start = end+l+1;
+                }
+                end += l;
+                break;
+            case BAM_CMATCH: // 1 1
+            case BAM_CEQUAL:
+            case BAM_CDIFF:
+                end += l;
+                break;
+            case BAM_CDEL : // D(0 1)
+#ifdef _RMATS_
+                return 0; // for rMATS, only M&N allowed
+#else
+                end += l;
+                break;
+#endif
+            case BAM_CINS: // 1 0
+            case BAM_CSOFT_CLIP:
+            case BAM_CHARD_CLIP:
+            case BAM_CPAD: // 0 0
+            case BAM_CBACK:
+#ifdef _RMATS_
+                return 0; // for rMATS, only M&N allowed
+#endif
+                break; 
+            default:
+                err_printf("Error: unknown cigar type: %d.\n", bam_cigar_op(c[i]));
+                break;
+        }
+    }
+
+    // ad
+    ad->exon_end[(ad->intv_n)++] = end;
+    ad->end = end;
+    return 1;
+}
+
+int parse_bam_record1(bam1_t *b, ad_t *ad, sg_para *sgp)
+{
+    int n_cigar; uint32_t *cigar;
+    uint8_t is_uniq; int tid, bam_start;
+    if (bam_unmap(b)) return 0; // unmap (0)
+    is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
+#ifdef _RMATS_
+    if (is_uniq == 0) return 0;
+#endif
+    if (bam_is_prop(b) != 1 && sgp->read_type == PAIR_T) return 0; // prop-pair (2)
+
+    tid = b->core.tid; n_cigar = b->core.n_cigar; cigar = bam_get_cigar(b);
+    bam_start = b->core.pos+1;
+    // alignment details
+    return bam2ad(tid, bam_start, is_uniq, n_cigar, cigar, ad, sgp);
 }
 
 // parse alignment details via BAM cigar
@@ -504,15 +699,15 @@ sj_t *merge_filter_sj(gen_sj_aux_t *aux, sg_para *sgp, int *sj_group_n)
 {
     int i, sj_n = 0, sj_m = 10000;
     sj_t *sj_group = (sj_t*)_err_malloc(sj_m * sizeof(sj_t));
-    int *rep_cur_sj_i = (int*)_err_calloc(sgp->tol_rep_n, sizeof(int));
+    int *rep_cur_sj_i = (int*)_err_calloc(sgp->tot_rep_n, sizeof(int));
     int rep_max_cnt, min_rep_sj_i, hit=0, cur_sj_i;
     sj_t **rep_sj_group = aux->rep_sj_group;
     int *rep_sj_group_n = aux->rep_sj_group_n;
-    while (hit < aux->sgp->tol_rep_n) {
+    while (hit < aux->sgp->tot_rep_n) {
         hit = 0;
         // find min
         min_rep_sj_i = 0; sj_t min_sj = rep_sj_group[0][0];
-        for (i = 1; i < sgp->tol_rep_n; ++i) {
+        for (i = 1; i < sgp->tot_rep_n; ++i) {
             if (rep_cur_sj_i[i] >= rep_sj_group_n[i]) continue;
             cur_sj_i = rep_cur_sj_i[i];
             if (comp_sj(min_sj, rep_sj_group[i][cur_sj_i]) < 0) {
@@ -522,7 +717,7 @@ sj_t *merge_filter_sj(gen_sj_aux_t *aux, sg_para *sgp, int *sj_group_n)
         }
         // merge, update rep_cur_sj_i
         rep_max_cnt = 0;
-        for (i = 0; i < sgp->tol_rep_n; ++i) {
+        for (i = 0; i < sgp->tot_rep_n; ++i) {
             if (rep_cur_sj_i[i] >= rep_sj_group_n[i]) continue;
             cur_sj_i = rep_cur_sj_i[i];
             if (comp_sj(min_sj, rep_sj_group[i][cur_sj_i]) == 0) {
@@ -545,7 +740,7 @@ static void *thread_generate_SpliceJunction(void *a)
         pthread_rwlock_wrlock(&RWLOCK);
         rep_i = REP_I++; 
         pthread_rwlock_unlock(&RWLOCK);
-        if (rep_i >= aux->sgp->tol_rep_n) break;
+        if (rep_i >= aux->sgp->tot_rep_n) break;
         aux->rep_sj_group_n[rep_i] = generate_SpliceJunction_core(&(aux->rep_sj_group[rep_i]), aux->sgp->in_name[rep_i], aux->seq, aux->seq_n, aux->sgp);
     }
     return 0;
@@ -559,8 +754,8 @@ sj_t *generate_SpliceJunction(sg_para* sgp, kseq_t *seq, int seq_n, int *sj_grou
     int i, t = sgp->n_threads;
     if (t < 1) t = 1;
     gen_sj_aux_t *aux = (gen_sj_aux_t*)_err_calloc(t, sizeof(gen_sj_aux_t));
-    sj_t **rep_sj_group = (sj_t**)_err_malloc(sgp->tol_rep_n * sizeof(sj_t*));
-    int *rep_sj_group_n = (int*)_err_malloc(sgp->tol_rep_n * sizeof(int));
+    sj_t **rep_sj_group = (sj_t**)_err_malloc(sgp->tot_rep_n * sizeof(sj_t*));
+    int *rep_sj_group_n = (int*)_err_malloc(sgp->tot_rep_n * sizeof(int));
     for (i = 0; i < t; ++i) {
         aux[i].tid = i; aux[i].sgp = sgp;
         aux[i].seq = seq; aux[i].seq_n = seq_n;
@@ -583,7 +778,7 @@ sj_t *generate_SpliceJunction(sg_para* sgp, kseq_t *seq, int seq_n, int *sj_grou
     sj_t *sj_group = merge_filter_sj(aux, sgp, &_sj_group_n);
     *sj_group_n = _sj_group_n;
 
-    for (i = 0; i < sgp->tol_rep_n; ++i) free(rep_sj_group[i]);
+    for (i = 0; i < sgp->tot_rep_n; ++i) free(rep_sj_group[i]);
     free(rep_sj_group_n); free(rep_sj_group);
     free(tid); free(aux);
     err_func_format_printf(__func__, "merging splice-junctions done!\n");

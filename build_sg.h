@@ -65,6 +65,7 @@ typedef struct {
     int node_id, s_site_id, e_site_id; // unique id in corresponding gene-locus
     int start, end; // real exon
     exon_t node_e;  // node in splice-graph
+                    // NOW: no differences between (start,end) and node_n
     uint8_t is_init:1, is_termi:1, is_asm:1;
     int uniq_c, multi_c;
     gec_t *next_id, next_n; int next_m;
@@ -123,7 +124,7 @@ typedef struct {
 
 typedef struct {
     int n_threads;
-    int sam_n, tol_rep_n, *rep_n;
+    int sam_n, tot_rep_n, *rep_n;
     char **in_name;
     uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
     int intron_len, edge_wt;
@@ -150,7 +151,6 @@ int comp_sj_sg(sj_t sj, SG sg);
 #define PAIR_T 1
 #define SING_T 0
 
-int sg_par_input(sg_para *sgp, char *in);
 sg_para *sg_init_para(void);
 void sg_free_para(sg_para *sgp);
 

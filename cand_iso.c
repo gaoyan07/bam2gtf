@@ -3,7 +3,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <pthread.h>
-#include "pred_asm.h"
+#include "cand_iso.h"
 #include "utils.h"
 #include "gtf.h"
 #include "build_sg.h"
@@ -719,7 +719,7 @@ int gen_asm_iso(SG_group *sg_g, int *sg_ad_idx, ad_t *ad_group, int ad_n, sg_par
 END: free(entry); free(exit); free(node_visit); free(iso_n); free(node_n);
     }
     int i;
-    for (i = 0; i < sgp->tol_rep_n+1; ++i) err_fclose(out_fp[i]);
+    for (i = 0; i < sgp->tot_rep_n+1; ++i) err_fclose(out_fp[i]);
     free(out_fp);
     err_func_format_printf(__func__, "generating candidate isoforms of alternative-splice-module done!\n");
     return asm_i;
@@ -814,7 +814,7 @@ int asm_output(char *in_fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg
 FILE **iso_output(sg_para *sgp, char *prefix)
 {
     // .IsoMatrix && .IsoExon
-    int i, out_n = sgp->tol_rep_n+1;
+    int i, out_n = sgp->tot_rep_n+1;
     char mat_suf[20] = { ".IsoMatrix" };
     char exon_suf[20] = { ".IsoExon" };
     //char suff[20] = "";
@@ -927,13 +927,13 @@ static void *thread_generate_ASMISO(void *a)
         pthread_rwlock_wrlock(&RWLOCK);
         rep_i = REP_I++; 
         pthread_rwlock_unlock(&RWLOCK);
-        if (rep_i >= aux->sgp->tol_rep_n) break;
+        if (rep_i >= aux->sgp->tot_rep_n) break;
         generate_ASMISO_core(aux->sg_g, aux->sgp->in_name[rep_i], aux->sgp, aux->out_fp[rep_i]);
     }
     return 0;
 }
 
-int cand_iso_core(SG_group *sg_g, sg_para *sgp, char *out_fn)
+/*int cand_iso_core(SG_group *sg_g, sg_para *sgp, char *out_fn)
 {
     FILE **out_fp = iso_output(sgp, out_fn);
     err_func_format_printf(__func__, "generating candidate isoforms of alternative-splice-module ...\n");
@@ -959,6 +959,91 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, char *out_fn)
     free(aux); free(tid);
     err_func_format_printf(__func__, "generating candidate isoforms of alternative-splice-module done!\n");
     return 0;
+}*/
+
+void read_exon_matrix_copy(read_exon_matrix *m, read_exon_matrix m1) {
+    m->weight = m1.weight;
+    m->exon_n = m1.exon_n;
+    if (m->exon_n > m->exon_m) {
+        m->exon_id = (gec_t*)_err_realloc(m->exon_id, m->exon_m * sizeof(gec_t));
+    }
+    int i;
+    for (i = 0; i < m->exon_n; ++i) m->exon_id[i] = m1.exon_id[i];
+}
+
+// TODO
+read_exon_matrix bam_sgnode_cmptb(ad_t ad, SGnode *node, int node_n, int *node_i) {
+    read_exon_matrix m;
+    return m;
+}
+
+read_exon_matrix *bam_sg_cmptb(bam_aux_t *bam_aux, int *bundle_n, SG *sg, sg_para *sgp) {
+    samFile *in = bam_aux->in; hts_itr_t *itr = bam_aux->itr; bam1_t *b = bam_aux->b;
+    ad_t ad, last_ad;
+    SGnode *node; int node_n = sg->node_n, node_i = 0, r, i;
+    int matrix_bundle_n = 0, matrix_bundle_m = 10000;
+    read_exon_matrix *m = (read_exon_matrix*)_err_malloc(matrix_bundle_m * sizeof(read_exon_matrix));
+    // init matrix
+    for (i = 0; i < matrix_bundle_m; ++i) {
+        m[i].exon_n = 0, m[i].exon_m = 4;
+        m[i].exon_id = (gec_t*)_err_malloc(4 * sizeof(gec_t));
+    }
+
+    last_ad.start = 0;
+    while ((r = sam_itr_next(in, itr, b)) >= 0) {
+        // parse bam record
+        if (parse_bam_record1(b, &ad, sgp) <= 0) continue;
+        if (ad.start == last_ad.start && ad.end == last_ad.end && ad.intv_n == last_ad.intv_n) {
+            int mis = 0;
+            for (i = 0; i < ad.intv_n-1; ++i) {
+                if (ad.exon_end[i] != last_ad.exon_end[i] || ad.intr_end[i] != last_ad.intr_end[i]) {
+                    mis = 1; break;
+                }
+            }
+            if (mis == 0) {
+                m[matrix_bundle_n-1].weight++;
+                continue;
+            }
+        }
+        read_exon_matrix m1 = bam_sgnode_cmptb(ad, node, node_n, &node_i);
+        // insert new bundle
+        if (matrix_bundle_n == matrix_bundle_m) {
+            matrix_bundle_m <<= 1;
+            m = (read_exon_matrix*)_err_realloc(m, matrix_bundle_m * sizeof(read_exon_matrix));
+            for (i = matrix_bundle_n; i < matrix_bundle_m; ++i) {
+                m[i].exon_n = 0, m[i].exon_m = 4;
+                m[i].exon_id = (gec_t*)_err_malloc(4 * sizeof(gec_t));
+            }
+        }
+        read_exon_matrix_copy(m+matrix_bundle_n, m1);
+        matrix_bundle_n++;
+    }
+    if (r < -1) err_func_format_printf("BAM file error. \"%s\"", bam_aux->fn);
+    // update SG with novel edge (weight >= THD)
+    // TODO
+
+    *bundle_n = matrix_bundle_n;
+    return m;
+}
+
+int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux, char *out_fn)
+{
+    SG *sg; int i, sg_i, rep_i; char reg[1024]; 
+
+    for (sg_i = 0; sg_i < sg_g->SG_n; ++sg_i) {
+        sg = sg_g->SG[i];
+        // 0. read bam bundle for each gene
+        for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
+            sprintf(reg, "%s:%d-%d", sg_g->cname->chr_name[sg->tid], sg->start, sg->end);
+            bam_aux[i]->itr = sam_itr_querys(bam_aux[i]->idx, bam_aux[i]->h, reg);
+            // 1. generate read-exon compatible array
+            // 2. update SG with bamBundle
+            // OR (optional) only known transcript
+            read_exon_matrix *m = bam_sg_cmptb(bam_aux[i], sg, sgp);
+        }
+        // 3. flow network decomposition
+        gen_cand_iso(m, sg);
+    }
 }
 
 /*****************************/
@@ -1012,23 +1097,23 @@ int cand_iso(int argc, char *argv[])
         seq = kseq_load_genome(genome_fp, &seq_n, &seq_m);
         err_gzclose(genome_fp); 
     }
-    // parse input name
-    if (sg_par_input(sgp, argv[optind+1]) <= 0) return cand_iso_usage();
+    // 0. parse input bam file names
+    bam_aux_t **bam_aux = sg_par_input(sgp, argv[optind+1]);
+    if (sgp->tot_rep_n <= 0) return cand_iso_usage();
     
     // 1. set cname --- 1 thread
     chr_name_t *cname = chr_name_init();
-    samFile *in; bam_hdr_t *h;
-    if ((in = sam_open(sgp->in_name[0], "rb")) == NULL) err_fatal_core(__func__, "Cannot open \"%s\"\n", sgp->in_name[0]);
-    if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", sgp->in_name[0]);
-    bam_set_cname(h, cname);
-    bam_hdr_destroy(h); sam_close(in);
+    bam_set_cname(bam_aux[0]->h, cname);
     // 2. build splice-graph --- 1 thread (Optional in future, infer exon-intron boundaries by bam records)
+    // XXX read gene and build SG one-by-one
     FILE *gtf_fp = xopen(argv[optind], "r");
+    // build from GTF file
+    // XXX OR from bam file
     SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
     err_fclose(gtf_fp); chr_name_free(cname);
 
     // 3. core process
-    cand_iso_core(sg_g, sgp, out_fn);
+    cand_iso_core(sg_g, sgp, bam_aux, out_fn);
 
     // 3. generate sj --- rep_n threads
     //    a. generate sj for each group/rep
@@ -1041,11 +1126,12 @@ int cand_iso(int argc, char *argv[])
     // 5. generate isoforms, output isoMatrix and isoExon -- rep_n threads
     generate_ASMISO(sg_g, sgp, out_fn);
 
-    sg_free_group(sg_g); sg_free_para(sgp);
+    sg_free_group(sg_g);
+    sg_free_para(sgp);
     if (seq_n > 0) {
-        for (i = 0; i < seq_n; ++i)  
-            free(seq[i].name.s), free(seq[i].seq.s);
+        for (i = 0; i < seq_n; ++i) { free(seq[i].name.s), free(seq[i].seq.s); }
         free(seq);
     }
+    for (i = 0; i < sgp->tot_rep_n; ++i) bam_aux_destroy(bam_aux[i]); free(bam_aux);
     return 0;
 }

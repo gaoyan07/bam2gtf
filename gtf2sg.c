@@ -354,76 +354,6 @@ void cal_post_domn(SG *sg)
     }
 }
 
-// construct splice-graph for each gene
-void construct_SpliceGraph_core(SG *sg, gene_t gene)
-{
-    int i, j, don_id, acc_id, don_site_id, acc_site_id; exon_t e; int start, end;
-    
-    sg->tid = gene.tid, sg->is_rev = gene.is_rev;
-    // generate node
-    // update v_start
-    sg_update_node(sg, (exon_t){gene.tid, gene.is_rev, 0, 0}, 0, 0);
-    for (i = 0; i < gene.trans_n; ++i) {
-        for (j = 0; j < gene.trans[i].exon_n; ++j) {
-            e = gene.trans[i].exon[j];
-            start = e.start, end = e.end;
-            if (j == 0) e.start = 0;
-            else sg_update_site(sg, e.start-1, ACC_SITE_F);
-            if (j == gene.trans[i].exon_n-1) e.end = MAX_SITE;
-            else sg_update_site(sg, e.end+1, DON_SITE_F);
-            sg_update_node(sg, e, start, end);
-        }
-    }
-    // update v_end
-    sg_update_node(sg, (exon_t){gene.tid, gene.is_rev, MAX_SITE, MAX_SITE}, MAX_SITE, MAX_SITE);
-
-    // alloc for next_id/pre_id/pre_domn/post_domn
-    sg_init_node(sg); sg_init_site(sg);
-
-    // search node and generate edge 
-    for (i = 0; i < gene.trans_n; ++i) {
-        if (gene.trans[i].exon_n == 1) continue;
-        e = gene.trans[i].exon[0]; e.start = 0;
-
-        don_id = _err_sg_bin_sch_node(sg, e);
-        don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1);
-        sg->node[don_id].s_site_id = -1;
-        sg->node[don_id].e_site_id = don_site_id;
-
-        // set next_id of v_start
-        _bin_insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, gec_t)
-        _bin_insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, gec_t)
-
-        sg->node[don_id].is_init = 1;
-
-        for (j = 1; j < gene.trans[i].exon_n; ++j) {
-            e = gene.trans[i].exon[j];
-            if (j == gene.trans[i].exon_n-1) e.end = MAX_SITE;
-
-            acc_id = _err_sg_bin_sch_node(sg, e);
-            acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1);
-            sg->node[acc_id].s_site_id = acc_site_id;
-
-            sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene.is_rev);
-
-            if (j == gene.trans[i].exon_n-1) {
-                sg->node[acc_id].e_site_id = -1;
-                break;
-            }
-            don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1);
-            sg->node[acc_id].e_site_id = don_site_id;
-            don_id = acc_id;
-        }
-        // set pre_id of v_end
-        _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, gec_t)
-            _bin_insert((gec_t)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, gec_t)
-
-            sg->node[acc_id].is_termi = 1;
-    }
-    // XXX after update!!! cal pre/post domn
-    // cal_pre_domn(sg); cal_post_domn(sg); 
-}
-
 typedef struct {
     int start, end;
     int n, m, *s;
@@ -433,7 +363,7 @@ typedef struct {
 // 2nd: use node to split exon
 // 3rd: use boundary to split node
 // 4th: use splited node to update sg
-int coor_push(coor_pair_t **coor, int *coor_n, int *coor_m, int start, int end) {
+int merge_exon(coor_pair_t **coor, int *coor_n, int *coor_m, int start, int end) {
     if (*coor_n == 0) {
         (*coor)[0].start = start, (*coor)[0].end = end;
         (*coor)[0].n = 0, (*coor)[0].m = 1; (*coor)[0].s = (int*)_err_malloc(sizeof(int));
@@ -490,7 +420,7 @@ void sg_merge_end(gene_t *gene) {
     int i, j, min, max;
     for (i = 0; i < gene->trans_n; ++i) {
         _bin_insert(gene->trans[i].exon[0].end, end, n1, m1, int)
-            _bin_insert(gene->trans[i].exon[gene->trans[i].exon_n-1].start, start, n2, m2, int)
+        _bin_insert(gene->trans[i].exon[gene->trans[i].exon_n-1].start, start, n2, m2, int)
     }
     for (i = 0; i < n1; ++i) {
         min = MAX_SITE;
@@ -545,23 +475,21 @@ void gen_gene_split_exon(coor_pair_t *coor, int coor_n, gene_t *gene) {
 
 int gen_sg_node(SG *sg, gene_t *gene)
 {
-    int i, j; exon_t e; int start, end;
+    int i, j; exon_t e;
     // merge init/term exon
+    // XXX should be optional
     sg_merge_end(gene);
     // generate node
     for (i = 0; i < gene->trans_n; ++i) {
         for (j = 0; j < gene->trans[i].exon_n; ++j) {
             e = gene->trans[i].exon[j];
-            start = e.start, end = e.end;
-            //if (j == 0) e.start = 0;
-            //if (j == gene->trans[i].exon_n-1) e.end = MAX_SITE;
-            sg_update_node(sg, e, start, end);
+            sg_update_node(sg, e, e.start, e.end);
         }
     }
     int coor_n = 0, coor_i, coor_m = gene->trans[0].exon_n; coor_pair_t *coor = (coor_pair_t*)_err_malloc(coor_m * sizeof(coor_pair_t));
     // merege into exonic region
     for (i = 0; i < sg->node_n; ++i)
-        coor_push(&coor, &coor_n, &coor_m, sg->node[i].start, sg->node[i].end);
+        merge_exon(&coor, &coor_n, &coor_m, sg->node[i].start, sg->node[i].end);
     // split gene-exon into splice-exon
     coor_i = 0;
     for (i = 0; i < sg->node_n; ++i)
@@ -637,6 +565,7 @@ SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
 {
     err_func_format_printf(__func__, "constructing splice-graph with GTF file ...\n", __func__);
     gene_group_t *gg = gene_group_init();
+    // XXX optional: merge overlapping genes into 1 complex gene
     int g_n = read_gene_group(gtf, cname, gg);
     SG_group *sg_g = sg_init_group(g_n);
     int i;
@@ -656,10 +585,6 @@ SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
 }
 
 /****************************************/
-int trav_SpliceGraph()
-{
-    return 0;
-}
 
 #ifdef __BUILD_SG_MAIN__
 const struct option sg_long_opt [] = {
