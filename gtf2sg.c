@@ -2,12 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include "build_sg.h"
+#include "splice_graph.h"
 #include "utils.h"
 #include "gtf.h"
 
-//extern char PROG[20];
-char PROG[20] = "gtools";
+extern char PROG[20];
 int sg_usage(void)
 {
     err_printf("\n");
@@ -243,7 +242,7 @@ int sg_update_site(SG *sg, int site, uint8_t type)
     return 0;
 }
 
-int sg_bin_sch_edge(SG *sg, int don_site_id, int acc_site_id, int *hit)
+int sg_bin_sch_edge(SG *sg, int don_id, int acc_id, int *hit)
 {
     *hit = 0;
     int mid_d, mid_a, tmp_d, tmp_a;
@@ -252,23 +251,23 @@ int sg_bin_sch_edge(SG *sg, int don_site_id, int acc_site_id, int *hit)
 
     while (left <= right) {
         mid = ((left + right) >> 1);
-        mid_d = sg->edge[mid].don_site_id, mid_a = sg->edge[mid].acc_site_id;
-        if (mid_d == don_site_id && mid_a == acc_site_id) { *hit = 1; return mid; }
-        else if (mid_d > don_site_id || (mid_d == don_site_id && mid_a > acc_site_id)) { // [mid] is bigger than query
+        mid_d = sg->edge[mid].don_id, mid_a = sg->edge[mid].acc_id;
+        if (mid_d == don_id && mid_a == acc_id) { *hit = 1; return mid; }
+        else if (mid_d > don_id || (mid_d == don_id && mid_a > acc_id)) { // [mid] is bigger than query
             if (mid != 0) {
-                tmp_d = sg->edge[mid-1].don_site_id, tmp_a = sg->edge[mid-1].acc_site_id;
+                tmp_d = sg->edge[mid-1].don_id, tmp_a = sg->edge[mid-1].acc_id;
             }
-            if (mid == 0 || (don_site_id > tmp_d || (don_site_id == tmp_d && acc_site_id > tmp_a))) {
+            if (mid == 0 || (don_id > tmp_d || (don_id == tmp_d && acc_id > tmp_a))) {
                 return mid;
             } else right = mid - 1;
         } else left = mid + 1;
     }
     return sg->edge_n;
 }
-int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_site_id, int acc_site_id)
+int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_id, int acc_id)
 {
     int hit;
-    int id = sg_bin_sch_edge(sg, don_site_id, acc_site_id, &hit);
+    int id = sg_bin_sch_edge(sg, don_id, acc_id, &hit);
     char head[100]; sprintf(head, "%s:%d", func, line);
     if (hit == 0) _err_fatal_simple(head, "Can not hit edge.\n");
     return id;
@@ -278,10 +277,10 @@ int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_site_i
 int sg_update_edge(SG *sg, int don_id, int acc_id, int don_site_id, int acc_site_id, uint8_t is_rev)
 {
     int hit = 0;
-    int e_i = sg_bin_sch_edge(sg, don_site_id, acc_site_id, &hit);
+    int e_i = sg_bin_sch_edge(sg, don_id, acc_id, &hit);
     if (hit == 0) { // insert new edge
         uint8_t is_anno=1;
-        sg_add_edge(sg->edge, e_i, (sg->edge_n), (sg->edge_m), don_site_id, acc_site_id, is_rev, is_anno)
+        sg_add_edge(sg->edge, e_i, (sg->edge_n), (sg->edge_m), don_id, acc_id, is_rev, is_anno)
     }
     // set next/pre
     _bin_insert(acc_id, sg->node[don_id].next_id, sg->node[don_id].next_n, sg->node[don_id].next_m, gec_t)

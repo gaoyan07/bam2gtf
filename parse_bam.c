@@ -11,7 +11,7 @@
 #include "utils.h"
 #include "gtf.h"
 #include "kseq.h"
-#include "build_sg.h"
+#include "splice_graph.h"
 #include "kstring.h"
 
 extern const char PROG[20];
@@ -430,6 +430,44 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
         (*ad_n)++;
     //}
     return SJ_n;
+}
+
+int ad_sim_comp(ad_t *ad1, ad_t *ad2) {
+    if (ad1->start != ad2->start) return (ad1->start - ad2->start);
+    int i, intv_n = MIN_OF_TWO(ad1->intv_n, ad2->intv_n);
+    for (i = 0; i < intv_n; ++i) {
+        if (ad1->exon_end[i] != ad2->exon_end[i])
+            return (ad1->exon_end[i] - ad2->exon_end[i]);
+    }
+    return (ad1->intv_n - ad2->intv_n);
+}
+int ad_comp(ad_t *ad1, ad_t *ad2) {
+    int i;
+    if (ad1->tid != ad2->tid) return (ad1->tid - ad2->tid);
+    if (ad1->start != ad2->start) return (ad1->start - ad2->start);
+    int intv_n = MIN_OF_TWO(ad1->intv_n, ad2->intv_n);
+    for (i = 0; i < intv_n; ++i) {
+        if (ad1->exon_end[i] != ad2->exon_end[i])
+            return (ad1->exon_end[i] - ad2->exon_end[i]);
+    }
+    return (ad1->intv_n - ad2->intv_n);
+}
+
+void ad_copy(ad_t *dest, ad_t *src) {
+    int i;
+    dest->tid = src->tid;
+    //dest->is_uniq = src->is_uniq;
+    //dest->is_splice = src->is_splice;
+    dest->start = src->start;
+    dest->end = src->end;
+    dest->intv_n = src->intv_n;
+    dest->exon_end = (int*)_err_malloc(src->intv_n * sizeof(int));
+    dest->intr_end = (int*)_err_malloc(src->intv_n-1 * sizeof(int));
+    for (i = 0; i < src->intv_n; ++i) {
+        dest->exon_end[i] = src->exon_end[i];
+        if (i != src->intv_n-1)
+            dest->intr_end[i] = src->intr_end[i];
+    }
 }
 
 int bam2ad(int tid, int start, uint8_t is_uniq, int n_cigar, const uint32_t *c, ad_t *ad, sg_para *sgp)

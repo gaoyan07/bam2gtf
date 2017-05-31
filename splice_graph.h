@@ -1,5 +1,5 @@
-#ifndef _BUILD_SG_H
-#define _BUILD_SG_H
+#ifndef _SG_H
+#define _SG_H
 #include <stdlib.h>
 #include <string.h>
 #include "gtf.h"
@@ -77,11 +77,11 @@ typedef struct {
 typedef struct {
     int site_id;
     int site;
-    int *exon_id; int exon_n, exon_m;
+    int *exon_id; int exon_n, exon_m; // in new definition, one site <-> one node
 } SGsite; // splice-site of splicing-graph
 
 typedef struct {
-    int don_site_id, acc_site_id;
+    int don_id, acc_id; // don/acc node id
     uint8_t is_rev:2, is_anno:2, motif:4;
     int uniq_c, multi_c, max_over;
 } SGedge; // edge of splicing-graph: splice junction
@@ -136,12 +136,12 @@ typedef struct {
 
 int comp_sj_sg(sj_t sj, SG sg);
 
-#define sg_add_edge(ed, ei, ed_n, ed_m, _don_site_id, _acc_site_id, _is_rev, _is_anno) { \
+#define sg_add_edge(ed, ei, ed_n, ed_m, _don_id, _acc_id, _is_rev, _is_anno) { \
     if (ed_n++ >= ed_m) _realloc(ed, ed_m, SGedge) \
     /* copy edge */ \
     if (ei <= ed_n-2) memmove(ed+ei+1, ed+ei, (ed_n-ei-1) * sizeof(SGedge)); \
     /* set edge */ \
-    ed[ei].don_site_id = _don_site_id, ed[ei].acc_site_id = _acc_site_id,   \
+    ed[ei].don_id = _don_id, ed[ei].acc_id = _acc_id,   \
     ed[ei].is_rev = _is_rev; ed[ei].is_anno = _is_anno;  \
     ed[ei].motif=0; ed[ei].uniq_c=0; ed[ei].multi_c=0; ed[ei].max_over=0; \
 }
@@ -168,9 +168,9 @@ int err_sg_bin_sch_node(const char *func, const int line, SG *sg, exon_t e);
 int sg_bin_sch_site(SGsite *site, int site_n, int s, int *hit);
 int err_sg_bin_sch_site(const char *func, const int line, SGsite *site, int site_n, int s);
 #define _err_sg_bin_sch_site(site, site_n, s) err_sg_bin_sch_site(__func__, __LINE__, site, site_n, s)
-int sg_bin_sch_edge(SG *sg, int don_site_id, int acc_site_id, int *hit);
-int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_site_id, int acc_site_id);
-#define _err_sg_bin_sch_edge(sg, don_site_id, acc_site_id) err_sg_bin_sch_edge(__func__, __LINE__, sg, don_site_id, acc_site_id)
+int sg_bin_sch_edge(SG *sg, int don_id, int acc_id, int *hit);
+int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_id, int acc_id);
+#define _err_sg_bin_sch_edge(sg, don_id, acc_id) err_sg_bin_sch_edge(__func__, __LINE__, sg, don_id, acc_id)
 
 void cal_pre_domn(SG *sg);
 void cal_post_domn(SG *sg);

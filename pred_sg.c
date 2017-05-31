@@ -4,7 +4,7 @@
 #include <getopt.h>
 #include "htslib/htslib/sam.h"
 #include "gtf.h"
-#include "build_sg.h"
+#include "splice_graph.h"
 #include "parse_bam.h"
 #include "kstring.h"
 #include "pred_asm.h"
@@ -30,7 +30,7 @@ sg_para *sg_init_para(void)
     sg_para *sgp = (sg_para*)_err_malloc(sizeof(sg_para));
     sgp->n_threads = 1;
     sgp->rep_n = NULL; sgp->in_name = NULL;
-    sgp->sam_n = 0; sgp->tol_rep_n = 0;
+    sgp->sam_n = 0; sgp->tot_rep_n = 0;
     sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = 0; // 1: pair, 0: single
     sgp->rm_edge = 0; sgp->edge_wt = 0;
@@ -47,7 +47,7 @@ void sg_free_para(sg_para *sgp)
 {
     if (sgp->in_name != NULL) {
         int i;
-        for (i = 0; i < sgp->tol_rep_n; ++i)
+        for (i = 0; i < sgp->tot_rep_n; ++i)
             free(sgp->in_name[i]);
         free(sgp->in_name);
     }
@@ -70,17 +70,17 @@ int comp_sj_sg(sj_t sj, SG sg)
  * predict splice graph with splice-junctions (short-read data) *
  * based on reference-splice-graph                              *
  ****************************************************************/
-int sg_update_edge_pred(SG *sg, sj_t sj, int don_site_id, int acc_site_id)
+int sg_update_edge_pred(SG *sg, sj_t sj, int don_id, int acc_id)
 {
     int hit = 0;
-    int e_i = sg_bin_sch_edge(sg, don_site_id, acc_site_id, &hit);
+    int e_i = sg_bin_sch_edge(sg, don_id, acc_id, &hit);
     if (hit == 0) { // insert new edge
         if (sg->edge_n++ >= sg->edge_m) _realloc(sg->edge, sg->edge_m, SGedge)
             // copy edge
             if (e_i <= sg->edge_n-2)
                 memmove(sg->edge+e_i+1, sg->edge+e_i, (sg->edge_n-e_i-1) * sizeof(SGedge));
         // set edge
-        sg->edge[e_i].don_site_id = don_site_id, sg->edge[e_i].acc_site_id = acc_site_id;
+        sg->edge[e_i].don_id = don_id, sg->edge[e_i].acc_id = acc_id;
         if (sj.strand == 0) sg->edge[e_i].is_rev = 2;
         else sg->edge[e_i].is_rev = sj.strand - 1; // 0:+, 1:-, 2:undefined
         sg->edge[e_i].motif = sj.motif, sg->edge[e_i].is_anno = sj.is_anno;
@@ -126,7 +126,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 // 0. search site/edge: (GTF_don_site_id, GTF_acc_site_id) => GTF_edge_id
                 GTF_don_site_id = sg_bin_sch_site(don_site, don_n, sj->don, &hit); if (hit == 0) continue;
                 GTF_acc_site_id = sg_bin_sch_site(acc_site, acc_n, sj->acc, &hit); if (hit == 0) continue;
-                sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); if (hit == 0 && no_novel_sj == 1) continue;
+                sg_bin_sch_edge(sg, don_site[GTF_don_site_id].exon_id[0], acc_site[GTF_acc_site_id].exon_id[0], &hit); if (hit == 0 && no_novel_sj == 1) continue;
                 // 1. update node & site
                 //    1.1 map[exon] = 1
                 for (j = 0; j < don_site[GTF_don_site_id].exon_n; ++j) {
@@ -188,7 +188,7 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
                 acc_site_id = sg_bin_sch_site(acc_site, acc_n, sj->acc, &hit); if (hit == 0) continue;
                 GTF_don_site_id = _err_sg_bin_sch_site(sg_don, sg_don_n, sj->don);
                 GTF_acc_site_id = _err_sg_bin_sch_site(sg_acc, sg_acc_n, sj->acc);
-                sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit); 
+                sg_bin_sch_edge(sg, sg_don[GTF_don_site_id].exon_id[0], sg_acc[GTF_acc_site_id].exon_id[0], &hit); 
                 if (hit == 0 && no_novel_sj == 1) continue;
                 else if (hit == 0) sj->is_anno = 0;
 

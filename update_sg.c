@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "gtf.h"
-#include "build_sg.h"
+#include "splice_graph.h"
 #include "utils.h"
 
 #define sg_update_edge_wei(ed, sj) { \
@@ -32,7 +32,7 @@ int update_SpliceGraph_edge(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *s
             // 0. search site/edge: (GTF_don_site_id, GTF_acc_site_id) => GTF_edge_id
             int GTF_don_site_id = sg_bin_sch_site(don_site, don_n, sj->don, &hit); if (hit == 0) continue;
             int GTF_acc_site_id = sg_bin_sch_site(acc_site, acc_n, sj->acc, &hit); if (hit == 0) continue;
-            int GTF_edge_id = sg_bin_sch_edge(sg, GTF_don_site_id, GTF_acc_site_id, &hit);
+            int GTF_edge_id = sg_bin_sch_edge(sg, don_site[GTF_don_site_id].exon_id[0], acc_site[GTF_acc_site_id].exon_id[0], &hit);
             // 1. for valid sj
             if (hit == 1) { // update edge weight
                 sg_update_edge_wei(sg->edge[GTF_edge_id], sj)
@@ -74,7 +74,8 @@ void remove_SpliceGraph_edge(SG_group *sg_g, int edge_wt)
         SGnode *node = sg->node; SGsite *don = sg->don_site, *acc = sg->acc_site; SGedge *edge = sg->edge;
         for (edge_i = 0; edge_i < sg->edge_n; ++edge_i) {
             if (edge[edge_i].uniq_c < edge_wt) {
-                int don_id = edge[edge_i].don_site_id, acc_id = edge[edge_i].acc_site_id;
+                int don_id = edge[edge_i].don_id, acc_id = edge[edge_i].acc_id;
+                // XXX ERROR
                 int *don_exon_id = don[don_id].exon_id, don_exon_n = don[don_id].exon_n;
                 int acc_site = acc[acc_id].site;
                 for (i = 0; i < don_exon_n; ++i) {
@@ -116,5 +117,23 @@ int update_SpliceGraph(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 {
     update_SpliceGraph_edge(sg_g, sj_group, sj_n, sgp);
     if (sgp->rm_edge) remove_SpliceGraph_edge(sg_g, sgp->edge_wt);
+    return 0;
+}
+
+int add_novel_sg_edge(SG *sg, gec_t *exon_id, gec_t exon_n, sg_para *sgp) {
+    if (sgp->no_novel_sj) return 0;
+    int i, hit; gec_t don_id, acc_id;
+    SGnode *node = sg->node; int edge_id;
+    for (i = 0; i < exon_n-1; ++i) {
+        don_id = exon_id[i], acc_id = exon_id[i+1];
+        edge_id =sg_bin_sch_edge(sg, don_id, acc_id, &hit);
+        if (hit == 0) {
+            uint8_t is_anno = 0, is_rev = sg->is_rev;
+
+            _bin_insert(acc_id, node[don_id].next_id, node[don_id].next_n, node[don_id].next_m, gec_t)
+            _bin_insert(don_id, node[acc_id].pre_id, node[acc_id].pre_n, node[acc_id].pre_m, gec_t)
+            sg_add_edge(sg->edge, edge_id, (sg->edge_n), (sg->edge_m), don_id, acc_id, is_rev, is_anno)
+        }
+    }
     return 0;
 }

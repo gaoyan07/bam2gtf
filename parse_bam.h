@@ -4,7 +4,7 @@
 #include "htslib/htslib/sam.h"
 #include "gtf.h"
 #include "kseq.h"
-#include "build_sg.h"
+#include "splice_graph.h"
 
 KSEQ_INIT(gzFile, gzread)
 
@@ -22,7 +22,9 @@ typedef struct {
     hts_itr_t *itr;
 } bam_aux_t;
 
-
+int ad_sim_comp(ad_t *ad1, ad_t *ad2);
+int ad_comp(ad_t *ad1, ad_t *ad2);
+void ad_copy(ad_t *dest, ad_t *src);
 int parse_bam_record1(bam1_t *b, ad_t *ad, sg_para *sgp);
 
 kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m);
