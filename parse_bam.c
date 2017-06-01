@@ -96,10 +96,13 @@ bam_aux_t **sg_par_input_list(sg_para *sgp, const char *list) {
     char buff[1024];
     fgets(buff, 1024, fp); 
     if ((sgp->sam_n = atoi(buff)) <= 0) err_fatal_core(__func__, "wrong format of BAM list file.\n");
+    //printf("sam: %d\n", sgp->sam_n);
 
     while (fgets(buff, 1024, fp) != NULL) {
         if ((rep_n = atoi(buff)) <= 0) err_fatal_core(__func__, "wrong format of BAM list file.\n");
+        //printf("rep: %d\n", rep_n);
         for (i = 0; i < rep_n; ++i) fgets(buff, 1024, fp);
+        //printf("bam: %s\n", buff);
         tot_rep_n += rep_n;
     }
     sgp->tot_rep_n = tot_rep_n;
@@ -115,7 +118,8 @@ bam_aux_t **sg_par_input_list(sg_para *sgp, const char *list) {
         if ((rep_n = atoi(buff)) <= 0) err_fatal_core(__func__, "wrong format of BAM list file.\n");
         for (i = 0; i < rep_n; ++i) {
             fgets(buff, 1024, fp);
-            sgp->in_name[tot_rep_n+i] = strdup(buff);
+            // remove '\n'
+            sgp->in_name[tot_rep_n+i] = strndup(buff, strlen(buff)-1);
         }
         sgp->rep_n[sam_n++] = rep_n;
         tot_rep_n += rep_n;
@@ -616,7 +620,9 @@ int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_
                 int start = sg->start, end = sg->end;
                 int j;
                 if (sg->tid < tid || start == MAX_SITE || end == 0 || (sg->tid == tid && end <= bam_start)) {
-                    if (sg_i == last_sg_i) last_sg_i++; continue;
+                    if (sg_i == last_sg_i) {
+                        last_sg_i++; continue;
+                    }
                 } else if (sg->tid > tid || (sg->tid == tid && start >= bam_end)) break;
                 else {
                     for (j = 0; j < sg->node_n; ++j) {

@@ -29,7 +29,7 @@ sg_para *sg_init_para(void)
 {
     sg_para *sgp = (sg_para*)_err_malloc(sizeof(sg_para));
     sgp->n_threads = 1;
-    sgp->rep_n = NULL; sgp->in_name = NULL;
+    sgp->in_list = 0; sgp->rep_n = NULL; sgp->in_name = NULL;
     sgp->sam_n = 0; sgp->tot_rep_n = 0;
     sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = 0; // 1: pair, 0: single

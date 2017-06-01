@@ -77,7 +77,7 @@ gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edg
         if (i < 0) break;
         node_id[l++] = i;
     }
-    if (node_id[l-1] != src) err_fatal_simple("0 edge in heaviest path.(1)\n");
+    //if (node_id[l-1] != src) err_fatal_simple("0 edge in heaviest path.(1)\n");
     // reverse
     for (i = 0; i < l/2; ++i) node_id[i] = node_id[l-1-i];
     node_id[l++] = max_i, node_id[l++] = max_j;
@@ -87,7 +87,7 @@ gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edg
         if (j < 0) break;
         node_id[l++] = j;
     }
-    if (node_id[l-1] != sink) err_fatal_simple("0 edge in heaviest path.(2)\n");
+    //if (node_id[l-1] != sink) err_fatal_simple("0 edge in heaviest path.(2)\n");
     for (i = 0; i < l-1; ++i) {
         cap[i] = W[node_id[i]][node_id[i+1]];
         bv[i] = bias[node_id[i]-src];
@@ -103,7 +103,7 @@ void normalize_bias_factor(double *bias, int src, int sink) {
         bias[i-src] = b * bias[i-src];
         b = bias[i-src];
     }
-    for (i = src+1; i < sink; ++i) printf("%f\n", bias[i-src]);
+    //for (i = src+1; i < sink; ++i) printf("%f\n", bias[i-src]);
 }
 
 double bias_flow(double *cap, double *bias, int src, int sink) {
@@ -147,6 +147,7 @@ void bias_flow_iso_core(SG *sg, double **W, int src, int sink, int map_n, cmptb_
         cmptb_map_t *iso_m = gen_iso_exon_map(node_id, l, map_n);
         insert_iso_exon_map(iso_map, iso_i, map_n, iso_m);
         if (*iso_i == iso_max) break;
+        free(iso_m);
 
         // next path
         l = heaviest_path(sg, W, bias, src, sink, edge_s_id, edge_e_id, node_id, capacities, bv, sgp->edge_wt);
@@ -154,11 +155,11 @@ void bias_flow_iso_core(SG *sg, double **W, int src, int sink, int map_n, cmptb_
     free(bias); free(node_id); free(capacities); free(bv);
 }
 
-int bias_flow_gen_cand_iso(SG *sg, double ***W, int src, int sink, int rep_n, cmptb_map_t **iso_map, sg_para *sgp) {
-    int i, iso_max = sgp->iso_cnt_max, iso_i=0, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
+int bias_flow_gen_cand_iso(SG *sg, double ***W, int src, int sink, int rep_n, cmptb_map_t **iso_map, int map_n, sg_para *sgp) {
+    int i, iso_max = sgp->iso_cnt_max, iso_i=0;
     for (i = 0; i < iso_max; ++i) iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
 
-   for (i = 0; i < rep_n; ++i) {
+    for (i = 0; i < rep_n; ++i) {
         bias_flow_iso_core(sg, W[i], src, sink, map_n, iso_map, &iso_i, iso_max, sgp);
     }
 
