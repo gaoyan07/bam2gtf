@@ -7,7 +7,7 @@
 #include "splice_graph.h"
 #include "parse_bam.h"
 #include "kstring.h"
-#include "pred_asm.h"
+#include "cand_iso.h"
 
 extern const char PROG[20];
 int pred_sg_usage(void)
@@ -47,9 +47,12 @@ void sg_free_para(sg_para *sgp)
 {
     if (sgp->in_name != NULL) {
         int i;
-        for (i = 0; i < sgp->tot_rep_n; ++i)
+        for (i = 0; i < sgp->tot_rep_n; ++i) {
             free(sgp->in_name[i]);
-        free(sgp->in_name);
+            err_fclose(sgp->out_fp[i]);
+        }
+        err_fclose(sgp->out_fp[i]);
+        free(sgp->in_name); free(sgp->out_fp);
     }
     if (sgp->rep_n != NULL) free(sgp->rep_n);
     free(sgp);

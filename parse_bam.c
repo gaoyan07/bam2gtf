@@ -31,16 +31,15 @@ bam_aux_t *bam_aux_init() {
     aux->idx = NULL;
     aux->h = NULL;
     aux->in = NULL;
-    aux->b = NULL;
     aux->itr = NULL;
     return aux;
 }
+
 void bam_aux_destroy(bam_aux_t *aux) {
     if (aux->idx != NULL) hts_idx_destroy(aux->idx);
     if (aux->h != NULL) bam_hdr_destroy(aux->h);
     if (aux->in != NULL) sam_close(aux->in);
-    if (aux->b != NULL) bam_destroy1(aux->b);
-    if (aux->itr != NULL) hts_itr_destroy(aux->itr);
+    //if (aux->itr != NULL) hts_itr_destroy(aux->itr);
     free(aux);
 }
 
@@ -82,7 +81,7 @@ bam_aux_t **sg_par_input(sg_para *sgp, char *in) {
         strcpy(aux[i]->fn, sgp->in_name[i]);
         err_sam_open(aux[i]->in, sgp->in_name[i]);
         err_sam_hdr_read(aux[i]->h, aux[i]->in, sgp->in_name[i]);
-        err_sam_idx_read(aux[i]->idx, aux[i]->in, sgp->in_name[i]);
+        err_sam_idx_load(aux[i]->idx, aux[i]->in, sgp->in_name[i]);
     }
     return aux;
 }
@@ -129,7 +128,7 @@ bam_aux_t **sg_par_input_list(sg_para *sgp, const char *list) {
         strcpy(aux[i]->fn, sgp->in_name[i]);
         err_sam_open(aux[i]->in, sgp->in_name[i]);
         err_sam_hdr_read(aux[i]->h, aux[i]->in, sgp->in_name[i]);
-        err_sam_idx_read(aux[i]->idx, aux[i]->in, sgp->in_name[i]);
+        err_sam_idx_load(aux[i]->idx, aux[i]->in, sgp->in_name[i]);
     }
     return aux;
 }
@@ -222,10 +221,21 @@ int add_sj(sj_t **sj, int sj_i, int *sj_m, int tid, int don, int acc, uint8_t st
 void free_ad_group(ad_t *ad, int ad_n)
 {
     int i; for (i = 0; i < ad_n; ++i) {
-        free(ad[i].exon_end); 
+        if (ad[i].exon_end != NULL) free(ad[i].exon_end); 
         if (ad[i].intr_end != NULL) free(ad[i].intr_end);
     }
     free(ad);
+}
+
+ad_t *ad_init(int n) {
+    ad_t *ad = (ad_t*)_err_malloc(sizeof(ad_t));
+    ad->tid = 0; ad->is_splice = 0; ad->is_uniq = 0;
+    ad->rlen = 0, ad->start = 0, ad->end = 0;
+    ad->intv_n = 0; ad->intv_m = n;
+    ad->intr_end = (int32_t*)_err_malloc(sizeof(int32_t) * n);
+    ad->exon_end = (int32_t*)_err_malloc(sizeof(int32_t) * n);
+    
+    return ad;
 }
 
 uint8_t intr_deri_str(kseq_t *seq, int seq_n, int tid, int start, int end, uint8_t *motif_i)
@@ -434,6 +444,7 @@ int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uin
 
 int ad_sim_comp(ad_t *ad1, ad_t *ad2) {
     if (ad1->start != ad2->start) return (ad1->start - ad2->start);
+    if (ad1->rlen != ad2->rlen) return (ad1->rlen - ad2->rlen);
     int i, intv_n = MIN_OF_TWO(ad1->intv_n, ad2->intv_n);
     for (i = 0; i < intv_n; ++i) {
         if (ad1->exon_end[i] != ad2->exon_end[i])
@@ -441,10 +452,12 @@ int ad_sim_comp(ad_t *ad1, ad_t *ad2) {
     }
     return (ad1->intv_n - ad2->intv_n);
 }
+
 int ad_comp(ad_t *ad1, ad_t *ad2) {
     int i;
     if (ad1->tid != ad2->tid) return (ad1->tid - ad2->tid);
     if (ad1->start != ad2->start) return (ad1->start - ad2->start);
+    if (ad1->rlen != ad2->rlen) return (ad1->rlen - ad2->rlen);
     int intv_n = MIN_OF_TWO(ad1->intv_n, ad2->intv_n);
     for (i = 0; i < intv_n; ++i) {
         if (ad1->exon_end[i] != ad2->exon_end[i])
@@ -460,9 +473,13 @@ void ad_copy(ad_t *dest, ad_t *src) {
     //dest->is_splice = src->is_splice;
     dest->start = src->start;
     dest->end = src->end;
+    dest->rlen = src->rlen;
     dest->intv_n = src->intv_n;
-    dest->exon_end = (int*)_err_malloc(src->intv_n * sizeof(int));
-    dest->intr_end = (int*)_err_malloc(src->intv_n-1 * sizeof(int));
+    if (src->intv_n > dest->intv_m) {
+        dest->intv_m = src->intv_n;
+        dest->exon_end = (int*)_err_realloc(dest->exon_end, src->intv_n * sizeof(int));
+        dest->intr_end = (int*)_err_realloc(dest->intr_end, src->intv_n * sizeof(int));
+    }
     for (i = 0; i < src->intv_n; ++i) {
         dest->exon_end[i] = src->exon_end[i];
         if (i != src->intv_n-1)
@@ -484,8 +501,11 @@ int bam2ad(int tid, int start, uint8_t is_uniq, int n_cigar, const uint32_t *c, 
     int end = start - 1; /* 1-base */
 
     ad->intv_n = 0;
-    ad->exon_end = (int*)_err_malloc((SJ_n+1) * sizeof(int));
-    ad->intr_end = (int*)_err_malloc(SJ_n * sizeof(int));
+    if (SJ_n+1 > ad->intv_m) {
+        ad->intv_m = SJ_n+1;
+        ad->exon_end = (int*)_err_realloc(ad->exon_end, (SJ_n+1) * sizeof(int));
+        ad->intr_end = (int*)_err_realloc(ad->intr_end, (SJ_n+1) * sizeof(int));
+    }
     ad->tid = tid; ad->start = start;
     ad->is_uniq = is_uniq; ad->is_splice = (SJ_n > 1);
 
@@ -549,6 +569,7 @@ int parse_bam_record1(bam1_t *b, ad_t *ad, sg_para *sgp)
 
     tid = b->core.tid; n_cigar = b->core.n_cigar; cigar = bam_get_cigar(b);
     bam_start = b->core.pos+1;
+    ad->rlen = b->core.l_qseq;
     // alignment details
     return bam2ad(tid, bam_start, is_uniq, n_cigar, cigar, ad, sgp);
 }

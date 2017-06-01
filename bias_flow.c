@@ -8,7 +8,7 @@
 #include "kstring.h"
 
 void cal_flow_bias_recur(double *bias, uint8_t *node_visit, SG *sg, double **W, int cur_id, int src, int sink) {
-    if (node_visit[cur_id] == 1) return; else node_visit[cur_id] = 1;
+    if (node_visit[cur_id-src] == 1) return; else node_visit[cur_id-src] = 1;
     if (cur_id == sink) return;
 
     int i; double wei_in=0, wei_out=0;
@@ -21,8 +21,8 @@ void cal_flow_bias_recur(double *bias, uint8_t *node_visit, SG *sg, double **W, 
     for (i = 0; i < sg->node[cur_id].pre_n; ++i) {
         wei_in += W[sg->node[cur_id].pre_id[i]][cur_id];
     }
-    if (wei_in == 0) bias[cur_id] = 0;
-    else bias[cur_id] = wei_out/wei_in;
+    if (wei_in == 0) bias[cur_id-src] = 0;
+    else bias[cur_id-src] = wei_out/wei_in;
 }
 
 // cal bias factor for each node
@@ -90,7 +90,7 @@ gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edg
     if (node_id[l-1] != sink) err_fatal_simple("0 edge in heaviest path.(2)\n");
     for (i = 0; i < l-1; ++i) {
         cap[i] = W[node_id[i]][node_id[i+1]];
-        bv[i] = bias[node_id[i]];
+        bv[i] = bias[node_id[i]-src];
     }
 
     return l;
@@ -98,25 +98,25 @@ gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edg
 
 void normalize_bias_factor(double *bias, int src, int sink) {
     int i; double b=1.0;
-    bias[src] = 1.0;
+    bias[src-src] = 1.0;
     for (i = src+1; i < sink; ++i) {
-        bias[i] = b * bias[i];
-        b = bias[i];
+        bias[i-src] = b * bias[i-src];
+        b = bias[i-src];
     }
-    for (i = src+1; i < sink; ++i) printf("%f\n", bias[i]);
+    for (i = src+1; i < sink; ++i) printf("%f\n", bias[i-src]);
 }
 
 double bias_flow(double *cap, double *bias, int src, int sink) {
     int i, min_i; double min_f;
-    min_i = src; min_f = cap[src];
+    min_i = src; min_f = cap[src-src];
     for (i = src+1; i < sink; ++i) {
-        if (cap[i] / bias[i] < min_f) {
-            min_f = cap[i] / bias[i];
+        if (cap[i-src] / bias[i-src] < min_f) {
+            min_f = cap[i-src] / bias[i-src];
             min_i = i;
         }
     }
     for (i = src; i < sink; ++i)
-        cap[i] -= (min_f * bias[i]);
+        cap[i-src] -= (min_f * bias[i-src]);
     return min_f;
 }
 
@@ -154,15 +154,13 @@ void bias_flow_iso_core(SG *sg, double **W, int src, int sink, int map_n, cmptb_
     free(bias); free(node_id); free(capacities); free(bv);
 }
 
-cmptb_map_t **bias_flow_gen_cand_iso(SG *sg, double ***W, int src, int sink, int rep_n, int *iso_n, sg_para *sgp) {
-    *iso_n = 0;
+int bias_flow_gen_cand_iso(SG *sg, double ***W, int src, int sink, int rep_n, cmptb_map_t **iso_map, sg_para *sgp) {
     int i, iso_max = sgp->iso_cnt_max, iso_i=0, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
-    cmptb_map_t **iso_map = (cmptb_map_t**)_err_malloc(iso_max * sizeof(cmptb_map_t*));
     for (i = 0; i < iso_max; ++i) iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
 
-    for (i = 0; i < rep_n; ++i) {
+   for (i = 0; i < rep_n; ++i) {
         bias_flow_iso_core(sg, W[i], src, sink, map_n, iso_map, &iso_i, iso_max, sgp);
     }
 
-    return iso_map;
+    return iso_i;
 }

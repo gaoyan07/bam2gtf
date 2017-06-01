@@ -523,13 +523,22 @@ void build_SpliceGraph_core(SG *sg, gene_t *gene)
         e = gene->trans[i].exon[0];
 
         acc_id = don_id = _err_sg_bin_sch_node(sg, e);
+        acc_site_id = _err_sg_bin_sch_site(sg->acc_site, sg->acc_site_n, e.start-1);
         don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1);
-        sg->node[don_id].s_site_id = -1;
+        sg->node[don_id].s_site_id = acc_site_id;
         sg->node[don_id].e_site_id = don_site_id;
 
         // set next_id of v_start
         _bin_insert(don_id, sg->node[0].next_id, sg->node[0].next_n, sg->node[0].next_m, gec_t)
         _bin_insert(0, sg->node[don_id].pre_id, sg->node[don_id].pre_n, sg->node[don_id].pre_m, gec_t)
+
+        // set edge
+        int hit = 0;
+        int e_i = sg_bin_sch_edge(sg, 0, acc_id, &hit);
+        if (hit == 0) // insert new edge
+            sg_add_edge(sg->edge, e_i, (sg->edge_n), (sg->edge_m), 0, acc_id, sg->is_rev, 1);
+        // set site
+        _bin_insert(acc_id, sg->acc_site[acc_site_id].exon_id, sg->acc_site[acc_site_id].exon_n, sg->acc_site[acc_site_id].exon_m, int)
 
         sg->node[don_id].is_init = 1;
 
@@ -542,10 +551,6 @@ void build_SpliceGraph_core(SG *sg, gene_t *gene)
 
             sg_update_edge(sg, don_id, acc_id, don_site_id, acc_site_id, gene->is_rev);
 
-            if (j == gene->trans[i].exon_n-1) {
-                sg->node[acc_id].e_site_id = -1;
-                break;
-            }
             don_site_id = _err_sg_bin_sch_site(sg->don_site, sg->don_site_n, e.end+1);
             sg->node[acc_id].e_site_id = don_site_id;
             don_id = acc_id;
@@ -553,6 +558,15 @@ void build_SpliceGraph_core(SG *sg, gene_t *gene)
         // set pre_id of v_end
         _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, gec_t)
         _bin_insert((gec_t)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, gec_t)
+
+        // set edge
+        hit = 0;
+        e_i = sg_bin_sch_edge(sg, acc_id, sg->node_n-1, &hit);
+        if (hit == 0) // insert new edge
+            sg_add_edge(sg->edge, e_i, (sg->edge_n), (sg->edge_m), acc_id, sg->node_n-1, sg->is_rev, 1);
+        // set site
+        _bin_insert(don_id, sg->don_site[don_site_id].exon_id, sg->don_site[don_site_id].exon_n, sg->don_site[don_site_id].exon_m, int)
+
 
         sg->node[acc_id].is_termi = 1;
     }

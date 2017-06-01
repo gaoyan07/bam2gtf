@@ -1,4 +1,4 @@
-#ifndef _CNAD_ISO_H
+#ifndef _CAND_ISO_H
 #define _CAND_ISO_H
 #include "splice_graph.h"
 
@@ -32,7 +32,7 @@ typedef struct {
  * compatibale!
  */
 typedef struct {
-    int weight;
+    int weight; int rlen;
     gec_t map_s, map_si, map_e, map_ei; // map_e - map_s : number of map of each read
     cmptb_map_t *map;
 } read_exon_map;

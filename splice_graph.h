@@ -13,8 +13,9 @@
 #define _node_len(n) ((n).end-(n).start+1)
 
 typedef struct {
-    uint32_t tid:16, intv_n:14, is_uniq:1, is_splice:1;
-    int32_t start, end;
+    uint32_t tid:30, is_uniq:1, is_splice:1;
+    int intv_n, intv_m;
+    int32_t start, end, rlen;
     int32_t *exon_end, *intr_end; // exon_end[intv_n]: exonic, intr_end[intv_n-1]: intronic
 } ad_t;   // alignment details: start, end, intv_n, intv[]
 
@@ -125,10 +126,10 @@ typedef struct {
 typedef struct {
     int n_threads;
     int sam_n, tot_rep_n, *rep_n;
-    char **in_name;
+    char **in_name; FILE **out_fp;
     uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
     int intron_len, edge_wt;
-    uint64_t iso_cnt_max; int asm_exon_max, iso_read_cnt_min;
+    int iso_cnt_max; int asm_exon_max, iso_read_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int uniq_min[5];   // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int all_min[5];    // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
