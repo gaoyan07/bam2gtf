@@ -56,12 +56,12 @@ int update_SpliceGraph_edge(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *s
         sj_i++;
     }
     // cal domn after remove 0-weight edge
-    if (sgp->rm_edge == 0) {
-        for (i = 0; i < sg_g->SG_n; ++i) {
-            SG *sg = sg_g->SG[i];
-            cal_pre_domn(sg), cal_post_domn(sg);
-        }
-    }
+    //if (sgp->rm_edge == 0) {
+        //for (i = 0; i < sg_g->SG_n; ++i) {
+            //SG *sg = sg_g->SG[i];
+            //cal_pre_domn(sg), cal_post_domn(sg);
+        //}
+    //}
     err_func_format_printf(__func__, "updating splice-graph with splice-junctions done!\n");
     return 0;
 }
@@ -109,7 +109,7 @@ void remove_SpliceGraph_edge(SG_group *sg_g, int edge_wt)
             }
         }
 
-        cal_pre_domn(sg), cal_post_domn(sg);
+        //cal_pre_domn(sg), cal_post_domn(sg);
     }
 }
 

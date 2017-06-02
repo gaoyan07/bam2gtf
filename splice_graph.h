@@ -173,8 +173,8 @@ int sg_bin_sch_edge(SG *sg, int don_id, int acc_id, int *hit);
 int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_id, int acc_id);
 #define _err_sg_bin_sch_edge(sg, don_id, acc_id) err_sg_bin_sch_edge(__func__, __LINE__, sg, don_id, acc_id)
 
-void cal_pre_domn(SG *sg);
-void cal_post_domn(SG *sg);
+void cal_pre_domn(SG *sg, double ***W, int rep_n);
+void cal_post_domn(SG *sg, double ***W, int rep_n);
 
 SG_group *construct_SpliceGraph(FILE *gtf_fp, chr_name_t *cname);
 

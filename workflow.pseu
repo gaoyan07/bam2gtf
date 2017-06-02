@@ -222,3 +222,29 @@ Workflow 7: (parse bam bundle by bundle)
     3.4 Candidate isoforms by Flow decomposition
     3.5 output Read-Isoform compatible matrix
 
+Workflow 8:
+1. build SG
+    for each gene
+    1.1 merge overlapping exons
+    1.2 splice merged exon into fragments
+    1.3 update SG node with fragments
+    1.4 change gene.trans.exon into gene.trans.frag
+2. calculate read-exon compatible matrix
+for each SG/gene
+    2.1 load corresponding BAM records
+    2.2 generate read-exon map for each BAM record
+    2.3 merge read-exon maps into bundles
+    2.4 calculate weight for each exon-exon(frag-frag) junction
+3. generate ASM
+for each SG/gene
+    3.1 use sg->node and weight to generate ASM
+    3.2 generate iso-map
+    for each ASM
+        3.2.1 bias flow network decomposition
+        3.2.2 calculate iso-exon compatible matrix
+4. output read-iso compatible matrix
+for each BAM bundle
+    for each iso-map
+        4.1 if bundle is NOT in ASM; then continue;
+        4.2 check compatibility with each isoform
+

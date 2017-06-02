@@ -333,58 +333,9 @@ map_END:
     return read_map;
 }
 
-/*read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, SG *sg, char *reg, sg_para *sgp) {
-    if (sg->start == 700237)
-        printf("debug");
-    char fn[1024] = "./data/test2.sort.bam";
-    samFile *in;  hts_idx_t *idx; bam_hdr_t *h; bam1_t *b;
-    err_sam_open(in, fn); b = bam_init1(); err_sam_hdr_read(h, in, fn); err_sam_idx_load(idx, in, fn);
-    hts_itr_t *itr = sam_itr_querys(idx, h, reg);
-
-    ad_t *ad = ad_init(1), *last_ad = ad_init(1); gec_t *exon_id, *last_exon_id, exon_n, exon_m, last_exon_n, last_exon_m; uint8_t cmptb, last_cmptb;
-    int i, r, bundle_n = 0, bundle_m = 10000;//, N = sg->node_n;
-    read_exon_map *read_map = (read_exon_map*)_err_malloc(bundle_m * sizeof(read_exon_map));
-    for (i = 0; i < sg->node_n; ++i) wei_matrix[i] = (double*)_err_calloc(sg->node_n, sizeof(double));
-
-    exon_id = (gec_t*)_err_malloc(4 * sizeof(gec_t)); exon_m = 4, exon_n = 0;
-    last_exon_id = (gec_t*)_err_malloc(4 * sizeof(gec_t)); last_exon_m = 4, last_exon_n = 0;
-    last_cmptb = 0;
-    while ((r = sam_itr_next(in, itr, b)) >= 0) {
-        // parse bam record
-        if (parse_bam_record1(b, ad, sgp) <= 0) continue;
-        if (ad_sim_comp(ad, last_ad) == 0) {
-            if (last_cmptb) {
-                read_map[bundle_n-1].weight++;
-                // update edge weight and novel edge
-                update_weight_matrix(wei_matrix, last_exon_id, last_exon_n);
-            }
-            continue;
-        }
-        read_exon_map *m1 = bam_sgnode_cmptb(ad, sg, &exon_id, &exon_n, &exon_m, &cmptb);
-        // insert new bundle
-        if (cmptb) {
-            read_exon_map_insert(&read_map, &bundle_n, &bundle_m, m1);
-            // update edge weight and novel edge
-            update_weight_matrix(wei_matrix, exon_id, exon_n);
-            add_novel_sg_edge(sg, exon_id, exon_n, sgp);
-            read_exon_map_free(m1);
-        }
-        last_cmptb = cmptb; exon_id_copy(&last_exon_id, &last_exon_n, &last_exon_m, exon_id, exon_n);
-        ad_copy(last_ad, ad); 
-    }
-    if (r < -1) err_func_format_printf("BAM file error. \"%s\"", bam_aux->fn);
-
-    *b_n = bundle_n; 
-    bam_destroy1(b); hts_itr_destroy(itr); hts_idx_destroy(idx); bam_hdr_destroy(h); sam_close(in);
-    free_ad_group(ad, 1); free_ad_group(last_ad, 1);
-    free(exon_id), free(last_exon_id);
-    return read_map;
-}*/
-
-read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, SG *sg, char *reg, sg_para *sgp) {
-    char *fn = bam_aux->fn;
-    samFile *in;  hts_idx_t *idx; bam_hdr_t *h; bam1_t *b;
-    err_sam_open(in, fn); b = bam_init1(); err_sam_hdr_read(h, in, fn); err_sam_idx_load(idx, in, fn);
+read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, SG *sg, char **cname, sg_para *sgp) {
+    samFile *in = bam_aux->in;  hts_idx_t *idx = bam_aux->idx; bam_hdr_t *h = bam_aux->h; bam1_t *b = bam_init1();
+    char reg[1024]; sprintf(reg, "%s:%d-%d", cname[sg->tid], sg->start, sg->end);
     hts_itr_t *itr = sam_itr_querys(idx, h, reg);
 
     ad_t *ad = ad_init(1), *last_ad = ad_init(1); gec_t *exon_id, *last_exon_id, exon_n, exon_m, last_exon_n, last_exon_m; uint8_t cmptb, last_cmptb;
@@ -423,7 +374,7 @@ read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, S
     if (r < -1) err_func_format_printf("BAM file error. \"%s\"", bam_aux->fn);
 
     *b_n = bundle_n; 
-    bam_destroy1(b); hts_itr_destroy(itr); hts_idx_destroy(idx); bam_hdr_destroy(h); sam_close(in);
+    bam_destroy1(b); hts_itr_destroy(itr); 
     free_ad_group(ad, 1); free_ad_group(last_ad, 1);
     free(exon_id), free(last_exon_id);
     return read_map;
@@ -471,15 +422,13 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
         }
     }
     // .IsoExon
-    int exon_i, exon_n, v_n = 0, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
+    int exon_i, exon_n, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
     SGnode *node = sg->node;
     cmptb_map_t *union_map = cmptb_map_union(iso_map, iso_n, map_n);
     exon_n = cmptb_map_exon_cnt(union_map, map_n);
 
-    if (src == 0) { src++; v_n++; }
-    if (sink == sg->node_n-1) { sink--; v_n++; }
     // exon header: ASM_ID, Exon_NUM, Isoform_NUM, strand, CHR_Name
-    fprintf(sgp->out_fp[rep_n], "ASM#%d\t%d\t%d\t%c\t%s\n", *asm_i, exon_n-v_n, iso_n, "+-"[sg->is_rev], cname[sg->tid]);
+    fprintf(sgp->out_fp[rep_n], "ASM#%d\t%d\t%d\t%c\t%s\n", *asm_i, exon_n, iso_n, "+-"[sg->is_rev], cname[sg->tid]);
     // exon coordinate pair: start, end
     int *exon_index = (int*)_err_calloc(sink-src+1, sizeof(int)); int _exon_i = 0;
     for (exon_i = src; exon_i <= sink; ++exon_i) {
@@ -491,7 +440,7 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
     for (iso_i = 0; iso_i < iso_n; ++iso_i) {
         im = iso_map[iso_i];
         exon_n = cmptb_map_exon_cnt(im, map_n);
-        fprintf(sgp->out_fp[rep_n], "%d", exon_n-v_n);
+        fprintf(sgp->out_fp[rep_n], "%d", exon_n);
         for (exon_i = src; exon_i <= sink; ++exon_i) {
             if (is_cmptb_exon_iso(exon_i, im)) {
                 fprintf(sgp->out_fp[rep_n], "\t%d", exon_index[exon_i-src]);
@@ -506,7 +455,7 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
 void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double ***W,  int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
     int entry_n, exit_n; int *entry, *exit;
 
-    cal_pre_domn(sg), cal_post_domn(sg);
+    cal_pre_domn(sg, W, rep_n), cal_post_domn(sg, W, rep_n);
     cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n);
     if (entry_n == 0 || exit_n == 0) {
         free(entry); free(exit); return;
@@ -542,6 +491,7 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
     read_exon_map **M = (read_exon_map**)_err_malloc(sgp->tot_rep_n * sizeof(read_exon_map*));
     double ***W = (double***)_err_malloc(sgp->tot_rep_n * sizeof(double**));
     int *bundle_n = (int*)_err_malloc(sgp->tot_rep_n * sizeof(int));
+    int i, hit = 0;
 
     asm_i = 0;
     for (sg_i = 0; sg_i < sg_g->SG_n; ++sg_i) {
@@ -549,19 +499,18 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
         if (sg->node_n - 2 < 3) continue;
 
         // 0. read bam bundle for each gene
+        hit = 0;
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
             // 1. generate read-exon compatible array
             // 2. update SG with bamBundle
             // OR (optional) only known transcript
-            char reg[1024]; 
-            sprintf(reg, "%s:%d-%d", sg_g->cname->chr_name[sg->tid], sg->start, sg->end);
             W[rep_i] = (double**)_err_calloc(sg->node_n, sizeof(double));
-            M[rep_i] = bam_sg_cmptb(bam_aux[rep_i], W[rep_i], bundle_n+rep_i, sg, reg, sgp);
+            M[rep_i] = bam_sg_cmptb(bam_aux[rep_i], W[rep_i], bundle_n+rep_i, sg, sg_g->cname->chr_name, sgp);
+            hit += bundle_n[rep_i];
         }
         // 3. flow network decomposition
-        gen_cand_iso(sg, sg_g->cname->chr_name, M, W, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
+        if (hit > 0) gen_cand_iso(sg, sg_g->cname->chr_name, M, W, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
-            int i;
             for (i = 0; i < sg->node_n; ++i) free(W[rep_i][i]); free(W[rep_i]); 
             for (i = 0; i < bundle_n[rep_i]; ++i) {
                 free(M[rep_i][i].map);

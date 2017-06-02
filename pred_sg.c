@@ -265,11 +265,11 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
         }
     }
     for (i = 0; i < sg_g.SG_n; ++i) free(node_map[i]); free(node_map);
-    int m;
-    for (m = 0; m < sr_sg_g->SG_n; ++m) {
-        SG *sr_sg = sr_sg_g->SG[m];
-        cal_pre_domn(sr_sg); cal_post_domn(sr_sg);
-    }
+    //int m;
+    //for (m = 0; m < sr_sg_g->SG_n; ++m) {
+        //SG *sr_sg = sr_sg_g->SG[m];
+        //cal_pre_domn(sr_sg); cal_post_domn(sr_sg);
+    //}
     return 0;
 }
 

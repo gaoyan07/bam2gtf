@@ -34,7 +34,8 @@ double *cal_flow_bias(SG *sg, double **W, int src, int sink) {
     return bias;
 }
 
-int heaviest_in_edge(SG *sg, double **W, int cur_id, double min_w) {
+int heaviest_in_edge(SG *sg, double **W, int cur_id, double min_w, int src) {
+    if (cur_id == src) return -1;
     int i, m = -1;
     for (i = 0; i < sg->node[cur_id].pre_n; ++i) {
         int don_id = sg->node[cur_id].pre_id[i];
@@ -46,7 +47,8 @@ int heaviest_in_edge(SG *sg, double **W, int cur_id, double min_w) {
     return m;
 }
 
-int heaviest_out_edge(SG *sg, double **W, int cur_id, double min_w) {
+int heaviest_out_edge(SG *sg, double **W, int cur_id, double min_w, int sink) {
+    if (cur_id == sink) return -1;
     int i, m = -1;
     for (i = 0; i < sg->node[cur_id].next_n; ++i) {
         int acc_id = sg->node[cur_id].next_id[i];
@@ -59,7 +61,11 @@ int heaviest_out_edge(SG *sg, double **W, int cur_id, double min_w) {
 }
 
 gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edge_s_id, int edge_e_id, gec_t *node_id, double *cap, double *bv, double min_w) {
+    uint8_t v_s=0, v_e=0;
+    if (src == 0) v_s = 1; if (sink == sg->node_n-1) v_e = 1;
+
     int max_i = src, max_j = sink, i, j; double w = min_w;
+    // XXX SG traversal
     SGedge *edge = sg->edge; int don_id, acc_id;
     for (i = edge_s_id; i <= edge_e_id; ++i) {
         don_id = edge[i].don_id, acc_id = edge[i].acc_id;
@@ -73,21 +79,49 @@ gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edg
     gec_t l = 0;
     i = max_i;
     while (1) {
-        i = heaviest_in_edge(sg, W, i, min_w);
+        i = heaviest_in_edge(sg, W, i, min_w, src);
         if (i < 0) break;
         node_id[l++] = i;
     }
-    //if (node_id[l-1] != src) err_fatal_simple("0 edge in heaviest path.(1)\n");
     // reverse
-    for (i = 0; i < l/2; ++i) node_id[i] = node_id[l-1-i];
-    node_id[l++] = max_i, node_id[l++] = max_j;
+    int tmp;
+    for (i = 0; i < l/2; ++i) {
+        tmp = node_id[i];
+        node_id[i] = node_id[l-1-i];
+        node_id[l-1-i] = tmp;
+    }
+    node_id[l++] = max_i;
+    // check isoform integrity
+    int id = node_id[0], hit = 0;
+    if (id == src) hit = 0;
+    else {
+        for (i = 0; i < sg->node[id].pre_n; ++i) {
+            if (sg->node[id].pre_id[i] == src) {
+                hit = 1; break;
+            }
+        }
+    }
+    if (hit == 0) return 0;
+
+    node_id[l++] = max_j;
     j = max_j;
     while (1) {
-        j = heaviest_out_edge(sg, W, j, min_w);
+        j = heaviest_out_edge(sg, W, j, min_w, sink);
         if (j < 0) break;
         node_id[l++] = j;
     }
-    //if (node_id[l-1] != sink) err_fatal_simple("0 edge in heaviest path.(2)\n");
+
+    // check isoform integrity
+    id = node_id[l-1]; hit = 0;
+    if (id == sink) hit = 1;
+    else {
+        for (i = 0; i < sg->node[id].next_n; ++i) {
+            if (sg->node[id].next_id[i] == sink) {
+                hit = 1; break;
+            }
+        }
+    }
+    if (hit == 0) return 0;
     for (i = 0; i < l-1; ++i) {
         cap[i] = W[node_id[i]][node_id[i+1]];
         bv[i] = bias[node_id[i]-src];
@@ -103,7 +137,8 @@ void normalize_bias_factor(double *bias, int src, int sink) {
         bias[i-src] = b * bias[i-src];
         b = bias[i-src];
     }
-    //for (i = src+1; i < sink; ++i) printf("%f\n", bias[i-src]);
+    for (i = src+1; i < sink; ++i) err_printf("%f\t", bias[i-src]);
+    err_printf("\n");
 }
 
 double bias_flow(double *cap, double *bias, int src, int sink) {
@@ -137,17 +172,19 @@ void bias_flow_iso_core(SG *sg, double **W, int src, int sink, int map_n, cmptb_
     int edge_s_id = _err_sg_bin_sch_edge(sg, src, sg->node[src].next_id[0]);
     int edge_e_id = _err_sg_bin_sch_edge(sg, sg->node[sink].pre_id[sg->node[sink].pre_n-1], sink);
 
+    err_printf("%d %d\t%d %d\n", src, sink, sg->node[src].start, sg->node[sink].end);
     gec_t l = heaviest_path(sg, W, bias, src, sink, edge_s_id, edge_e_id, node_id, capacities, bv, sgp->edge_wt);
     while (l > 0) {
         int s = 0, t = l-1;
+        err_printf("%d\n", l);
         normalize_bias_factor(bv, s, t);
         bias_flow(capacities, bv, s, t);
         recal_flow_cap(W, capacities, node_id, l);
         // node_id, l => iso_exon_map
         cmptb_map_t *iso_m = gen_iso_exon_map(node_id, l, map_n);
         insert_iso_exon_map(iso_map, iso_i, map_n, iso_m);
-        if (*iso_i == iso_max) break;
         free(iso_m);
+        if (*iso_i == iso_max) break;
 
         // next path
         l = heaviest_path(sg, W, bias, src, sink, edge_s_id, edge_e_id, node_id, capacities, bv, sgp->edge_wt);
@@ -157,6 +194,7 @@ void bias_flow_iso_core(SG *sg, double **W, int src, int sink, int map_n, cmptb_
 
 int bias_flow_gen_cand_iso(SG *sg, double ***W, int src, int sink, int rep_n, cmptb_map_t **iso_map, int map_n, sg_para *sgp) {
     int i, iso_max = sgp->iso_cnt_max, iso_i=0;
+    // XXX add annotation iso to iso_map firstly
     for (i = 0; i < iso_max; ++i) iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
 
     for (i = 0; i < rep_n; ++i) {

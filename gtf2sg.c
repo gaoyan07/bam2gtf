@@ -310,16 +310,36 @@ void intersect_domn(gec_t **com, gec_t *new_domn, gec_t *com_n, gec_t new_n, int
     *com_n = domn_i;
 }
 
-void cal_pre_domn(SG *sg)
+// calculate predominate nodes with edge weight
+// XXX require at least one rep has >0 weight
+void cal_pre_domn(SG *sg, double ***W, int rep_n)
 {
-    int i, j;
+    int i, j, first, rep_i;
     for (i = 0; i < sg->node_n; ++i) {
         if (sg->node[i].pre_n == 0) continue;
 
-        gec_t com_n = sg->node[sg->node[i].pre_id[0]].pre_domn_n, com_m = sg->node[sg->node[i].pre_id[0]].pre_domn_m;
-        gec_t *com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
-        for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].pre_id[0]].pre_domn[j];
-        for (j = 1; j < sg->node[i].pre_n; ++j) {
+        gec_t com_n, com_m, *com;
+
+        for (first = 0; first < sg->node[i].pre_n; ++first) {
+            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
+                if (sg->node[i].pre_id[first] == 0 || W[rep_i][sg->node[i].pre_id[first]][i] > 0)
+                    goto pre_domn;
+            }
+        }
+        continue;
+
+pre_domn:
+        com_n = sg->node[sg->node[i].pre_id[first]].pre_domn_n, com_m = sg->node[sg->node[i].pre_id[first]].pre_domn_m;
+        com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
+        for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].pre_id[first]].pre_domn[j];
+
+        for (j = first+1; j < sg->node[i].pre_n; ++j) {
+            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
+                if (sg->node[i].pre_id[j] == 0 || W[rep_i][sg->node[i].pre_id[j]][i] > 0)
+                    goto pre_domn_x;
+            }
+            continue;
+pre_domn_x:
             intersect_domn(&com, sg->node[sg->node[i].pre_id[j]].pre_domn, &com_n, sg->node[sg->node[i].pre_id[j]].pre_domn_n, 1);
         }
         if (com_n+1 > sg->node[i].pre_domn_m) {
@@ -332,17 +352,36 @@ void cal_pre_domn(SG *sg)
     }
 }
 
-void cal_post_domn(SG *sg)
+void cal_post_domn(SG *sg, double ***W, int rep_n)
 {
-    int i, j;
+    int i, j, first, rep_i;
     for (i = sg->node_n-1; i >= 0; --i) {
         if (sg->node[i].next_n == 0) continue;
+            
+        gec_t com_n, com_m, *com;
+        for (first = 0; first < sg->node[i].next_n; ++first) {
+            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
+                if (sg->node[i].next_id[first] == sg->node_n-1 || W[rep_i][i][sg->node[i].next_id[first]] > 0)
+                    goto post_domn;
+            }
+        }
+        continue;
 
-        gec_t com_n = sg->node[sg->node[i].next_id[0]].post_domn_n, com_m = sg->node[sg->node[i].next_id[0]].post_domn_m;
-        gec_t *com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
-        for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].next_id[0]].post_domn[j];
-        for (j = 1; j < sg->node[i].next_n; ++j) 
+post_domn:
+        com_n = sg->node[sg->node[i].next_id[first]].post_domn_n, com_m = sg->node[sg->node[i].next_id[first]].post_domn_m;
+        com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
+        for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].next_id[first]].post_domn[j];
+
+        for (j = first+1; j < sg->node[i].next_n; ++j) {
+            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
+                if (sg->node[i].next_id[j] == sg->node_n-1 || W[rep_i][i][sg->node[i].next_id[j]] > 0)
+                    goto post_domn_x;
+            }
+            continue;
+post_domn_x:
             intersect_domn(&com, sg->node[sg->node[i].next_id[j]].post_domn, &com_n, sg->node[sg->node[i].next_id[j]].post_domn_n, 2);
+        }
+
         if (com_n+1 > sg->node[i].post_domn_m) {
             sg->node[i].post_domn_m = com_n+1; 
             sg->node[i].post_domn = (gec_t*)_err_realloc(sg->node[i].post_domn, (com_n+1) * sizeof(gec_t));
@@ -427,7 +466,7 @@ void sg_merge_end(gene_t *gene) {
             if (gene->trans[j].exon[0].end != end[i]) continue;
             min = MIN_OF_TWO(min, gene->trans[j].exon[0].start);
         }
-        for (j = 0; j < gene->trans_n; ++j) {
+        for (j = 0; j < gene->trans_n; ++j) { // merge init-exon's start, which share same end
             if (gene->trans[j].exon[0].end != end[i]) continue;
             gene->trans[j].exon[0].start = min;
         }
@@ -438,7 +477,7 @@ void sg_merge_end(gene_t *gene) {
             if (gene->trans[j].exon[gene->trans[j].exon_n-1].start!= start[i]) continue;
             max = MAX_OF_TWO(max, gene->trans[j].exon[gene->trans[j].exon_n-1].end);
         }
-        for (j = 0; j < gene->trans_n; ++j) {
+        for (j = 0; j < gene->trans_n; ++j) { // merge term-exon' end, which share same start
             if (gene->trans[j].exon[gene->trans[j].exon_n-1].start!= start[i]) continue;
             gene->trans[j].exon[gene->trans[j].exon_n-1].end = max;
         }
@@ -459,14 +498,15 @@ void gen_gene_split_exon(coor_pair_t *coor, int coor_n, gene_t *gene) {
                         gene->trans[i].exon[j].end = coor[k].s[p]-1;
                         exon_t e = gene->trans[i].exon[j];
                         for (q = p; q < coor[k].n-1 && coor[k].s[q] < end; ++q) {
-                            e.start = coor[k].s[p], e.end = coor[k].s[p+1]-1;
+                            e.start = coor[k].s[q], e.end = coor[k].s[q+1]-1;
                             if (gene->trans[i].exon_n == gene->trans[i].exon_m) _realloc(gene->trans[i].exon, gene->trans[i].exon_m, exon_t)
                             gene->trans[i].exon[gene->trans[i].exon_n++] = e;
                         }
-                        break;
+                        goto next_exon;
                     }
                 }
             }
+next_exon:;
         }
         sort_exon(gene->trans+i);
     }
@@ -555,6 +595,7 @@ void build_SpliceGraph_core(SG *sg, gene_t *gene)
             sg->node[acc_id].e_site_id = don_site_id;
             don_id = acc_id;
         }
+
         // set pre_id of v_end
         _bin_insert(acc_id, sg->node[sg->node_n-1].pre_id, sg->node[sg->node_n-1].pre_n, sg->node[sg->node_n-1].pre_m, gec_t)
         _bin_insert((gec_t)sg->node_n-1, sg->node[acc_id].next_id, sg->node[acc_id].next_n, sg->node[acc_id].next_m, gec_t)
@@ -570,7 +611,7 @@ void build_SpliceGraph_core(SG *sg, gene_t *gene)
 
         sg->node[acc_id].is_termi = 1;
     }
-    // XXX after update!!! cal pre/post domn
+    // after update!!! cal pre/post domn
     // cal_pre_domn(sg); cal_post_domn(sg); 
 }
 
