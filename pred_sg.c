@@ -33,7 +33,7 @@ sg_para *sg_init_para(void)
     sgp->sam_n = 0; sgp->tot_rep_n = 0;
     sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = 0; // 1: pair, 0: single
-    sgp->rm_edge = 0; sgp->edge_wt = 0;
+    sgp->rm_edge = 0; sgp->edge_wt = 0.1;
     sgp->asm_exon_max = ISO_EXON_MAX; sgp->iso_cnt_max = ISO_CNT_MAX; sgp->iso_read_cnt_min = ISO_READ_CNT_MIN;
     sgp->intron_len = INTRON_MIN_LEN;
     sgp->merge_out = 0;

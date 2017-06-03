@@ -7,13 +7,14 @@
 #include "kdq.h"
 #include "kstring.h"
 
-void cal_flow_bias_recur(double *bias, uint8_t *node_visit, SG *sg, double **W, int cur_id, int src, int sink) {
+void cal_flow_bias_recur(double *bias, uint8_t *node_visit, SG *sg, double **W, uint8_t **asm_matrix, int cur_id, int src, int sink) {
     if (node_visit[cur_id-src] == 1) return; else node_visit[cur_id-src] = 1;
     if (cur_id == sink) return;
 
     int i; double wei_in=0, wei_out=0;
     for (i = 0; i < sg->node[cur_id].next_n; ++i) {
-        cal_flow_bias_recur(bias, node_visit, sg, W, sg->node[cur_id].next_id[i], src, sink);
+        if (cur_id != 0 && W[cur_id][sg->node[cur_id].next_id[i]] == 0) continue;
+        cal_flow_bias_recur(bias, node_visit, sg, W, asm_matrix, sg->node[cur_id].next_id[i], src, sink);
         wei_out += W[cur_id][sg->node[cur_id].next_id[i]];
     }
     if (cur_id == src) return;
@@ -26,19 +27,20 @@ void cal_flow_bias_recur(double *bias, uint8_t *node_visit, SG *sg, double **W, 
 }
 
 // cal bias factor for each node
-double *cal_flow_bias(SG *sg, double **W, int src, int sink) {
+double *cal_flow_bias(SG *sg, double **W, uint8_t **asm_matrix, int src, int sink) {
     uint8_t *node_visit = (uint8_t*)_err_calloc(sink-src+1, sizeof(uint8_t));
     double *bias = (double*)_err_calloc(sink-src+1, sizeof(double));
-    cal_flow_bias_recur(bias, node_visit, sg, W, src, src, sink);
+    cal_flow_bias_recur(bias, node_visit, sg, W, asm_matrix, src, src, sink);
     free(node_visit);
     return bias;
 }
 
-int heaviest_in_edge(SG *sg, double **W, int cur_id, double min_w, int src) {
+int heaviest_in_edge(SG *sg, double **W, uint8_t **asm_matrix, int cur_id, double min_w, int src) {
     if (cur_id == src) return -1;
     int i, m = -1;
     for (i = 0; i < sg->node[cur_id].pre_n; ++i) {
         int don_id = sg->node[cur_id].pre_id[i];
+        if (asm_matrix[don_id][cur_id] != 3) continue;
         if (W[don_id][cur_id] > min_w) {
             min_w = W[don_id][cur_id];
             m = don_id;
@@ -47,11 +49,12 @@ int heaviest_in_edge(SG *sg, double **W, int cur_id, double min_w, int src) {
     return m;
 }
 
-int heaviest_out_edge(SG *sg, double **W, int cur_id, double min_w, int sink) {
+int heaviest_out_edge(SG *sg, double **W, uint8_t **asm_matrix, int cur_id, double min_w, int sink) {
     if (cur_id == sink) return -1;
     int i, m = -1;
     for (i = 0; i < sg->node[cur_id].next_n; ++i) {
         int acc_id = sg->node[cur_id].next_id[i];
+        if (asm_matrix[cur_id][acc_id] != 3) continue;
         if (W[cur_id][acc_id] > min_w) {
             min_w = W[cur_id][acc_id];
             m = acc_id;
@@ -60,26 +63,41 @@ int heaviest_out_edge(SG *sg, double **W, int cur_id, double min_w, int sink) {
     return m;
 }
 
-gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edge_s_id, int edge_e_id, gec_t *node_id, double *cap, double *bv, double min_w) {
-    uint8_t v_s=0, v_e=0;
-    if (src == 0) v_s = 1; if (sink == sg->node_n-1) v_e = 1;
+void heaviest_edge_recur(SG *sg, double **W, uint8_t **asm_matrix, uint8_t *node_visit, int cur_id, int src, int sink, double *w, int *max_i, int *max_j) {
+    if (node_visit[cur_id-src] == 1) return; else node_visit[cur_id-src]  = 1;
+    if (cur_id == sink) return;
 
-    int max_i = src, max_j = sink, i, j; double w = min_w;
-    // XXX SG traversal
-    SGedge *edge = sg->edge; int don_id, acc_id;
-    for (i = edge_s_id; i <= edge_e_id; ++i) {
-        don_id = edge[i].don_id, acc_id = edge[i].acc_id;
-        if (W[don_id][acc_id] > w) {
-            w = W[don_id][acc_id];
-            max_i = don_id, max_j = acc_id;
+    int i, acc_id;
+    for (i = 0; i < sg->node[cur_id].next_n; ++i) {
+        acc_id = sg->node[cur_id].next_id[i];
+        if (asm_matrix[cur_id][acc_id] != 3) continue;
+        heaviest_edge_recur(sg, W, asm_matrix, node_visit, acc_id, src, sink, w, max_i, max_j);
+        if (W[cur_id][acc_id] > *w) {
+            *w = W[cur_id][acc_id];
+            *max_i = cur_id, *max_j = acc_id;
         }
     }
+}
+
+double heaviest_edge(SG *sg, double **W, uint8_t **asm_matrix, double min_w, int src, int sink, int *max_i, int *max_j) {
+    double w = min_w;
+    uint8_t *node_visit = (uint8_t*)_err_calloc(sink-src+1, sizeof(uint8_t));
+    heaviest_edge_recur(sg, W, asm_matrix, node_visit, src, src, sink, &w, max_i, max_j);
+    free(node_visit);
+    return w;
+}
+
+gec_t heaviest_path(SG *sg, double **W, uint8_t **asm_matrix, double *bias, int src, int sink, gec_t *node_id, double *cap, double *bv, double min_w) {
+    int max_i = src, max_j = sink, i, j; double w;
+    // SG traversal
+    w = heaviest_edge(sg, W, asm_matrix, min_w, src, sink, &max_i, &max_j);
+
     if (w == min_w) return 0;
 
     gec_t l = 0;
     i = max_i;
     while (1) {
-        i = heaviest_in_edge(sg, W, i, min_w, src);
+        i = heaviest_in_edge(sg, W, asm_matrix, i, min_w, src);
         if (i < 0) break;
         node_id[l++] = i;
     }
@@ -93,8 +111,11 @@ gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edg
     node_id[l++] = max_i;
     // check isoform integrity
     int id = node_id[0], hit = 0;
-    if (id == src) hit = 0;
-    else {
+    if (id == src) {
+        hit = 1;
+    } else {
+        if (src != 0) 
+            err_printf("Non-0 src\n");
         for (i = 0; i < sg->node[id].pre_n; ++i) {
             if (sg->node[id].pre_id[i] == src) {
                 hit = 1; break;
@@ -106,15 +127,18 @@ gec_t heaviest_path(SG *sg, double **W, double *bias, int src, int sink, int edg
     node_id[l++] = max_j;
     j = max_j;
     while (1) {
-        j = heaviest_out_edge(sg, W, j, min_w, sink);
+        j = heaviest_out_edge(sg, W, asm_matrix, j, min_w, sink);
         if (j < 0) break;
         node_id[l++] = j;
     }
 
     // check isoform integrity
     id = node_id[l-1]; hit = 0;
-    if (id == sink) hit = 1;
-    else {
+    if (id == sink) {
+        hit = 1;
+    } else {
+        if (sink != sg->node_n-1) 
+            err_printf("Non-(n-1) sink\n");
         for (i = 0; i < sg->node[id].next_n; ++i) {
             if (sg->node[id].next_id[i] == sink) {
                 hit = 1; break;
@@ -162,18 +186,14 @@ void recal_flow_cap(double **W, double *cap, gec_t *node_id, int l) {
     }
 }
 
-void bias_flow_iso_core(SG *sg, double **W, int src, int sink, int map_n, cmptb_map_t **iso_map, int *iso_i, int iso_max, sg_para *sgp) {
-    double *bias = cal_flow_bias(sg, W, src, sink);
+void bias_flow_iso_core(SG *sg, double **W, uint8_t **asm_matrix, int src, int sink, int map_n, cmptb_map_t **iso_map, int *iso_i, int iso_max, sg_para *sgp) {
+    double *bias = cal_flow_bias(sg, W, asm_matrix, src, sink);
     gec_t *node_id = (gec_t*)_err_malloc((sink-src+1) * sizeof(gec_t));
     double *capacities = (double*)_err_malloc((sink-src+1) * sizeof(double));
     double *bv =  (double*)_err_malloc((sink-src+1) * sizeof(double));
 
-    // cal edge s_id/e_id
-    int edge_s_id = _err_sg_bin_sch_edge(sg, src, sg->node[src].next_id[0]);
-    int edge_e_id = _err_sg_bin_sch_edge(sg, sg->node[sink].pre_id[sg->node[sink].pre_n-1], sink);
-
     err_printf("%d %d\t%d %d\n", src, sink, sg->node[src].start, sg->node[sink].end);
-    gec_t l = heaviest_path(sg, W, bias, src, sink, edge_s_id, edge_e_id, node_id, capacities, bv, sgp->edge_wt);
+    gec_t l = heaviest_path(sg, W, asm_matrix, bias, src, sink, node_id, capacities, bv, sgp->edge_wt);
     while (l > 0) {
         int s = 0, t = l-1;
         err_printf("%d\n", l);
@@ -187,18 +207,18 @@ void bias_flow_iso_core(SG *sg, double **W, int src, int sink, int map_n, cmptb_
         if (*iso_i == iso_max) break;
 
         // next path
-        l = heaviest_path(sg, W, bias, src, sink, edge_s_id, edge_e_id, node_id, capacities, bv, sgp->edge_wt);
+        l = heaviest_path(sg, W, asm_matrix, bias, src, sink, node_id, capacities, bv, sgp->edge_wt);
     }
     free(bias); free(node_id); free(capacities); free(bv);
 }
 
-int bias_flow_gen_cand_iso(SG *sg, double ***W, int src, int sink, int rep_n, cmptb_map_t **iso_map, int map_n, sg_para *sgp) {
+int bias_flow_gen_cand_iso(SG *sg, double ***W, uint8_t ***asm_matrix, int src, int sink, int rep_n, cmptb_map_t **iso_map, int map_n, sg_para *sgp) {
     int i, iso_max = sgp->iso_cnt_max, iso_i=0;
     // XXX add annotation iso to iso_map firstly
     for (i = 0; i < iso_max; ++i) iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
 
     for (i = 0; i < rep_n; ++i) {
-        bias_flow_iso_core(sg, W[i], src, sink, map_n, iso_map, &iso_i, iso_max, sgp);
+        bias_flow_iso_core(sg, W[i], asm_matrix[i], src, sink, map_n, iso_map, &iso_i, iso_max, sgp);
     }
 
     return iso_i;

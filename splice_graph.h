@@ -128,7 +128,7 @@ typedef struct {
     int sam_n, tot_rep_n, *rep_n;
     uint8_t in_list; char **in_name; FILE **out_fp;
     uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
-    int intron_len, edge_wt;
+    int intron_len; double edge_wt;
     int iso_cnt_max; int asm_exon_max, iso_read_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int uniq_min[5];   // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
@@ -173,8 +173,8 @@ int sg_bin_sch_edge(SG *sg, int don_id, int acc_id, int *hit);
 int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_id, int acc_id);
 #define _err_sg_bin_sch_edge(sg, don_id, acc_id) err_sg_bin_sch_edge(__func__, __LINE__, sg, don_id, acc_id)
 
-void cal_pre_domn(SG *sg, double ***W, int rep_n);
-void cal_post_domn(SG *sg, double ***W, int rep_n);
+void cal_pre_domn(SG *sg, double **rep_W, uint8_t ***asm_matrix);
+void cal_post_domn(SG *sg, double **rep_W, uint8_t ***asm_matrix);
 
 SG_group *construct_SpliceGraph(FILE *gtf_fp, chr_name_t *cname);
 

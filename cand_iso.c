@@ -70,7 +70,7 @@ int cand_iso_usage(void)
     err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
     err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
     err_printf("\n");
-    err_printf("         -w --edge-wei    [INT]    remove edge in splice-graph whose weight is less than specified value. [%d]\n", 0);
+    err_printf("         -w --edge-wei    [DOU]    remove edge in splice-graph whose weight is less than specified value. [%f]\n", 0.1);
     err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
 
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
@@ -87,12 +87,28 @@ int cand_iso_usage(void)
 /*****************************
  *       generate ASM        *
  *****************************/
-void cal_cand_node(SG *sg, int **entry, int **exit, int *entry_n, int *exit_n)
+int none_zore_next(SGnode *node, double **rep_W, int id) {
+    int i, n=0;
+    for (i = 0; i < node->next_n; ++i) {
+        if (node->next_id[i] == id || rep_W[node->node_id][node->next_id[i]] > 0) n++;
+    }
+    return n;
+}
+
+int none_zore_pre(SGnode *node, double **rep_W, int id) {
+    int i, n=0;
+    for (i = 0; i < node->pre_n; ++i) {
+        if (node->pre_id[i] == id || rep_W[node->pre_id[i]][node->node_id] > 0) n++;
+    }
+    return n;
+}
+
+void cal_cand_node(SG *sg, int **entry, int **exit, int *entry_n, int *exit_n, double **rep_W)
 {
     int i, n1=0, n2=0;
     for (i = 0; i < sg->node_n; ++i) {
-        if (sg->node[i].next_n > 1) n1++;
-        if (sg->node[i].pre_n > 1) n2++;
+        if (i == 0 || none_zore_next(sg->node+i, rep_W, sg->node_n-1) > 1) n1++;
+        if (i == sg->node_n-1 || none_zore_pre(sg->node+i, rep_W, 0) > 1) n2++;
     }
     *entry_n = n1, *exit_n = n2;
     *entry = (int*)_err_malloc(n1 * sizeof(int));
@@ -100,8 +116,8 @@ void cal_cand_node(SG *sg, int **entry, int **exit, int *entry_n, int *exit_n)
 
     n1 = 0, n2 = 0;
     for (i = 0; i < sg->node_n; ++i) {
-        if (sg->node[i].next_n > 1) (*entry)[n1++] = sg->node[i].node_id;
-        if (sg->node[i].pre_n > 1) (*exit)[n2++] = sg->node[i].node_id;;
+        if (i == 0 || none_zore_next(sg->node+i, rep_W, sg->node_n-1) > 1) (*entry)[n1++] = sg->node[i].node_id;
+        if (i == sg->node_n-1 || none_zore_pre(sg->node+i, rep_W, 0) > 1) (*exit)[n2++] = sg->node[i].node_id;;
     }
 }
 
@@ -452,19 +468,22 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
     (*asm_i)++;
 }
 
-void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double ***W,  int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
+void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double ***W, double **rep_W, uint8_t ***asm_matrix,  int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
     int entry_n, exit_n; int *entry, *exit;
 
-    cal_pre_domn(sg, W, rep_n), cal_post_domn(sg, W, rep_n);
-    cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n);
+    cal_pre_domn(sg, rep_W, asm_matrix), cal_post_domn(sg, rep_W, asm_matrix);
+    cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n, rep_W);
     if (entry_n == 0 || exit_n == 0) {
         free(entry); free(exit); return;
     }
 
     cmptb_map_t **iso_map = (cmptb_map_t**)_err_malloc(sgp->iso_cnt_max * sizeof(cmptb_map_t*));
+    int last_exit = -1;
     int i, j;
     for (i = 0; i < entry_n; ++i) {
+        if (entry[i] < last_exit) continue;
         for (j = 0; j < exit_n; ++j) {
+            if (exit[j] < last_exit) continue;
             int post_domn_n = sg->node[entry[i]].post_domn_n;
             int pre_domn_n = sg->node[exit[j]].pre_domn_n;
             if (post_domn_n > 1 && pre_domn_n > 1 
@@ -473,9 +492,10 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double ***W,  int rep
 
                 int iso_n, k, map_n = ((sg->node_n-1) >> MAP_STEP_N) + 1;
 
-                iso_n = bias_flow_gen_cand_iso(sg, W, entry[i], exit[j], rep_n, iso_map, map_n, sgp);
+                iso_n = bias_flow_gen_cand_iso(sg, W, asm_matrix, entry[i], exit[j], rep_n, iso_map, map_n, sgp);
                 // cal read-iso cmptb matrix
                 read_iso_cmptb(sg, cname, M, rep_n, bundle_n, iso_map, iso_n, sgp, asm_i, entry[i], exit[j]);
+                last_exit = exit[j];
                 for (k = 0; k < sgp->iso_cnt_max; ++k) free(iso_map[k]);
 
                 break;
@@ -485,11 +505,21 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double ***W,  int rep
     free(iso_map); free(entry); free(exit);
 }
 
+void update_W(double **rep_W, double **W, int n) {
+    int i, j;
+    for (i = 0; i < n-1; ++i) {
+        for (j = i+1; j < n; ++j) {
+            rep_W[i][j] += W[i][j];
+        }
+    }
+}
+
 int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
 {
     int sg_i, asm_i, rep_i; SG *sg; 
     read_exon_map **M = (read_exon_map**)_err_malloc(sgp->tot_rep_n * sizeof(read_exon_map*));
     double ***W = (double***)_err_malloc(sgp->tot_rep_n * sizeof(double**));
+    uint8_t ***asm_matrix = (uint8_t***)_err_malloc(sgp->tot_rep_n * sizeof(uint8_t**));
     int *bundle_n = (int*)_err_malloc(sgp->tot_rep_n * sizeof(int));
     int i, hit = 0;
 
@@ -498,26 +528,38 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
         sg = sg_g->SG[sg_i];
         if (sg->node_n - 2 < 3) continue;
 
+        double **rep_W = (double**)_err_calloc(sg->node_n, sizeof(double*));
+        for (i = 0; i < sg->node_n; ++i) rep_W[i] = (double*)_err_calloc(sg->node_n, sizeof(double));
         // 0. read bam bundle for each gene
         hit = 0;
+        if (sg->start == 762988)
+            printf("debug");
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
             // 1. generate read-exon compatible array
             // 2. update SG with bamBundle
             // OR (optional) only known transcript
-            W[rep_i] = (double**)_err_calloc(sg->node_n, sizeof(double));
+            W[rep_i] = (double**)_err_calloc(sg->node_n, sizeof(double*));
+            asm_matrix[rep_i] = (uint8_t**)_err_calloc(sg->node_n, sizeof(uint8_t*));
+            for (i = 0; i < sg->node_n; ++i) asm_matrix[rep_i][i] = (uint8_t*)_err_calloc(sg->node_n, sizeof(uint8_t));
             M[rep_i] = bam_sg_cmptb(bam_aux[rep_i], W[rep_i], bundle_n+rep_i, sg, sg_g->cname->chr_name, sgp);
+            update_W(rep_W, W[rep_i], sg->node_n);
             hit += bundle_n[rep_i];
         }
         // 3. flow network decomposition
-        if (hit > 0) gen_cand_iso(sg, sg_g->cname->chr_name, M, W, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
+        if (hit > 0) gen_cand_iso(sg, sg_g->cname->chr_name, M, W, rep_W, asm_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
-            for (i = 0; i < sg->node_n; ++i) free(W[rep_i][i]); free(W[rep_i]); 
+            for (i = 0; i < sg->node_n; ++i) {
+                free(W[rep_i][i]);
+                free(asm_matrix[rep_i][i]);
+            }
+            free(W[rep_i]); free(asm_matrix[rep_i]);
             for (i = 0; i < bundle_n[rep_i]; ++i) {
                 free(M[rep_i][i].map);
             } free(M[rep_i]);
         }
+        for (i = 0; i < sg->node_n; ++i) free(rep_W[i]); free(rep_W);
     }
-    free(bundle_n); free(W); free(M);
+    free(bundle_n); free(W); free(M); free(asm_matrix);
     return 0;
 }
 
@@ -558,7 +600,7 @@ int cand_iso(int argc, char *argv[])
                       if (*p != 0) sgp->all_min[4] = strtol(p+1, &p, 10); else return cand_iso_usage();
                       break;
             case 'i': sgp->intron_len = atoi(optarg); break;
-            case 'w': sgp->rm_edge = 1, sgp->edge_wt = atoi(optarg); break;
+            case 'w': sgp->rm_edge = 1, sgp->edge_wt = atof(optarg); break;
             case 'g': strcpy(ref_fn, optarg); break;
             case 'o': strcpy(out_pre, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg); return cand_iso_usage();

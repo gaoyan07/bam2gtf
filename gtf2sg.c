@@ -312,34 +312,33 @@ void intersect_domn(gec_t **com, gec_t *new_domn, gec_t *com_n, gec_t new_n, int
 
 // calculate predominate nodes with edge weight
 // XXX require at least one rep has >0 weight
-void cal_pre_domn(SG *sg, double ***W, int rep_n)
+void cal_pre_domn(SG *sg, double **rep_W, uint8_t ***asm_matrix)
 {
-    int i, j, first, rep_i;
+    int i, j, first;
     for (i = 0; i < sg->node_n; ++i) {
         if (sg->node[i].pre_n == 0) continue;
 
         gec_t com_n, com_m, *com;
 
         for (first = 0; first < sg->node[i].pre_n; ++first) {
-            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
-                if (sg->node[i].pre_id[first] == 0 || W[rep_i][sg->node[i].pre_id[first]][i] > 0)
-                    goto pre_domn;
-            }
+            if (sg->node[i].pre_id[first] == 0 || ((i == sg->node_n-1 || rep_W[sg->node[i].pre_id[first]][i] > 0) && sg->node[sg->node[i].pre_id[first]].pre_domn_n > 1))
+                goto pre_domn;
         }
         continue;
 
 pre_domn:
         com_n = sg->node[sg->node[i].pre_id[first]].pre_domn_n, com_m = sg->node[sg->node[i].pre_id[first]].pre_domn_m;
         com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
+
         for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].pre_id[first]].pre_domn[j];
 
+        asm_matrix[0][sg->node[i].pre_id[first]][i] = 1;
         for (j = first+1; j < sg->node[i].pre_n; ++j) {
-            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
-                if (sg->node[i].pre_id[j] == 0 || W[rep_i][sg->node[i].pre_id[j]][i] > 0)
-                    goto pre_domn_x;
-            }
-            continue;
+            if (sg->node[i].pre_id[j] == 0 || ((i == sg->node_n-1 || rep_W[sg->node[i].pre_id[j]][i] > 0) && sg->node[sg->node[i].pre_id[j]].pre_domn_n > 1))
+                goto pre_domn_x;
+            else continue;
 pre_domn_x:
+            asm_matrix[0][sg->node[i].pre_id[j]][i] = 1;
             intersect_domn(&com, sg->node[sg->node[i].pre_id[j]].pre_domn, &com_n, sg->node[sg->node[i].pre_id[j]].pre_domn_n, 1);
         }
         if (com_n+1 > sg->node[i].pre_domn_m) {
@@ -352,18 +351,17 @@ pre_domn_x:
     }
 }
 
-void cal_post_domn(SG *sg, double ***W, int rep_n)
+void cal_post_domn(SG *sg, double **rep_W, uint8_t ***asm_matrix)
 {
-    int i, j, first, rep_i;
+    int i, j, first;
     for (i = sg->node_n-1; i >= 0; --i) {
         if (sg->node[i].next_n == 0) continue;
             
         gec_t com_n, com_m, *com;
+        first = 0;
         for (first = 0; first < sg->node[i].next_n; ++first) {
-            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
-                if (sg->node[i].next_id[first] == sg->node_n-1 || W[rep_i][i][sg->node[i].next_id[first]] > 0)
-                    goto post_domn;
-            }
+            if (sg->node[i].next_id[first] == sg->node_n-1 || ((i == 0 || rep_W[i][sg->node[i].next_id[first]] > 0) && sg->node[sg->node[i].next_id[first]].post_domn_n > 1))
+                goto post_domn;
         }
         continue;
 
@@ -372,13 +370,13 @@ post_domn:
         com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
         for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].next_id[first]].post_domn[j];
 
+        asm_matrix[0][i][sg->node[i].next_id[first]] |= 2;
         for (j = first+1; j < sg->node[i].next_n; ++j) {
-            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
-                if (sg->node[i].next_id[j] == sg->node_n-1 || W[rep_i][i][sg->node[i].next_id[j]] > 0)
-                    goto post_domn_x;
-            }
-            continue;
+            if (sg->node[i].next_id[j] == sg->node_n-1 || ((i == 0 || rep_W[i][sg->node[i].next_id[j]] > 0) && sg->node[sg->node[i].next_id[j]].post_domn_n > 1))
+                goto post_domn_x;
+            else continue;
 post_domn_x:
+            asm_matrix[0][i][sg->node[i].next_id[j]] |= 2;
             intersect_domn(&com, sg->node[sg->node[i].next_id[j]].post_domn, &com_n, sg->node[sg->node[i].next_id[j]].post_domn_n, 2);
         }
 
