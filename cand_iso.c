@@ -87,28 +87,28 @@ int cand_iso_usage(void)
 /*****************************
  *       generate ASM        *
  *****************************/
-int none_zore_next(SGnode *node, double **rep_W, int id) {
+int none_zore_next(SGnode *node, uint8_t **con_matrix) {
     int i, n=0;
     for (i = 0; i < node->next_n; ++i) {
-        if (node->next_id[i] == id || rep_W[node->node_id][node->next_id[i]] > 0) n++;
+        if (is_con_matrix(con_matrix, node->node_id, node->next_id[i])) n++;
     }
     return n;
 }
 
-int none_zore_pre(SGnode *node, double **rep_W, int id) {
+int none_zore_pre(SGnode *node, uint8_t **con_matrix) {
     int i, n=0;
     for (i = 0; i < node->pre_n; ++i) {
-        if (node->pre_id[i] == id || rep_W[node->pre_id[i]][node->node_id] > 0) n++;
+        if (is_con_matrix(con_matrix, node->pre_id[i], node->node_id)) n++;
     }
     return n;
 }
 
-void cal_cand_node(SG *sg, int **entry, int **exit, int *entry_n, int *exit_n, double **rep_W)
+void cal_cand_node(SG *sg, int **entry, int **exit, int *entry_n, int *exit_n, uint8_t **con_matrix)
 {
     int i, n1=0, n2=0;
     for (i = 0; i < sg->node_n; ++i) {
-        if (i == 0 || none_zore_next(sg->node+i, rep_W, sg->node_n-1) > 1) n1++;
-        if (i == sg->node_n-1 || none_zore_pre(sg->node+i, rep_W, 0) > 1) n2++;
+        if (none_zore_next(sg->node+i, con_matrix) > 1) n1++;
+        if (none_zore_pre(sg->node+i, con_matrix) > 1) n2++;
     }
     *entry_n = n1, *exit_n = n2;
     *entry = (int*)_err_malloc(n1 * sizeof(int));
@@ -116,8 +116,8 @@ void cal_cand_node(SG *sg, int **entry, int **exit, int *entry_n, int *exit_n, d
 
     n1 = 0, n2 = 0;
     for (i = 0; i < sg->node_n; ++i) {
-        if (i == 0 || none_zore_next(sg->node+i, rep_W, sg->node_n-1) > 1) (*entry)[n1++] = sg->node[i].node_id;
-        if (i == sg->node_n-1 || none_zore_pre(sg->node+i, rep_W, 0) > 1) (*exit)[n2++] = sg->node[i].node_id;;
+        if (none_zore_next(sg->node+i, con_matrix) > 1) (*entry)[n1++] = sg->node[i].node_id;
+        if (none_zore_pre(sg->node+i, con_matrix) > 1) (*exit)[n2++] = sg->node[i].node_id;;
     }
 }
 
@@ -159,6 +159,16 @@ typedef struct {
 int REP_I;
 pthread_rwlock_t RWLOCK;
 
+read_iso_map *read_iso_map_init(int ri_map_m, int map_n) {
+    int r_i;
+    read_iso_map *ri_map = (read_iso_map*)_err_calloc(ri_map_m, sizeof(read_iso_map));
+    for (r_i = 0; r_i < ri_map_m; r_i++) {
+        ri_map[r_i].rlen = 0, ri_map[r_i].weight = 0;
+        ri_map[r_i].map = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
+        ri_map[r_i].map_n = map_n;
+    }
+    return ri_map;
+}
 
 int is_cmptb_read_iso(read_exon_map *read_map, cmptb_map_t *iso_exon_map) {
     int start = read_map->map_s, si = read_map->map_si, end = read_map->map_e, ei = read_map->map_ei;
@@ -216,6 +226,23 @@ cmptb_map_t *gen_iso_exon_map(gec_t *exon_id, gec_t exon_n, int map_n) {
     return map;
 }
 
+read_iso_map *gen_read_iso_map(read_exon_map *read_map, cmptb_map_t **iso_map, int iso_n, int map_n, int *zero) {
+    int iso_i; cmptb_map_t *im;
+    *zero = 0;
+    read_iso_map *rim = (read_iso_map*)_err_malloc(sizeof(read_iso_map));
+    rim->map = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
+    rim->weight = read_map->weight; rim->rlen = read_map->rlen;
+    rim->map_n = map_n;
+    for (iso_i = 0; iso_i < iso_n; ++iso_i) {
+        im = iso_map[iso_i];
+        if (is_cmptb_read_iso(read_map, im)) {
+            rim->map[iso_i >> MAP_STEP_N] |= (0x1ULL << (~iso_i & MAP_STEP_M));
+            *zero = 1;
+        }
+    }
+    return rim;
+}
+
 void insert_iso_exon_map(cmptb_map_t **iso_map, int *iso_i, int map_n, cmptb_map_t *iso_m) {
     int i, j, mis=0;
     for (i = 0; i < *iso_i; ++i) {
@@ -230,7 +257,95 @@ void insert_iso_exon_map(cmptb_map_t **iso_map, int *iso_i, int map_n, cmptb_map
         }
     }                           
     for (i = 0; i < map_n; ++i) {
-        iso_map[(*iso_i)++][i] = iso_m[i];          
+        iso_map[*iso_i][i] = iso_m[i];          
+    }
+    (*iso_i)++;
+}
+
+int comp_read_iso_map(read_iso_map *m1, read_iso_map *m2) {
+    int i;
+    for (i = 0; i < m1->map_n; ++i) {
+        if (m1->map[i] > m2->map[i]) return 1;
+        else if (m1->map[i] < m2->map[i]) return -1;
+    }
+    return (m1->rlen - m2->rlen);
+}
+
+/*extern int bin_search_idx(void *array, int num, void v, int *hit, int (*comp)(const void *, const void*)) {
+    *hit = 0;
+    int idx = 0, left = 0, right = num-1, mid;
+    if (right == -1) return 0;
+    while (left <= right) {
+        mid = (left + right) >> 1;
+        int comp_res = comp(array[mid], v);
+        if (comp_res == 0) {
+            *hit = 0;
+            return mid;
+        } else if (comp_res > 0) {
+            if (mid != 0) {
+                if (comp(array[mid-1], v) < 0) {
+                    return mid;
+                } else right = mid-1;
+            } else {
+                return mid;
+            }
+        } else left = mid+1;
+    }
+    return num;
+}*/
+
+int map_bin_sch_read_iso(read_iso_map *ri_map, int ri_n, read_iso_map *ri, int *hit) {
+    *hit = 0;
+    int left = 0, right = ri_n-1, mid;
+    if (right == -1) return 0;
+    while (left <= right) {
+        mid = (left + right) >> 1;
+        int comp_res = comp_read_iso_map(ri_map+mid, ri);
+        if (comp_res == 0) {
+            *hit = 1; return mid;
+        } else if (comp_res > 0) {
+            if (mid != 0) {
+                if (comp_read_iso_map(ri_map+mid-1, ri) < 0) {
+                    return mid;
+                } else right = mid-1;
+            } else {
+                return mid;
+            }
+        } else left = mid+1;
+    }
+    return ri_n;
+}
+
+void read_iso_map_copy(read_iso_map *m1, read_iso_map *m2) {
+    m1->weight = m2->weight;
+    m1->rlen = m2->rlen;
+    m1->map_n = m2->map_n;
+    int i; 
+    for (i = 0; i < m1->map_n; ++i) {
+        m1->map[i] = m2->map[i];
+    }
+}
+
+void read_iso_map_free(read_iso_map *m) {
+    free(m->map); free(m);
+}
+
+void insert_read_iso_map(read_iso_map **ri_map, int *ri_n, int *ri_m, read_iso_map *ri) {
+    int i, hit; int map_i = map_bin_sch_read_iso(*ri_map, *ri_n, ri, &hit);
+    if (hit == 0) {
+        if (*ri_n == *ri_m) {
+            _realloc((*ri_map), *ri_m, read_iso_map)
+            for (i = *ri_n; i < *ri_m; ++i) {
+                (*ri_map)[i].map = (cmptb_map_t*)_err_calloc(ri->map_n, sizeof(cmptb_map_t));
+            }
+        }
+        // XXX
+        //if (map_i <= *ri_n-1)
+            //memmove((*ri_map)+map_i+1, (*ri_map)+map_i, (*ri_n-map_i)*sizeof(read_iso_map));
+        read_iso_map_copy((*ri_map)+map_i, ri);
+        (*ri_n)++;
+    } else {
+        (*ri_map)[map_i].weight += ri->weight;
     }
 }
 
@@ -419,60 +534,80 @@ int cmptb_map_exon_cnt(cmptb_map_t *union_map, int map_n) {
     return n;
 }
 
+// generate read-iso compatible matrix
 void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, int *bundle_n, cmptb_map_t **iso_map, int iso_n, sg_para *sgp, int *asm_i, int src, int sink) {
-    int rep_i, b_i, iso_i; read_exon_map *rm; cmptb_map_t *im;
+    int rep_i, b_i, r_i, iso_i; read_exon_map *rm; cmptb_map_t *im;
     // .IsoMatrix
-    for (rep_i = 0; rep_i < rep_n; ++rep_i) {
-        int bn = bundle_n[rep_i];
-        // matrix header: ASM_ID, ReadBundle_NUM, Isoform_NUM
-        fprintf(sgp->out_fp[rep_i], "ASM#%d\t%d\t%d\n", *asm_i, bn, iso_n);
-        for (b_i = 0; b_i < bn; ++b_i) {
-            rm = (read_map[rep_i])+b_i;
-            // read length
-            fprintf(sgp->out_fp[rep_i], "%d\t%d", read_map[rep_i][b_i].rlen, read_map[rep_i][b_i].weight);
-            // read-iso compatible matrix
-            for (iso_i = 0; iso_i < iso_n; ++iso_i) {
-                im = iso_map[iso_i];
-                fprintf(sgp->out_fp[rep_i], "\t%d", is_cmptb_read_iso(rm, im));
-            } fprintf(sgp->out_fp[rep_i], "\n");
+    {
+        for (rep_i = 0; rep_i < rep_n; ++rep_i) {
+            int bn = bundle_n[rep_i];
+            int ri_map_n = 0, ri_map_m = 1000, map_n = 1 + ((iso_n-1) >> MAP_STEP_N);
+            read_iso_map *ri_map = read_iso_map_init(ri_map_m, map_n);
+            for (b_i = 0; b_i < bn; ++b_i) {
+                rm = (read_map[rep_i])+b_i;
+                // gen read-iso map
+                int zero;
+                read_iso_map *rim = gen_read_iso_map(rm, iso_map, iso_n, map_n, &zero);
+                if (zero != 0) {
+                    // insert read-iso map, update weight
+                    insert_read_iso_map(&ri_map, &ri_map_n, &ri_map_m, rim);
+                }
+                read_iso_map_free(rim);
+            }
+            // matrix header: ASM_ID, ReadBundle_NUM, Isoform_NUM
+            fprintf(sgp->out_fp[rep_i], "ASM#%d\t%d\t%d\n", *asm_i, ri_map_n, iso_n);
+            // output read-iso compatible matrix
+            for (r_i = 0; r_i < ri_map_n; ++r_i) {
+                // read length and count
+                fprintf(sgp->out_fp[rep_i], "%d\t%d", ri_map[r_i].rlen, ri_map[r_i].weight);
+                // read-iso compatible matrix
+                for (iso_i = 0; iso_i < iso_n; ++iso_i) {
+                    fprintf(sgp->out_fp[rep_i], "\t%ld", 0x1 & (ri_map[r_i].map[iso_i >> MAP_STEP_N] >> (~iso_i & MAP_STEP_M)));
+                } fprintf(sgp->out_fp[rep_i], "\n");
+            }
+            for (r_i = 0; r_i < ri_map_m; ++r_i) 
+                free(ri_map[r_i].map);
+            free(ri_map);
         }
     }
     // .IsoExon
-    int exon_i, exon_n, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
-    SGnode *node = sg->node;
-    cmptb_map_t *union_map = cmptb_map_union(iso_map, iso_n, map_n);
-    exon_n = cmptb_map_exon_cnt(union_map, map_n);
+    { 
+        int exon_i, exon_n, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
+        SGnode *node = sg->node;
+        cmptb_map_t *union_map = cmptb_map_union(iso_map, iso_n, map_n);
+        exon_n = cmptb_map_exon_cnt(union_map, map_n);
 
-    // exon header: ASM_ID, Exon_NUM, Isoform_NUM, strand, CHR_Name
-    fprintf(sgp->out_fp[rep_n], "ASM#%d\t%d\t%d\t%c\t%s\n", *asm_i, exon_n, iso_n, "+-"[sg->is_rev], cname[sg->tid]);
-    // exon coordinate pair: start, end
-    int *exon_index = (int*)_err_calloc(sink-src+1, sizeof(int)); int _exon_i = 0;
-    for (exon_i = src; exon_i <= sink; ++exon_i) {
-        if (is_cmptb_exon_iso(exon_i, union_map)) {
-            fprintf(sgp->out_fp[rep_n], "%d,%d\t", node[exon_i].start, node[exon_i].end);
-            exon_index[exon_i-src] = _exon_i++;
-        }
-    } fprintf(sgp->out_fp[rep_n], "\n");
-    for (iso_i = 0; iso_i < iso_n; ++iso_i) {
-        im = iso_map[iso_i];
-        exon_n = cmptb_map_exon_cnt(im, map_n);
-        fprintf(sgp->out_fp[rep_n], "%d", exon_n);
+        // exon header: ASM_ID, Exon_NUM, Isoform_NUM, strand, CHR_Name
+        fprintf(sgp->out_fp[rep_n], "ASM#%d\t%d\t%d\t%c\t%s\n", *asm_i, exon_n, iso_n, "+-"[sg->is_rev], cname[sg->tid]);
+        // exon coordinate pair: start, end
+        int *exon_index = (int*)_err_calloc(sink-src+1, sizeof(int)); int _exon_i = 0;
         for (exon_i = src; exon_i <= sink; ++exon_i) {
-            if (is_cmptb_exon_iso(exon_i, im)) {
-                fprintf(sgp->out_fp[rep_n], "\t%d", exon_index[exon_i-src]);
+            if (is_cmptb_exon_iso(exon_i, union_map)) {
+                fprintf(sgp->out_fp[rep_n], "%d,%d\t", node[exon_i].start, node[exon_i].end);
+                exon_index[exon_i-src] = _exon_i++;
             }
         } fprintf(sgp->out_fp[rep_n], "\n");
-    }
+        for (iso_i = 0; iso_i < iso_n; ++iso_i) {
+            im = iso_map[iso_i];
+            exon_n = cmptb_map_exon_cnt(im, map_n);
+            fprintf(sgp->out_fp[rep_n], "%d", exon_n);
+            for (exon_i = src; exon_i <= sink; ++exon_i) {
+                if (is_cmptb_exon_iso(exon_i, im)) {
+                    fprintf(sgp->out_fp[rep_n], "\t%d", exon_index[exon_i-src]);
+                }
+            } fprintf(sgp->out_fp[rep_n], "\n");
+        }
 
-    free(union_map); free(exon_index);
+        free(union_map); free(exon_index);
+    }
     (*asm_i)++;
 }
 
-void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double ***W, double **rep_W, uint8_t ***asm_matrix,  int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
+void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8_t **con_matrix, int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
     int entry_n, exit_n; int *entry, *exit;
 
-    cal_pre_domn(sg, rep_W, asm_matrix), cal_post_domn(sg, rep_W, asm_matrix);
-    cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n, rep_W);
+    cal_pre_domn(sg, rep_W, con_matrix), cal_post_domn(sg, rep_W, con_matrix);
+    cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n, con_matrix);
     if (entry_n == 0 || exit_n == 0) {
         free(entry); free(exit); return;
     }
@@ -492,7 +627,8 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double ***W, double *
 
                 int iso_n, k, map_n = ((sg->node_n-1) >> MAP_STEP_N) + 1;
 
-                iso_n = bias_flow_gen_cand_iso(sg, W, asm_matrix, entry[i], exit[j], rep_n, iso_map, map_n, sgp);
+                // use sum(W) to generate isoform
+                iso_n = bias_flow_gen_cand_iso(sg, rep_W, con_matrix, entry[i], exit[j], iso_map, map_n, sgp);
                 // cal read-iso cmptb matrix
                 read_iso_cmptb(sg, cname, M, rep_n, bundle_n, iso_map, iso_n, sgp, asm_i, entry[i], exit[j]);
                 last_exit = exit[j];
@@ -519,7 +655,6 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
     int sg_i, asm_i, rep_i; SG *sg; 
     read_exon_map **M = (read_exon_map**)_err_malloc(sgp->tot_rep_n * sizeof(read_exon_map*));
     double ***W = (double***)_err_malloc(sgp->tot_rep_n * sizeof(double**));
-    uint8_t ***asm_matrix = (uint8_t***)_err_malloc(sgp->tot_rep_n * sizeof(uint8_t**));
     int *bundle_n = (int*)_err_malloc(sgp->tot_rep_n * sizeof(int));
     int i, hit = 0;
 
@@ -529,37 +664,40 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
         if (sg->node_n - 2 < 3) continue;
 
         double **rep_W = (double**)_err_calloc(sg->node_n, sizeof(double*));
-        for (i = 0; i < sg->node_n; ++i) rep_W[i] = (double*)_err_calloc(sg->node_n, sizeof(double));
+        uint8_t **con_matrix = (uint8_t**)_err_calloc(sg->node_n, sizeof(uint8_t*)); // connect matrix
+        for (i = 0; i < sg->node_n; ++i) {
+            rep_W[i] = (double*)_err_calloc(sg->node_n, sizeof(double));
+            con_matrix[i] = (uint8_t*)_err_calloc(sg->node_n, sizeof(uint8_t));
+        }
         // 0. read bam bundle for each gene
         hit = 0;
-        if (sg->start == 762988)
-            printf("debug");
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
             // 1. generate read-exon compatible array
             // 2. update SG with bamBundle
             // OR (optional) only known transcript
             W[rep_i] = (double**)_err_calloc(sg->node_n, sizeof(double*));
-            asm_matrix[rep_i] = (uint8_t**)_err_calloc(sg->node_n, sizeof(uint8_t*));
-            for (i = 0; i < sg->node_n; ++i) asm_matrix[rep_i][i] = (uint8_t*)_err_calloc(sg->node_n, sizeof(uint8_t));
             M[rep_i] = bam_sg_cmptb(bam_aux[rep_i], W[rep_i], bundle_n+rep_i, sg, sg_g->cname->chr_name, sgp);
-            update_W(rep_W, W[rep_i], sg->node_n);
+            update_W(rep_W, W[rep_i], sg->node_n); // use sum(W) of total reps
             hit += bundle_n[rep_i];
         }
         // 3. flow network decomposition
-        if (hit > 0) gen_cand_iso(sg, sg_g->cname->chr_name, M, W, rep_W, asm_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
+        if (hit > 0) gen_cand_iso(sg, sg_g->cname->chr_name, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
+        
+        // free variables
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
             for (i = 0; i < sg->node_n; ++i) {
                 free(W[rep_i][i]);
-                free(asm_matrix[rep_i][i]);
             }
-            free(W[rep_i]); free(asm_matrix[rep_i]);
+            free(W[rep_i]);
             for (i = 0; i < bundle_n[rep_i]; ++i) {
                 free(M[rep_i][i].map);
             } free(M[rep_i]);
         }
-        for (i = 0; i < sg->node_n; ++i) free(rep_W[i]); free(rep_W);
+        for (i = 0; i < sg->node_n; ++i) {
+            free(rep_W[i]); free(con_matrix[i]);
+        } free(rep_W); free(con_matrix);
     }
-    free(bundle_n); free(W); free(M); free(asm_matrix);
+    free(bundle_n); free(W); free(M);
     return 0;
 }
 

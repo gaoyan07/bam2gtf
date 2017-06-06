@@ -312,80 +312,78 @@ void intersect_domn(gec_t **com, gec_t *new_domn, gec_t *com_n, gec_t new_n, int
 
 // calculate predominate nodes with edge weight
 // XXX require at least one rep has >0 weight
-void cal_pre_domn(SG *sg, double **rep_W, uint8_t ***asm_matrix)
+void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
 {
-    int i, j, first;
+    int i, j, first; SGnode *ni, *node;
     for (i = 0; i < sg->node_n; ++i) {
-        if (sg->node[i].pre_n == 0) continue;
+        node = sg->node;
+        ni = node+i;
+        if (ni->pre_n == 0) continue;
 
         gec_t com_n, com_m, *com;
 
-        for (first = 0; first < sg->node[i].pre_n; ++first) {
-            if (sg->node[i].pre_id[first] == 0 || ((i == sg->node_n-1 || rep_W[sg->node[i].pre_id[first]][i] > 0) && sg->node[sg->node[i].pre_id[first]].pre_domn_n > 1))
+        for (first = 0; first < ni->pre_n; ++first) {
+            if (ni->pre_id[first] == 0 || ((i == sg->node_n-1 || rep_W[ni->pre_id[first]][i] > 0) && node[ni->pre_id[first]].pre_domn_n > 1))
                 goto pre_domn;
         }
         continue;
-
 pre_domn:
-        com_n = sg->node[sg->node[i].pre_id[first]].pre_domn_n, com_m = sg->node[sg->node[i].pre_id[first]].pre_domn_m;
+        com_n = node[ni->pre_id[first]].pre_domn_n, com_m = node[ni->pre_id[first]].pre_domn_m;
         com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
 
-        for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].pre_id[first]].pre_domn[j];
+        for (j = 0; j < com_n; ++j) com[j] = node[ni->pre_id[first]].pre_domn[j];
 
-        asm_matrix[0][sg->node[i].pre_id[first]][i] = 1;
-        for (j = first+1; j < sg->node[i].pre_n; ++j) {
-            if (sg->node[i].pre_id[j] == 0 || ((i == sg->node_n-1 || rep_W[sg->node[i].pre_id[j]][i] > 0) && sg->node[sg->node[i].pre_id[j]].pre_domn_n > 1))
-                goto pre_domn_x;
-            else continue;
-pre_domn_x:
-            asm_matrix[0][sg->node[i].pre_id[j]][i] = 1;
-            intersect_domn(&com, sg->node[sg->node[i].pre_id[j]].pre_domn, &com_n, sg->node[sg->node[i].pre_id[j]].pre_domn_n, 1);
+        set_pre_con_matrix(con_matrix, ni->pre_id[first], i);
+        for (j = first+1; j < ni->pre_n; ++j) {
+            if (ni->pre_id[j] == 0 || ((i == sg->node_n-1 || rep_W[ni->pre_id[j]][i] > 0) && node[ni->pre_id[j]].pre_domn_n > 1)) {
+                set_pre_con_matrix(con_matrix, ni->pre_id[j], i);
+                intersect_domn(&com, node[ni->pre_id[j]].pre_domn, &com_n, node[ni->pre_id[j]].pre_domn_n, 1);
+            }
         }
-        if (com_n+1 > sg->node[i].pre_domn_m) {
-            sg->node[i].pre_domn_m = com_n+1; 
-            sg->node[i].pre_domn = (gec_t*)_err_realloc(sg->node[i].pre_domn, (com_n+1) * sizeof(gec_t));
+        if (com_n+1 > ni->pre_domn_m) {
+            ni->pre_domn_m = com_n+1; 
+            ni->pre_domn = (gec_t*)_err_realloc(ni->pre_domn, (com_n+1) * sizeof(gec_t));
         }
-        for (j = 0; j < com_n; ++j) sg->node[i].pre_domn[j+1] = com[j];
-        sg->node[i].pre_domn_n = 1+com_n;
+        for (j = 0; j < com_n; ++j) ni->pre_domn[j+1] = com[j];
+        ni->pre_domn_n = 1+com_n;
         free(com);
     }
 }
 
-void cal_post_domn(SG *sg, double **rep_W, uint8_t ***asm_matrix)
+void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
 {
-    int i, j, first;
+    int i, j, first; SGnode *ni, *node;
     for (i = sg->node_n-1; i >= 0; --i) {
-        if (sg->node[i].next_n == 0) continue;
+        node = sg->node;
+        ni = node+i;
+        if (ni->next_n == 0) continue;
             
         gec_t com_n, com_m, *com;
         first = 0;
-        for (first = 0; first < sg->node[i].next_n; ++first) {
-            if (sg->node[i].next_id[first] == sg->node_n-1 || ((i == 0 || rep_W[i][sg->node[i].next_id[first]] > 0) && sg->node[sg->node[i].next_id[first]].post_domn_n > 1))
+        for (first = 0; first < ni->next_n; ++first) {
+            if (ni->next_id[first] == sg->node_n-1 || ((i == 0 || rep_W[i][ni->next_id[first]] > 0) && node[ni->next_id[first]].post_domn_n > 1))
                 goto post_domn;
         }
         continue;
-
 post_domn:
-        com_n = sg->node[sg->node[i].next_id[first]].post_domn_n, com_m = sg->node[sg->node[i].next_id[first]].post_domn_m;
+        com_n = node[ni->next_id[first]].post_domn_n, com_m = node[ni->next_id[first]].post_domn_m;
         com = (gec_t*)_err_malloc(com_m * sizeof(gec_t));
-        for (j = 0; j < com_n; ++j) com[j] = sg->node[sg->node[i].next_id[first]].post_domn[j];
+        for (j = 0; j < com_n; ++j) com[j] = node[ni->next_id[first]].post_domn[j];
 
-        asm_matrix[0][i][sg->node[i].next_id[first]] |= 2;
-        for (j = first+1; j < sg->node[i].next_n; ++j) {
-            if (sg->node[i].next_id[j] == sg->node_n-1 || ((i == 0 || rep_W[i][sg->node[i].next_id[j]] > 0) && sg->node[sg->node[i].next_id[j]].post_domn_n > 1))
-                goto post_domn_x;
-            else continue;
-post_domn_x:
-            asm_matrix[0][i][sg->node[i].next_id[j]] |= 2;
-            intersect_domn(&com, sg->node[sg->node[i].next_id[j]].post_domn, &com_n, sg->node[sg->node[i].next_id[j]].post_domn_n, 2);
+        set_post_con_matrix(con_matrix, i, ni->next_id[first]);
+        for (j = first+1; j < ni->next_n; ++j) {
+            if (ni->next_id[j] == sg->node_n-1 || ((i == 0 || rep_W[i][ni->next_id[j]] > 0) && node[ni->next_id[j]].post_domn_n > 1)) {
+                set_post_con_matrix(con_matrix, i, ni->next_id[j]);
+                intersect_domn(&com, node[ni->next_id[j]].post_domn, &com_n, node[ni->next_id[j]].post_domn_n, 2);
+            }
         }
 
-        if (com_n+1 > sg->node[i].post_domn_m) {
-            sg->node[i].post_domn_m = com_n+1; 
-            sg->node[i].post_domn = (gec_t*)_err_realloc(sg->node[i].post_domn, (com_n+1) * sizeof(gec_t));
+        if (com_n+1 > ni->post_domn_m) {
+            ni->post_domn_m = com_n+1; 
+            ni->post_domn = (gec_t*)_err_realloc(ni->post_domn, (com_n+1) * sizeof(gec_t));
         }
-        for (j = 0; j < com_n; ++j) sg->node[i].post_domn[j+1] = com[j];
-        sg->node[i].post_domn_n = com_n+1;
+        for (j = 0; j < com_n; ++j) ni->post_domn[j+1] = com[j];
+        ni->post_domn_n = com_n+1;
         free(com);
     }
 }
@@ -495,7 +493,7 @@ void gen_gene_split_exon(coor_pair_t *coor, int coor_n, gene_t *gene) {
                     if (coor[k].s[p] > gene->trans[i].exon[j].start) {
                         gene->trans[i].exon[j].end = coor[k].s[p]-1;
                         exon_t e = gene->trans[i].exon[j];
-                        for (q = p; q < coor[k].n-1 && coor[k].s[q] < end; ++q) {
+                        for (q = p; q < coor[k].n-1 && coor[k].s[q] <= end; ++q) {
                             e.start = coor[k].s[q], e.end = coor[k].s[q+1]-1;
                             if (gene->trans[i].exon_n == gene->trans[i].exon_m) _realloc(gene->trans[i].exon, gene->trans[i].exon_m, exon_t)
                             gene->trans[i].exon[gene->trans[i].exon_n++] = e;

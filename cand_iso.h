@@ -37,6 +37,11 @@ typedef struct {
     cmptb_map_t *map;
 } read_exon_map;
 
+typedef struct {
+    int weight, rlen, map_n;
+    cmptb_map_t *map;
+} read_iso_map;
+
 //cmptb_map_t *iso_exon_map;
 
 
