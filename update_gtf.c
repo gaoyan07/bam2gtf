@@ -190,7 +190,7 @@ int check_full(trans_t *t, trans_t anno_t, int level)
                 }
             }
         }
-    } else if (level == 4) { // most 5' exon meets #3, most 3' exon has a polyA+ tail of 15bp or longer XXX
+    } else if (level == 4) { // XXX most 5' exon meets #3, most 3' exon has a polyA+ tail of 15bp or longer
         if (t->lfull == 0) {
             if (t->is_rev) {
                 i = t->exon_n-1; j = anno_t.exon_n-1;
@@ -413,9 +413,6 @@ int check_novel_trans(read_trans_t bam_T, read_trans_t anno_T, intron_group_t I,
     int i=0, j=0, last_j=0, k=0, NOT_MERG=0;
     int e_novel[4]={0,0,0,0}, j_novel[4]={0,0,0,0}, s_novel[4]={0,0,0,0}, trans_novel[10]={0,0,0,0,0,0,0,0,0,0};
     while (i < bam_T.trans_n && j < anno_T.trans_n) {
-        int x;
-        if (strcmp(bam_T.t[i].tname, "m130605_182355_42175_c100519402550000001823080809281340_s1_p0/109886/ccs.path1")==0)
-            x=i;
         if (NOT_MERG == 0 && merge_trans(bam_T.t[i], novel_T, dis)) { 
             //err_printf("merge: %s\n", bam_T.t[i].tname);
             NOT_MERG = 0; i++; continue; 
@@ -554,7 +551,6 @@ int update_gtf(int argc, char *argv[])
                       break;
         }
     }
-    // XXX
     if (argc - optind != 2) return update_gtf_usage();
 
     read_trans_t *anno_T, *bam_T, *novel_T;

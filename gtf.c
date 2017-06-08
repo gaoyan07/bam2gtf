@@ -399,10 +399,10 @@ void reverse_exon_order(gene_group_t *gg) {
 // read all anno from GTF file
 // sorted with chr and start
 // exon sorted by start
-int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
+int read_gene_group(FILE *gtf, char *fn, chr_name_t *cname, gene_group_t *gg)
 {
     char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[100], tname[100], tag[20];
-    gene_t *cur_g; trans_t *cur_t; exon_t *cur_e;
+    gene_t *cur_g=0; trans_t *cur_t=0; exon_t *cur_e=0;
     gg->gene_n = 0;
 
     while (fgets(line, 1024, gtf) != NULL) {
@@ -421,6 +421,7 @@ int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
             strcpy(cur_g->gname, gname);
             cur_g->trans_n = 0;
         } else if (strcmp(type, "transcript") == 0) { // new trans starts, old trans ends
+            if (cur_g == 0) err_fatal_core(__func__, "GTF format error in %s.\n", fn);
             if (++cur_g->trans_n == cur_g->trans_m) cur_g = trans_realloc(cur_g);
             cur_t = cur_g->trans + cur_g->trans_n-1;
             cur_t->tid = tid; cur_t->is_rev = is_rev;
@@ -428,6 +429,7 @@ int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg)
             strcpy(cur_t->tname, tname);
             cur_t->exon_n = 0;
         } else if (strcmp(type, "exon") == 0) { // new exon starts, old exon ends
+            if (cur_t == 0) err_fatal_core(__func__, "GTF format error in %s.\n", fn);
             // add exon to gg
             if (++cur_t->exon_n == cur_t->exon_m) cur_t = exon_realloc(cur_t);
             cur_e = cur_t->exon + cur_t->exon_n-1;

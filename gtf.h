@@ -145,7 +145,7 @@ gene_group_t *gene_group_realloc(gene_group_t *gg);
 void add_gene(gene_group_t *gg, gene_t g, int novel_gene_flag);
 void set_gene_group(gene_group_t *gg);
 void gene_group_free(gene_group_t *gg);
-int read_gene_group(FILE *gtf, chr_name_t *cname, gene_group_t *gg);
+int read_gene_group(FILE *gtf, char *fn, chr_name_t *cname, gene_group_t *gg);
 
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);

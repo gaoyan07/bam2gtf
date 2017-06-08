@@ -109,7 +109,7 @@ int bam_filter(int argc, char *argv[])
     if (argc - optind != 2) return filter_usage();
 
     samFile *in, *out; bam_hdr_t *h; bam1_t *b;
-    bam1_t *best_b; int b_score=0, s_score=0, score, b_intron_n, intron_n;
+    bam1_t *best_b; int b_score=0, s_score=0, score, b_intron_n=0, intron_n;
     if ((in = sam_open(argv[optind], "rb")) == NULL) err_fatal(__func__, "Cannot open \"%s\"\n", argv[optind]);
     if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "Couldn't read header for \"%s\"\n", argv[optind]);
     b = bam_init1();  best_b = bam_init1();

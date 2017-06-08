@@ -24,40 +24,6 @@ int pred_sg_usage(void)
     err_printf("\n");
     return 1;
 }
-
-sg_para *sg_init_para(void)
-{
-    sg_para *sgp = (sg_para*)_err_malloc(sizeof(sg_para));
-    sgp->n_threads = 1;
-    sgp->in_list = 0; sgp->rep_n = NULL; sgp->in_name = NULL;
-    sgp->sam_n = 0; sgp->tot_rep_n = 0;
-    sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
-    sgp->use_multi = 0; sgp->read_type = 0; // 1: pair, 0: single
-    sgp->rm_edge = 0; sgp->edge_wt = 0.1;
-    sgp->asm_exon_max = ISO_EXON_MAX; sgp->iso_cnt_max = ISO_CNT_MAX; sgp->iso_read_cnt_min = ISO_READ_CNT_MIN;
-    sgp->intron_len = INTRON_MIN_LEN;
-    sgp->merge_out = 0;
-    sgp->anchor_len[0] = ANCHOR_MIN_LEN, sgp->anchor_len[1] = NON_ANCHOR, sgp->anchor_len[2] = ANCHOR1, sgp->anchor_len[3] = ANCHOR2, sgp->anchor_len[4] = ANCHOR3;
-    sgp->uniq_min[0] = UNIQ_MIN, sgp->uniq_min[1] = NON_UNIQ_MIN, sgp->uniq_min[2] = UNIQ_MIN1, sgp->uniq_min[3] = UNIQ_MIN2, sgp->uniq_min[4] = UNIQ_MIN3;
-    sgp->all_min[0] = ALL_MIN, sgp->all_min[1] = NON_ALL_MIN, sgp->all_min[2] = ALL_MIN1, sgp->all_min[3] = ALL_MIN2, sgp->all_min[4] = ALL_MIN3;
-    return sgp;
-}
-
-void sg_free_para(sg_para *sgp)
-{
-    if (sgp->in_name != NULL) {
-        int i;
-        for (i = 0; i < sgp->tot_rep_n; ++i) {
-            free(sgp->in_name[i]);
-            err_fclose(sgp->out_fp[i]);
-        }
-        err_fclose(sgp->out_fp[i]);
-        free(sgp->in_name); free(sgp->out_fp);
-    }
-    if (sgp->rep_n != NULL) free(sgp->rep_n);
-    free(sgp);
-}
-
 int comp_sj_sg(sj_t sj, SG sg)
 {
     if (sj.tid < sg.tid) return -1;
@@ -264,7 +230,8 @@ int predict_SpliceGraph_core(SG_group sg_g, sj_t *sj_group, int sj_n, SG_group *
             i++;
         }
     }
-    for (i = 0; i < sg_g.SG_n; ++i) free(node_map[i]); free(node_map);
+    for (i = 0; i < sg_g.SG_n; ++i) free(node_map[i]); 
+    free(node_map);
     //int m;
     //for (m = 0; m < sr_sg_g->SG_n; ++m) {
         //SG *sr_sg = sr_sg_g->SG[m];
@@ -335,7 +302,7 @@ int pred_sg(int argc, char *argv[])
     SG_group *sg_g;
     FILE *gtf_fp = xopen(argv[optind], "r");
     chr_name_t *cname = chr_name_init();
-    sg_g = construct_SpliceGraph(gtf_fp, cname);
+    sg_g = construct_SpliceGraph(gtf_fp, argv[optind], cname);
     err_fclose(gtf_fp);  chr_name_free(cname);
 
     // get splice-junction based on .bam file

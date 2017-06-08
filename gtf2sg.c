@@ -3,6 +3,7 @@
 #include <string.h>
 #include <getopt.h>
 #include "splice_graph.h"
+#include "cand_iso.h"
 #include "utils.h"
 #include "gtf.h"
 
@@ -16,6 +17,39 @@ int sg_usage(void)
     err_printf("\n");
 
     return 0;
+}
+
+sg_para *sg_init_para(void)
+{
+    sg_para *sgp = (sg_para*)_err_malloc(sizeof(sg_para));
+    sgp->n_threads = 1;
+    sgp->in_list = 0; sgp->rep_n = NULL; sgp->in_name = NULL;
+    sgp->sam_n = 0; sgp->tot_rep_n = 0;
+    sgp->no_novel_sj = 1; sgp->no_novel_com = 1; sgp->only_novel = 0;
+    sgp->use_multi = 0; sgp->read_type = 0; // 1: pair, 0: single
+    sgp->rm_edge = 0; sgp->edge_wt = 0.1;
+    sgp->exon_thres = ISO_EXON_ALL_CNT; sgp->asm_exon_max = ISO_EXON_MAX; sgp->iso_cnt_max = ISO_CNT_MAX; sgp->iso_read_cnt_min = ISO_READ_CNT_MIN;
+    sgp->intron_len = INTRON_MIN_LEN;
+    sgp->merge_out = 0;
+    sgp->anchor_len[0] = ANCHOR_MIN_LEN, sgp->anchor_len[1] = NON_ANCHOR, sgp->anchor_len[2] = ANCHOR1, sgp->anchor_len[3] = ANCHOR2, sgp->anchor_len[4] = ANCHOR3;
+    sgp->uniq_min[0] = UNIQ_MIN, sgp->uniq_min[1] = NON_UNIQ_MIN, sgp->uniq_min[2] = UNIQ_MIN1, sgp->uniq_min[3] = UNIQ_MIN2, sgp->uniq_min[4] = UNIQ_MIN3;
+    sgp->all_min[0] = ALL_MIN, sgp->all_min[1] = NON_ALL_MIN, sgp->all_min[2] = ALL_MIN1, sgp->all_min[3] = ALL_MIN2, sgp->all_min[4] = ALL_MIN3;
+    return sgp;
+}
+
+void sg_free_para(sg_para *sgp)
+{
+    if (sgp->in_name != NULL) {
+        int i;
+        for (i = 0; i < sgp->tot_rep_n; ++i) {
+            free(sgp->in_name[i]);
+            err_fclose(sgp->out_fp[i]);
+        }
+        err_fclose(sgp->out_fp[i]);
+        free(sgp->in_name); free(sgp->out_fp);
+    }
+    if (sgp->rep_n != NULL) free(sgp->rep_n);
+    free(sgp);
 }
 
 /***************************
@@ -310,6 +344,28 @@ void intersect_domn(gec_t **com, gec_t *new_domn, gec_t *com_n, gec_t new_n, int
     *com_n = domn_i;
 }
 
+void sg_travl_n_iter(SG *sg, int cur_id, int src, int sink, uint8_t **con_matrix, uint8_t *node_visit, int *n) {
+    if (node_visit[cur_id-src] == 1) return; else node_visit[cur_id-src] = 1;
+    (*n)++;
+    if (cur_id == sink) return;
+    int i, next_id;
+    for (i = 0; i < sg->node[cur_id].next_n; ++i) {
+        next_id = sg->node[cur_id].next_id[i];
+        if (is_con_matrix(con_matrix, cur_id, next_id)) {
+            sg_travl_n_iter(sg, next_id, src, sink, con_matrix, node_visit, n);
+        }
+    }
+}
+
+int sg_travl_n(SG *sg, int src, int sink, uint8_t **con_matrix) {
+    int n = 0; uint8_t *node_visit = (uint8_t*)_err_calloc(sink-src+1, sizeof(uint8_t));
+    sg_travl_n_iter(sg, src, src, sink, con_matrix, node_visit, &n);
+    if (src == 0) n--; 
+    if (sink == sg->node_n-1) n--;
+    free(node_visit);
+    return n;
+}
+
 // calculate predominate nodes with edge weight
 // XXX require at least one rep has >0 weight
 void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
@@ -535,7 +591,8 @@ int gen_sg_node(SG *sg, gene_t *gene)
     // split exon in gene
     gen_gene_split_exon(coor, coor_n, gene);
 
-    for (i = 0; i < coor_n; ++i) free(coor[i].s); free(coor);
+    for (i = 0; i < coor_n; ++i) free(coor[i].s); 
+    free(coor);
     return 0;
 }
 
@@ -611,12 +668,12 @@ void build_SpliceGraph_core(SG *sg, gene_t *gene)
     // cal_pre_domn(sg); cal_post_domn(sg); 
 }
 
-SG_group *construct_SpliceGraph(FILE *gtf, chr_name_t *cname)
+SG_group *construct_SpliceGraph(FILE *gtf, char *fn, chr_name_t *cname)
 {
     err_func_format_printf(__func__, "constructing splice-graph with GTF file ...\n", __func__);
     gene_group_t *gg = gene_group_init();
     // XXX optional: merge overlapping genes into 1 complex gene
-    int g_n = read_gene_group(gtf, cname, gg);
+    int g_n = read_gene_group(gtf, fn, cname, gg);
     SG_group *sg_g = sg_init_group(g_n);
     int i;
     if (cname->chr_n > sg_g->cname->chr_m) {
@@ -658,7 +715,7 @@ int main(int argc, char *argv[])
     if (strlen(prefix) == 0) strcpy(prefix, argv[optind]);
 
     chr_name_t *cname = chr_name_init();
-    SG_group *sg_g = construct_SpliceGraph(gtf_fp, cname);
+    SG_group *sg_g = construct_SpliceGraph(gtf_fp, argv[optnd], cname);
 
     sg_free_group(sg_g); err_fclose(gtf_fp); chr_name_free(cname); 
     return 0;

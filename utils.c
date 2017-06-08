@@ -245,6 +245,13 @@ int err_fputs(const char *s, FILE *stream)
 	return ret;
 }
 
+void err_fgets(char *buff, size_t s, FILE *fp)
+{
+    if (fgets(buff, s, fp) == NULL) {
+        err_fatal_simple("fgets error.\n");
+    }
+}
+
 int err_puts(const char *s)
 {
 	int ret = puts(s);

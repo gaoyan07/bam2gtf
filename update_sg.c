@@ -15,7 +15,7 @@
 int update_SpliceGraph_edge(SG_group *sg_g, sj_t *sj_group, int sj_n, sg_para *sgp)
 {
     err_func_format_printf(__func__, "updating splice-graph with splice-junctions ...\n");
-    int no_novel_sj = sgp->no_novel_sj; //, no_novel_com = sgp->no_novel_com; // XXX no need for no_novel_com
+    int no_novel_sj = sgp->no_novel_sj; //, no_novel_com = sgp->no_novel_com;
     int hit, i, j;
     int sj_i = 0, last_sg_i = 0, sg_i;
     while (sj_i < sj_n && last_sg_i < sg_g->SG_n) {
@@ -75,7 +75,6 @@ void remove_SpliceGraph_edge(SG_group *sg_g, int edge_wt)
         for (edge_i = 0; edge_i < sg->edge_n; ++edge_i) {
             if (edge[edge_i].uniq_c < edge_wt) {
                 int don_id = edge[edge_i].don_id, acc_id = edge[edge_i].acc_id;
-                // XXX ERROR
                 int *don_exon_id = don[don_id].exon_id, don_exon_n = don[don_id].exon_n;
                 int acc_site = acc[acc_id].site;
                 for (i = 0; i < don_exon_n; ++i) {

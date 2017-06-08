@@ -7,6 +7,9 @@
 #include "kdq.h"
 #include "kstring.h"
 
+KDQ_INIT(int)
+#define kdq_gec_t kdq_t(int)
+
 void cal_flow_bias_recur(double *bias, uint8_t *node_visit, SG *sg, double **W, uint8_t **con_matrix, int cur_id, int src, int sink) {
     if (node_visit[cur_id-src] == 1) return; else node_visit[cur_id-src] = 1;
     if (cur_id == sink) return;
@@ -116,8 +119,8 @@ gec_t heaviest_path(SG *sg, double **W, uint8_t **con_matrix, double *bias, int 
     if (id == src) {
         hit = 1;
     } else {
-        if (src != 0) 
-            err_printf("Non-0 src\n"); // because remaining edge weight < min_w
+        //if (src != 0) 
+        //    err_printf("Non-0 src\n"); // because remaining edge weight < min_w
         for (i = 0; i < sg->node[id].pre_n; ++i) {
             if (sg->node[id].pre_id[i] == src) {
                 hit = 1; break;
@@ -139,8 +142,8 @@ gec_t heaviest_path(SG *sg, double **W, uint8_t **con_matrix, double *bias, int 
     if (id == sink) {
         hit = 1;
     } else {
-        if (sink != sg->node_n-1) 
-            err_printf("Non-(n-1) sink\n"); // because remaining edge weight < min_w
+        //if (sink != sg->node_n-1) 
+        //    err_printf("Non-(n-1) sink\n"); // because remaining edge weight < min_w
         for (i = 0; i < sg->node[id].next_n; ++i) {
             if (sg->node[id].next_id[i] == sink) {
                 hit = 1; break;
@@ -148,11 +151,11 @@ gec_t heaviest_path(SG *sg, double **W, uint8_t **con_matrix, double *bias, int 
         }
     }
     if (hit == 0) return 0;
+
     for (i = 0; i < l-1; ++i) {
         cap[i] = W[node_id[i]][node_id[i+1]];
         bv[i] = bias[node_id[i]-src];
     }
-
     return l;
 }
 
@@ -163,17 +166,16 @@ void normalize_bias_factor(double *bias, int src, int sink) {
         bias[i-src] = b * bias[i-src];
         b = bias[i-src];
     }
-    for (i = src+1; i < sink; ++i) err_printf("%f\t", bias[i-src]);
-    err_printf("\n");
+    //for (i = src+1; i < sink; ++i) err_printf("%f\t", bias[i-src]);
+    //err_printf("\n");
 }
 
 double bias_flow(double *cap, double *bias, int src, int sink) {
-    int i, min_i; double min_f;
-    min_i = src; min_f = cap[src-src];
+    int i; double min_f;
+    min_f = cap[src-src];
     for (i = src+1; i < sink; ++i) {
         if (cap[i-src] / bias[i-src] < min_f) {
             min_f = cap[i-src] / bias[i-src];
-            min_i = i;
         }
     }
     for (i = src; i < sink; ++i)
@@ -188,38 +190,88 @@ void recal_flow_cap(double **W, double *cap, gec_t *node_id, int l) {
     }
 }
 
-void bias_flow_iso_core(SG *sg, double **W, uint8_t **con_matrix, int src, int sink, int map_n, cmptb_map_t **iso_map, int *iso_i, int iso_max, sg_para *sgp) {
+int path_filter(gec_t *id, gec_t l, gec_t sg_node_n) {
+    int n = 0, i;
+    for (i = 0; i < l; ++i) {
+        if (id[i] != 0 && id[i] != sg_node_n-1) n++;
+    }
+    return (n>=2 ? 1 : 0);
+}
+
+void bias_flow_iso_core(SG *sg, double **W, uint8_t **con_matrix, int src, int sink, int map_n, cmptb_map_t **iso_map, int *iso_n, int iso_max, sg_para *sgp) {
     double *bias = cal_flow_bias(sg, W, con_matrix, src, sink);
     gec_t *node_id = (gec_t*)_err_malloc((sink-src+1) * sizeof(gec_t));
     double *capacities = (double*)_err_malloc((sink-src+1) * sizeof(double));
     double *bv =  (double*)_err_malloc((sink-src+1) * sizeof(double));
 
     gec_t l;
-    err_printf("%d %d\t%d %d\n", src, sink, sg->node[src].start, sg->node[sink].end);
+    //err_printf("%d %d\t%d %d\n", src, sink, sg->node[src].start, sg->node[sink].end);
 
     while (1) {
         if ((l = heaviest_path(sg, W, con_matrix, bias, src, sink, node_id, capacities, bv, sgp->edge_wt)) <= 0) break;
 
         int s = 0, t = l-1;
-        err_printf("%d\n", l);
+        //err_printf("%d\n", l);
         normalize_bias_factor(bv, s, t);
         bias_flow(capacities, bv, s, t);
         recal_flow_cap(W, capacities, node_id, l);
         // node_id, l => iso_exon_map
-        cmptb_map_t *iso_m = gen_iso_exon_map(node_id, l, map_n);
-        insert_iso_exon_map(iso_map, iso_i, map_n, iso_m);
+        if (path_filter(node_id, l, sg->node_n) == 0) continue;
+        cmptb_map_t *iso_m = gen_iso_exon_map(node_id, l, map_n, sg->node_n);
+        insert_iso_exon_map(iso_map, iso_n, map_n, iso_m);
         free(iso_m);
-        if (*iso_i == iso_max) break;
+        if (*iso_n == iso_max) break;
     }
     free(bias); free(node_id); free(capacities); free(bv);
 }
 
 int bias_flow_gen_cand_iso(SG *sg, double **rep_W, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int map_n, sg_para *sgp) {
-    int i, iso_max = sgp->iso_cnt_max, iso_i=0;
+    int i, iso_max = sgp->iso_cnt_max, iso_n=0;
     // XXX add annotation iso to iso_map firstly
     for (i = 0; i < iso_max; ++i) iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
 
-    bias_flow_iso_core(sg, rep_W, con_matrix, src, sink, map_n, iso_map, &iso_i, iso_max, sgp);
+    bias_flow_iso_core(sg, rep_W, con_matrix, src, sink, map_n, iso_map, &iso_n, iso_max, sgp);
 
-    return iso_i;
+    return iso_n;
+}
+
+void enum_gen_cand_iso_core(cmptb_map_t **iso_map, int *iso_n, int iso_max, int map_n, SG *sg, uint8_t **con_matrix, int cur_id, int src, int sink, uint8_t *node_visit, gec_t *path, gec_t *path_idx) {
+    int next_id, i;
+    SGnode *node = sg->node;
+
+    node_visit[cur_id-src] = 1;
+    path[*path_idx] = cur_id;
+    (*path_idx)++;
+
+    if (cur_id == sink) { // src-sink path
+        if (path_filter(path, *path_idx, sg->node_n)) {
+            if (*iso_n < iso_max) {
+                cmptb_map_t *iso_m = gen_iso_exon_map(path, *path_idx, map_n, sg->node_n);
+                insert_iso_exon_map(iso_map, iso_n, map_n, iso_m);
+                free(iso_m);
+            }
+        }
+    } else { // recursively all next-node
+        for (i = 0; i < node[cur_id].next_n; ++i) {
+            next_id = node[cur_id].next_id[i];
+            if (!node_visit[next_id-src] && is_con_matrix(con_matrix, cur_id, next_id)) {
+                enum_gen_cand_iso_core(iso_map, iso_n, iso_max, map_n, sg, con_matrix, next_id, src, sink, node_visit, path, path_idx);
+            }
+        }
+    }
+    // remove current node and mark it as unvisited
+    (*path_idx)--;
+    node_visit[cur_id-src] = 0;
+}
+
+int enum_gen_cand_iso(SG *sg, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int map_n, sg_para *sgp) {
+    int i, iso_n = 0, iso_max = sgp->iso_cnt_max;
+    gec_t *path = (gec_t*)_err_calloc(sink-src+1, sizeof(gec_t)); gec_t path_idx = 0;
+    uint8_t *node_visit = (uint8_t*)_err_calloc(sink-src+1, sizeof(uint8_t));
+
+    for (i = 0; i < iso_max; ++i) iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
+
+    enum_gen_cand_iso_core(iso_map, &iso_n, iso_max, map_n,  sg, con_matrix, src, src, sink, node_visit, path, &path_idx);
+    free(node_visit); free(path);
+    return iso_n;
 }
