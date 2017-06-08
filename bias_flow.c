@@ -21,7 +21,9 @@ void cal_flow_bias_recur(double *bias, uint8_t *node_visit, SG *sg, double **W, 
     if (cur_id == src) return;
     // cal bias
     for (i = 0; i < sg->node[cur_id].pre_n; ++i) {
-        wei_in += W[sg->node[cur_id].pre_id[i]][cur_id];
+        if (is_con_matrix(con_matrix, sg->node[cur_id].pre_id[i], cur_id)) {
+            wei_in += W[sg->node[cur_id].pre_id[i]][cur_id];
+        }
     }
     if (wei_in == 0) bias[cur_id-src] = 0;
     else bias[cur_id-src] = wei_out/wei_in;
@@ -115,7 +117,7 @@ gec_t heaviest_path(SG *sg, double **W, uint8_t **con_matrix, double *bias, int 
         hit = 1;
     } else {
         if (src != 0) 
-            err_printf("Non-0 src\n");
+            err_printf("Non-0 src\n"); // because remaining edge weight < min_w
         for (i = 0; i < sg->node[id].pre_n; ++i) {
             if (sg->node[id].pre_id[i] == src) {
                 hit = 1; break;
@@ -138,7 +140,7 @@ gec_t heaviest_path(SG *sg, double **W, uint8_t **con_matrix, double *bias, int 
         hit = 1;
     } else {
         if (sink != sg->node_n-1) 
-            err_printf("Non-(n-1) sink\n");
+            err_printf("Non-(n-1) sink\n"); // because remaining edge weight < min_w
         for (i = 0; i < sg->node[id].next_n; ++i) {
             if (sg->node[id].next_id[i] == sink) {
                 hit = 1; break;

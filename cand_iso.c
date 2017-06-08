@@ -316,6 +316,18 @@ int map_bin_sch_read_iso(read_iso_map *ri_map, int ri_n, read_iso_map *ri, int *
     return ri_n;
 }
 
+void read_iso_map_move(read_iso_map *m1, read_iso_map *m2, int l) {
+    int i, j;
+    for (i = 0; i < l; ++i) {
+        m1[i].rlen = m2[i].rlen; m2[i].rlen = 0;
+        m1[i].weight = m2[i].weight; m2[i].weight = 0;
+        m1[i].map_n = m2[i].map_n; m2[i].map_n = 0;
+        for (j = 0; j < m1[i].map_n; ++j) {
+            m1[i].map[j] = m2[i].map[j];
+        }
+    }
+}
+
 void read_iso_map_copy(read_iso_map *m1, read_iso_map *m2) {
     m1->weight = m2->weight;
     m1->rlen = m2->rlen;
@@ -339,9 +351,8 @@ void insert_read_iso_map(read_iso_map **ri_map, int *ri_n, int *ri_m, read_iso_m
                 (*ri_map)[i].map = (cmptb_map_t*)_err_calloc(ri->map_n, sizeof(cmptb_map_t));
             }
         }
-        // XXX
-        //if (map_i <= *ri_n-1)
-            //memmove((*ri_map)+map_i+1, (*ri_map)+map_i, (*ri_n-map_i)*sizeof(read_iso_map));
+        if (map_i <= *ri_n-1)
+            read_iso_map_move((*ri_map)+map_i+1, (*ri_map)+map_i, (*ri_n-map_i)*sizeof(read_iso_map));
         read_iso_map_copy((*ri_map)+map_i, ri);
         (*ri_n)++;
     } else {
@@ -465,7 +476,7 @@ map_END:
 }
 
 read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, SG *sg, char **cname, sg_para *sgp) {
-    samFile *in = bam_aux->in;  hts_idx_t *idx = bam_aux->idx; bam_hdr_t *h = bam_aux->h; bam1_t *b = bam_init1();
+    samFile *in = bam_aux->in;  hts_idx_t *idx = bam_aux->idx; bam_hdr_t *h = bam_aux->h; bam1_t *b = bam_aux->b;
     char reg[1024]; sprintf(reg, "%s:%d-%d", cname[sg->tid], sg->start, sg->end);
     hts_itr_t *itr = sam_itr_querys(idx, h, reg);
 
@@ -477,7 +488,7 @@ read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, S
     exon_id = (gec_t*)_err_malloc(4 * sizeof(gec_t)); exon_m = 4, exon_n = 0;
     last_exon_id = (gec_t*)_err_malloc(4 * sizeof(gec_t)); last_exon_m = 4, last_exon_n = 0;
     last_cmptb = 0;
-    while ((r = sam_read1(in, h, b)) >= 0)  {
+    while ((r = sam_itr_next(in, itr, b)) >= 0)  {
         if (parse_bam_record1(b, ad, sgp) <= 0) continue;
         if (ad->end < sg->start) continue;
         else if (ad->start > sg->end) break;
@@ -505,7 +516,7 @@ read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, S
     if (r < -1) err_func_format_printf("BAM file error. \"%s\"", bam_aux->fn);
 
     *b_n = bundle_n; 
-    bam_destroy1(b); hts_itr_destroy(itr); 
+    hts_itr_destroy(itr); 
     free_ad_group(ad, 1); free_ad_group(last_ad, 1);
     free(exon_id), free(last_exon_id);
     return read_map;

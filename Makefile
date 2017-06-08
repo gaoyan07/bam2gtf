@@ -5,7 +5,7 @@ HTSLIB_DIR = ./htslib
 HTSLIB  =   $(HTSLIB_DIR)/libhts.a
 LIB     =	$(HTSLIB) -lm -lz -lpthread
 COMP_LIB=	-lz
-INCLUDE = -I ./htslib
+INCLUDE = -I $(HTSLIB_DIR)
 
 
 BIN_DIR =	.
@@ -43,7 +43,7 @@ gdb_comp-gtf: $(GDB_COMP)
 
 
 $(HTS_ALL):
-	cd $(HTSLIB_DIR); make; cd ../
+	cd $(HTSLIB_DIR); make;
 $(BIN): $(OBJS)
 		$(CC) $(OBJS) -o $@ $(LIB)
 

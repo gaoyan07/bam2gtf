@@ -175,7 +175,7 @@ int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_id, in
 
 #define set_pre_con_matrix(m, i, j) m[i][j] |= 1
 #define set_post_con_matrix(m, i, j) m[i][j] |= 2
-#define is_con_matrix(m, i, j) (m[i][j] & 3)
+#define is_con_matrix(m, i, j) (m[i][j] == 3)
 
 void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix);
 void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix);

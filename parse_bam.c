@@ -32,6 +32,7 @@ bam_aux_t *bam_aux_init() {
     aux->h = NULL;
     aux->in = NULL;
     aux->itr = NULL;
+    aux->b = NULL;
     return aux;
 }
 
@@ -39,6 +40,7 @@ void bam_aux_destroy(bam_aux_t *aux) {
     if (aux->idx != NULL) hts_idx_destroy(aux->idx);
     if (aux->h != NULL) bam_hdr_destroy(aux->h);
     if (aux->in != NULL) sam_close(aux->in);
+    if (aux->b != NULL) bam_destroy1(aux->b);
     //if (aux->itr != NULL) hts_itr_destroy(aux->itr);
     free(aux);
 }
@@ -82,6 +84,7 @@ bam_aux_t **sg_par_input(sg_para *sgp, char *in) {
         err_sam_open(aux[i]->in, sgp->in_name[i]);
         err_sam_hdr_read(aux[i]->h, aux[i]->in, sgp->in_name[i]);
         err_sam_idx_load(aux[i]->idx, aux[i]->in, sgp->in_name[i]);
+        aux[i]->b = bam_init1();
     }
     return aux;
 }

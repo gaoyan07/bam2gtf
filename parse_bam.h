@@ -18,6 +18,7 @@ typedef struct {
     samFile *in;
     bam_hdr_t *h;
 
+    bam1_t *b;
     hts_itr_t *itr;
 } bam_aux_t;
 
