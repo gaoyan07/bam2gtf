@@ -17,8 +17,7 @@ const struct option asm_long_opt [] = {
 
     { "list-input", 0, NULL, 'L' },
     { "novel-sj", 0, NULL, 'n' },
-    { "novel-com", 0, NULL, 'N' },
-    { "proper-pair", 1, NULL, 'p' },
+    { "un-pair", 0, NULL, 'u' },
     { "anchor-len", 1, NULL, 'a' },
     { "intron-len", 1, NULL, 'i' },
     { "genome-file", 1, NULL, 'g' },
@@ -30,7 +29,7 @@ const struct option asm_long_opt [] = {
     { "exon-thres", 1, NULL, 'T' },
     { "asm-exon", 1, NULL, 'e' },
     { "iso-cnt", 1, NULL, 'C' },
-    { "read-cnt", 1, NULL, 'c' },
+    //{ "read-cnt", 1, NULL, 'c' },
 
     { "output", 1, NULL, 'o' },
 
@@ -52,31 +51,31 @@ int cand_iso_usage(void)
 {
     err_printf("\n");
     err_printf("Usage:   %s iso [option] <in.gtf> <in.bam/sj>\n\n", PROG);
-    err_printf("Note:    for multi-sample and multi-replicate should be this format: \n");
+    err_printf("Note:    for multi-sample and multi-replicate, input should be list file(with -L) or in this format: \n");
     err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
     err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
     err_printf("Options:\n\n");
     err_printf("         -t --thread               number of threads to use. [1]\n");
-    err_printf("         -L --list-input           use bam list file as input. [False]\n");
-    err_printf("                                   refer to \"example.list\"\n");
+    err_printf("         -L --list-input           use bam list file as input. Refer to \"example.list\". [False]\n");
+    err_printf("\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
-    err_printf("         -N --novel-com            allow novel combination of known exons in the ASM. [False]\n");
-    err_printf("         -p --prop-pair            set -p to force to filter out reads mapped in improper pair. [False]\n");
+    err_printf("         -u --un-pair              set -u to use both proper and unproper paired mapped read. [False] (proper paired only)\n");
+    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam file. [False] (uniq-mapped only)\n");
     err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d].\n", ANCHOR_MIN_LEN);
     err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
     err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
     err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
     err_printf("\n");
-    err_printf("         -w --edge-wei    [DOU]    ignore edge in splice-graph whose weight is less than specified value. [%f]\n", 0.1);
     err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
 
-    err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam input.[False (uniq only)]\n");
     err_printf("\n");
-    err_printf("         -T --exon-thres  [INT]    maximum number of exon for ASM to enumerate all possible isoforms. Ohterwise, \n");
-    err_printf("                                   heuristic method will be applied. [%d]\n", ISO_EXON_ALL_CNT);
+    err_printf("         -T --exon-thres  [INT]    maximum number of exon for ASM to enumerate all possible isoforms.\n");
+    err_printf("                                   For larger ASM, heuristic method will be applied. [%d]\n", ISO_EXON_ALL_CNT);
     err_printf("         -e --iso-exon    [INT]    maximum number of exons for ASM to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
     err_printf("         -C --iso-cnt     [INT]    maximum number of isoform count to keep ASM to candidate isoforms. [%d]\n", ISO_CNT_MAX); 
-    err_printf("         -c --read-cnt    [INT]    minimum number of read count for candidate isoforms. [%d]\n", ISO_READ_CNT_MIN); 
+    //err_printf("         -c --read-cnt    [INT]    minimum number of read count for candidate isoforms. [%d]\n", ISO_READ_CNT_MIN); 
+    err_printf("         -w --edge-wei    [DOU]    during weight-based candidate isoform generation, ignore edge in\n");
+    err_printf("                                   splicing-graph whose weight is less than specified value. [%.2f]\n", ISO_EDGE_MIN_WEI);
     err_printf("\n");
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT. [in.bam/sj]\n");
     err_printf("                                   prefix.IsoMatrix & prefix.IsoExon\n");
@@ -657,18 +656,19 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8
                 int iso_n, k, map_n = ((sg->node_n-1) >> MAP_STEP_N) + 1;
 
                 int asm_node_n = sg_travl_n(sg, entry[i], exit[j], con_matrix);
-                if (asm_node_n <= sgp->exon_thres) { 
-                    iso_n = enum_gen_cand_iso(sg, con_matrix, entry[i], exit[j], iso_map, map_n, sgp);
-                } else {
-                    // use sum(W) to generate isoform
-                    iso_n = bias_flow_gen_cand_iso(sg, rep_W, con_matrix, entry[i], exit[j], iso_map, map_n, sgp);
+                if (asm_node_n <= sgp->asm_exon_max) {
+                    if (asm_node_n <= sgp->exon_thres) { 
+                        iso_n = enum_gen_cand_iso(sg, con_matrix, entry[i], exit[j], iso_map, map_n, sgp);
+                    } else {
+                        // use sum(W) to generate isoform
+                        iso_n = bias_flow_gen_cand_iso(sg, rep_W, con_matrix, entry[i], exit[j], iso_map, map_n, sgp);
+                    }
+                    // cal read-iso cmptb matrix
+                    if (iso_n > 1) read_iso_cmptb(sg, cname, M, rep_n, bundle_n, iso_map, iso_n, sgp, asm_i, entry[i], exit[j]);
+                    for (k = 0; k < sgp->iso_cnt_max; ++k) free(iso_map[k]);
                 }
-                // cal read-iso cmptb matrix
-                if (iso_n > 1) read_iso_cmptb(sg, cname, M, rep_n, bundle_n, iso_map, iso_n, sgp, asm_i, entry[i], exit[j]);
+
                 last_exit = exit[j];
-
-                for (k = 0; k < sgp->iso_cnt_max; ++k) free(iso_map[k]);
-
                 break;
             }
         }
@@ -743,14 +743,14 @@ int cand_iso(int argc, char *argv[])
 {
     int c, i; char ref_fn[1024]="", out_pre[1024]="", *p;
     sg_para *sgp = sg_init_para();
-    while ((c = getopt_long(argc, argv, "t:LnNpa:i:g:w:lmT:e:C:c:o:", asm_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:lT:e:C:c:o:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 't': sgp->n_threads = atoi(optarg); break;
             case 'L': sgp->in_list = 1; break;
 
-            case 'n': sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
-            case 'N': sgp->no_novel_com = 0; break;
-            case 'p': sgp->read_type = PAIR_T; break;
+            case 'n': sgp->no_novel_sj=0; break;
+            case 'u': sgp->read_type = SING_T; break;
+            case 'm': sgp->use_multi = 1; break;
             case 'a': sgp->anchor_len[0] = strtol(optarg, &p, 10);
                       if (*p != 0) sgp->anchor_len[1] = strtol(p+1, &p, 10); else return cand_iso_usage();
                       if (*p != 0) sgp->anchor_len[2] = strtol(p+1, &p, 10); else return cand_iso_usage();
@@ -761,14 +761,13 @@ int cand_iso(int argc, char *argv[])
             case 'g': strcpy(ref_fn, optarg); break;
 
             case 'w': sgp->rm_edge = 1, sgp->edge_wt = atof(optarg); break;
-            case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0, sgp->no_novel_com=0; break;
+            case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0; break; // XXX only novel
 
-            case 'm': sgp->use_multi = 1; break;
 
             case 'T': sgp->exon_thres = atoi(optarg); break;
             case 'e': sgp->asm_exon_max = atoi(optarg); break;
             case 'C': sgp->iso_cnt_max = atoll(optarg); break;
-            case 'c': sgp->iso_read_cnt_min = atoi(optarg); break;
+            //case 'c': sgp->iso_read_cnt_min = atoi(optarg); break;
 
             case 'o': strcpy(out_pre, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg); return cand_iso_usage();

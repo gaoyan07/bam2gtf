@@ -127,7 +127,7 @@ typedef struct {
     int n_threads;
     int sam_n, tot_rep_n, *rep_n;
     uint8_t in_list; char **in_name; FILE **out_fp;
-    uint8_t no_novel_sj:1, no_novel_com:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
+    uint8_t no_novel_sj:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
     int intron_len; double edge_wt;
     int exon_thres, iso_cnt_max; int asm_exon_max, iso_read_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
@@ -135,7 +135,6 @@ typedef struct {
     int all_min[5];    // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
 } sg_para;
 
-int comp_sj_sg(sj_t sj, SG sg);
 
 #define sg_add_edge(ed, ei, ed_n, ed_m, _don_id, _acc_id, _is_rev, _is_anno) { \
     if (ed_n++ >= ed_m) _realloc(ed, ed_m, SGedge) \

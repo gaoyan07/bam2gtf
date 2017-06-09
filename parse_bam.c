@@ -517,7 +517,6 @@ int bam2ad(int tid, int start, uint8_t is_uniq, int n_cigar, const uint32_t *c, 
     ad->tid = tid; ad->start = start;
     ad->is_uniq = is_uniq; ad->is_splice = (SJ_n > 1);
 
-    // XXX use bam_endpos()
     for (i = 0; i < n_cigar; ++i) {
         int l = bam_cigar_oplen(c[i]);
         switch (bam_cigar_op(c[i])) {
@@ -561,6 +560,12 @@ int bam2ad(int tid, int start, uint8_t is_uniq, int n_cigar, const uint32_t *c, 
     // ad
     ad->exon_end[(ad->intv_n)++] = end;
     ad->end = end;
+    // filter with anchor length
+    start = ad->start;
+    if (ad->intv_n > 1) {
+        if ((ad->exon_end[0] - start + 1) < sgp->anchor_len[0]) return 0;
+        if ((ad->end - ad->intr_end[ad->intv_n-2]) < sgp->anchor_len[0]) return 0;
+    }
     return 1;
 }
 
@@ -572,6 +577,8 @@ int parse_bam_record1(bam1_t *b, ad_t *ad, sg_para *sgp)
     is_uniq = bam_is_uniq_NH(b); // uniq-map (1)
 #ifdef _RMATS_
     if (is_uniq == 0) return 0;
+#else
+    if (sgp->use_multi == 0 && is_uniq == 0) return 0;
 #endif
     if (bam_is_prop(b) != 1 && sgp->read_type == PAIR_T) return 0; // prop-pair (2)
 

@@ -2,6 +2,7 @@
 #define _CAND_ISO_H
 #include "splice_graph.h"
 
+#define ISO_EDGE_MIN_WEI 0.1
 #define ISO_EXON_ALL_CNT 10
 #define ISO_EXON_MAX 50
 #define ISO_CNT_MAX 20
