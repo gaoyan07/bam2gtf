@@ -220,7 +220,7 @@ void bias_flow_iso_core(SG *sg, double **W, uint8_t **con_matrix, int src, int s
         cmptb_map_t *iso_m = gen_iso_exon_map(node_id, l, map_n, sg->node_n);
         insert_iso_exon_map(iso_map, iso_n, map_n, iso_m);
         free(iso_m);
-        if (*iso_n == iso_max) break;
+        if (*iso_n == iso_max) break; // XXX top iso_max, weight based
     }
     free(bias); free(node_id); free(capacities); free(bv);
 }
@@ -249,6 +249,8 @@ void enum_gen_cand_iso_core(cmptb_map_t **iso_map, int *iso_n, int iso_max, int 
                 cmptb_map_t *iso_m = gen_iso_exon_map(path, *path_idx, map_n, sg->node_n);
                 insert_iso_exon_map(iso_map, iso_n, map_n, iso_m);
                 free(iso_m);
+            } else {
+                (*iso_n)++;
             }
         }
     } else { // recursively all next-node
@@ -272,6 +274,7 @@ int enum_gen_cand_iso(SG *sg, uint8_t **con_matrix, int src, int sink, cmptb_map
     for (i = 0; i < iso_max; ++i) iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
 
     enum_gen_cand_iso_core(iso_map, &iso_n, iso_max, map_n,  sg, con_matrix, src, src, sink, node_visit, path, &path_idx);
+    if (iso_n > iso_max) iso_n = 0;
     free(node_visit); free(path);
     return iso_n;
 }
