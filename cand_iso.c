@@ -546,7 +546,9 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
                 read_iso_map_free(rim);
             }
             // matrix header: ASM_ID, ReadBundle_NUM, Isoform_NUM
-            fprintf(sgp->out_fp[rep_i], "ASM#%d\t%d\t%d\n", *asm_i, ri_map_n, iso_n);
+            int tot_wei = 0;
+            for (r_i = 0; r_i < ri_map_n; ++r_i) tot_wei += ri_map[r_i].weight;
+            fprintf(sgp->out_fp[rep_i], "ASM#%d\t%d\t%d\n", *asm_i, tot_wei, iso_n);
             // output read-iso compatible matrix
             for (r_i = 0; r_i < ri_map_n; ++r_i) {
                 // read length and count
