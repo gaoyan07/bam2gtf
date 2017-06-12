@@ -131,7 +131,7 @@ FILE **iso_output(sg_para *sgp, char *prefix)
     for (i = 0; i < out_n-1; ++i) {
          out_fn[i] = (char*)_err_malloc(strlen(prefix)+strlen(sgp->in_name[i])+30); strcpy(out_fn[i], sgp->in_name[i]); strcat(out_fn[i], prefix), strcat(out_fn[i], mat_suf);
     }
-    out_fn[i] = (char*)_err_malloc(strlen(prefix)+strlen(sgp->in_name[0])+30); strcpy(out_fn[i], sgp->in_name[0]); strcat(out_fn[i], prefix); strcpy(out_fn[i], exon_suf);
+    out_fn[i] = (char*)_err_malloc(strlen(prefix)+strlen(sgp->in_name[0])+30); strcpy(out_fn[i], sgp->in_name[0]); strcat(out_fn[i], prefix); strcat(out_fn[i], exon_suf);
     /* else {
         for (i = 0; i < out_n-1; ++i) {
             out_fn[i] = (char*)_err_malloc(strlen(prefix)+30); strcpy(out_fn[i], prefix); strcat(out_fn[i], mat_suf);
@@ -535,20 +535,20 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
 
         // TODO filter out adjacent exons
         /* filter start */
-        int last_end = -1;
+        /*int last_end = -1;
         for (exon_i = src; exon_i <= sink; ++exon_i) {
             if (is_cmptb_exon_iso(exon_i, union_map)) {
                 if (node[exon_i].start == last_end+1) return;
                 last_end = node[exon_i].end;
             }
-        }
-        /*int last_end = node[src].start - 1;
+        }*/
+        int last_end = node[src].start - 1;
         for (exon_i = src; exon_i <= sink; ++exon_i) {
             if (is_cmptb_exon_iso(exon_i, union_map)) {
                 if (node[exon_i].start != last_end+1) return;
                 last_end = node[exon_i].end;
             }
-        }*/
+        }
         /*  filter end  */
 
         // exon header: ASM_ID, Exon_NUM, Isoform_NUM, strand, CHR_Name
@@ -678,8 +678,8 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8
 
                 // TODO only output simple models
                 /* filter start */
-                if ((asm_node_n == 3 && (entry[i] == 0 || exit[j] == sg->node_n-1)) || asm_node_n == 4) {
-                //if (entry[i] != 0 && exit[j] != sg->node_n-1) {
+                //if ((asm_node_n == 3 && (entry[i] == 0 || exit[j] == sg->node_n-1)) || asm_node_n == 4) {
+                if (entry[i] != 0 && exit[j] != sg->node_n-1) {
                     /*  filter end  */
                     if (asm_node_n <= sgp->asm_exon_max) {
                         if (asm_node_n <= sgp->exon_thres) { 
