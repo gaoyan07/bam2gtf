@@ -28,7 +28,7 @@ sg_para *sg_init_para(void)
     sgp->no_novel_sj = 1; sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = PAIR_T;
     sgp->rm_edge = 0; sgp->edge_wt = ISO_EDGE_MIN_WEI;
-    sgp->exon_thres = ISO_EXON_ALL_CNT; sgp->asm_exon_max = ISO_EXON_MAX; sgp->iso_cnt_max = ISO_CNT_MAX; sgp->iso_read_cnt_min = ISO_READ_CNT_MIN;
+    sgp->junc_cnt_min = JUNC_READ_CNT_MIN; sgp->exon_thres = ISO_EXON_ALL_CNT; sgp->asm_exon_max = ISO_EXON_MAX; sgp->iso_cnt_max = ISO_CNT_MAX; //sgp->iso_read_cnt_min = ISO_READ_CNT_MIN;
     sgp->intron_len = INTRON_MIN_LEN;
     sgp->merge_out = 0;
     sgp->anchor_len[0] = ANCHOR_MIN_LEN, sgp->anchor_len[1] = NON_ANCHOR, sgp->anchor_len[2] = ANCHOR1, sgp->anchor_len[3] = ANCHOR2, sgp->anchor_len[4] = ANCHOR3;

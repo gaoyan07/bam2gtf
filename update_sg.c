@@ -4,14 +4,14 @@
 #include "splice_graph.h"
 #include "utils.h"
 
-int add_novel_sg_edge(SG *sg, gec_t *exon_id, gec_t exon_n, sg_para *sgp) {
+int add_novel_sg_edge(SG *sg, double **wei_matrix, gec_t *exon_id, gec_t exon_n, sg_para *sgp) {
     if (sgp->no_novel_sj) return 0;
     int i, hit; gec_t don_id, acc_id;
     SGnode *node = sg->node; int edge_id;
     for (i = 0; i < exon_n-1; ++i) {
         don_id = exon_id[i], acc_id = exon_id[i+1];
         edge_id =sg_bin_sch_edge(sg, don_id, acc_id, &hit);
-        if (hit == 0) {
+        if (wei_matrix[don_id][acc_id] >= sgp->junc_cnt_min && hit == 0) {
             uint8_t is_anno = 0, is_rev = sg->is_rev;
 
             _bin_insert(acc_id, node[don_id].next_id, node[don_id].next_n, node[don_id].next_m, gec_t)
