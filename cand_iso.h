@@ -7,7 +7,8 @@
 #define ISO_EXON_MAX 50
 #define ISO_CNT_MAX 20
 //#define ISO_READ_CNT_MIN 1
-#define JUNC_READ_CNT_MIN 10
+#define NOVEL_JUNC_READ_CNT_MIN 10
+#define JUNC_READ_CNT_MIN 1
 
 #define cmptb_map_t uint64_t
 #define MAP_STEP 64

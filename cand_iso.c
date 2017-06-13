@@ -30,6 +30,7 @@ const struct option asm_long_opt [] = {
     { "asm-exon", 1, NULL, 'e' },
     { "iso-cnt", 1, NULL, 'C' },
     { "junc-cnt", 1, NULL, 'c' },
+    { "novel-jcnt", 1, NULL, 'v' },
 
     { "output", 1, NULL, 'o' },
 
@@ -74,6 +75,7 @@ int cand_iso_usage(void)
     err_printf("         -e --iso-exon    [INT]    maximum number of exons for ASM to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
     err_printf("         -C --iso-cnt     [INT]    maximum number of isoform count to keep ASM to candidate isoforms. [%d]\n", ISO_CNT_MAX); 
     err_printf("         -c --junc-cnt    [INT]    minimum number of read count for junction. [%d]\n", JUNC_READ_CNT_MIN); 
+    err_printf("         -v --novel-jcnt  [INT]    minimum number of read count for novel-junction. [%d]\n", NOVEL_JUNC_READ_CNT_MIN); 
     err_printf("         -w --edge-wei    [DOU]    during weight-based candidate isoform generation, ignore edge in\n");
     err_printf("                                   splicing-graph whose weight is less than specified value. [%.2f]\n", ISO_EDGE_MIN_WEI);
     err_printf("\n");
@@ -485,13 +487,13 @@ read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, S
             read_exon_map_insert(&read_map, &bundle_n, &bundle_m, m1);
             // update edge weight and novel edge
             update_weight_matrix(wei_matrix, exon_id, exon_n);
-            add_novel_sg_edge(sg, wei_matrix, exon_id, exon_n, sgp);
             read_exon_map_free(m1);
         }
         last_cmptb = cmptb; exon_id_copy(&last_exon_id, &last_exon_n, &last_exon_m, exon_id, exon_n);
         ad_copy(last_ad, ad); 
     }
     if (r < -1) err_func_format_printf("BAM file error. \"%s\"", bam_aux->fn);
+    add_novel_sg_edge(sg, wei_matrix, sgp);
 
     *b_n = bundle_n; 
     hts_itr_destroy(itr); 
@@ -704,11 +706,23 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8
     free(iso_map); free(entry); free(exit);
 }
 
-void update_W(double **rep_W, double **W, int n) {
-    int i, j;
-    for (i = 0; i < n-1; ++i) {
-        for (j = i+1; j < n; ++j) {
-            rep_W[i][j] += W[i][j];
+void update_W(double **rep_W, double ***W, int rep_n, SG *sg, int junc_cnt_min) {
+    int i, j, rep_i;
+    for (i = 0; i < sg->node_n-1; ++i) {
+        for (j = i+1; j < sg->node_n; ++j) {
+            if (sg->node[i].end + 1 != sg->node[j].start) {
+                int flag = 0;
+                for (rep_i = 0; rep_i < rep_n; ++rep_i) {
+                    if (W[rep_i][i][j] >= junc_cnt_min) {
+                        flag = 1;
+                        break;
+                    }
+                }
+                if (flag == 0) continue;
+            }
+            for (rep_i = 0; rep_i < rep_n; ++rep_i) {
+                rep_W[i][j] += W[rep_i][i][j];
+            }
         }
     }
 }
@@ -741,9 +755,9 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
             // OR (optional) only known transcript
             W[rep_i] = (double**)_err_calloc(sg->node_n, sizeof(double*));
             M[rep_i] = bam_sg_cmptb(bam_aux[rep_i], W[rep_i], bundle_n+rep_i, sg, sg_g->cname->chr_name, sgp);
-            update_W(rep_W, W[rep_i], sg->node_n); // use sum(W) of total reps
             hit += bundle_n[rep_i];
         }
+        update_W(rep_W, W, sgp->tot_rep_n, sg, sgp->junc_cnt_min); // use sum(W) of total reps
         // 3. flow network decomposition
         if (hit > 0) gen_cand_iso(sg, sg_g->cname->chr_name, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
         
@@ -771,7 +785,7 @@ int cand_iso(int argc, char *argv[])
 {
     int c, i; char ref_fn[1024]="", out_pre[1024]="", *p;
     sg_para *sgp = sg_init_para();
-    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:lT:e:C:c:o:", asm_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:lT:e:C:c:v:o:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 't': sgp->n_threads = atoi(optarg); break;
             case 'L': sgp->in_list = 1; break;
@@ -796,6 +810,7 @@ int cand_iso(int argc, char *argv[])
             case 'e': sgp->asm_exon_max = atoi(optarg); break;
             case 'C': sgp->iso_cnt_max = atoll(optarg); break;
             case 'c': sgp->junc_cnt_min = atoi(optarg); break;
+            case 'v': sgp->novel_junc_cnt_min = atoi(optarg); break;
 
             case 'o': strcpy(out_pre, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg); return cand_iso_usage();

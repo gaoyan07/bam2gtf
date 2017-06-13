@@ -23,6 +23,7 @@
 
 # Executables
 gtools
+*gtools
 gdb_gtools
 rmats_gtools
 rgdb_gtools

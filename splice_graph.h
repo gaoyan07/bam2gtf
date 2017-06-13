@@ -129,7 +129,7 @@ typedef struct {
     uint8_t in_list; char **in_name; FILE **out_fp;
     uint8_t no_novel_sj:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
     int intron_len; double edge_wt;
-    int junc_cnt_min, exon_thres, iso_cnt_max; int asm_exon_max;//, iso_read_cnt_min;
+    int junc_cnt_min, novel_junc_cnt_min, exon_thres, iso_cnt_max; int asm_exon_max;//, iso_read_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int uniq_min[5];   // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
     int all_min[5];    // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
