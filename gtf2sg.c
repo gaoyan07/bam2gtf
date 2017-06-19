@@ -380,7 +380,7 @@ void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
         gec_t com_n, com_m, *com;
 
         for (first = 0; first < ni->pre_n; ++first) {
-            if (ni->pre_id[first] == 0 || ((i == sg->node_n-1 || rep_W[ni->pre_id[first]][i] > 0) && node[ni->pre_id[first]].pre_domn_n > 1))
+            if (ni->pre_id[first] == 0 || ((i == sg->node_n-1 && node[ni->pre_id[first]].pre_domn_n > 1) || rep_W[ni->pre_id[first]][i] > 0))
                 goto pre_domn;
         }
         continue;
@@ -392,7 +392,7 @@ pre_domn:
 
         set_pre_con_matrix(con_matrix, ni->pre_id[first], i);
         for (j = first+1; j < ni->pre_n; ++j) {
-            if (ni->pre_id[j] == 0 || ((i == sg->node_n-1 || rep_W[ni->pre_id[j]][i] > 0) && node[ni->pre_id[j]].pre_domn_n > 1)) {
+            if (ni->pre_id[j] == 0 || ((i == sg->node_n-1 && node[ni->pre_id[j]].pre_domn_n > 1) || rep_W[ni->pre_id[j]][i] > 0)) {
                 set_pre_con_matrix(con_matrix, ni->pre_id[j], i);
                 intersect_domn(&com, node[ni->pre_id[j]].pre_domn, &com_n, node[ni->pre_id[j]].pre_domn_n, 1);
             }
@@ -418,7 +418,7 @@ void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
         gec_t com_n, com_m, *com;
         first = 0;
         for (first = 0; first < ni->next_n; ++first) {
-            if (ni->next_id[first] == sg->node_n-1 || ((i == 0 || rep_W[i][ni->next_id[first]] > 0) && node[ni->next_id[first]].post_domn_n > 1))
+            if (ni->next_id[first] == sg->node_n-1 || ((i == 0 && node[ni->next_id[first]].post_domn_n > 1) || rep_W[i][ni->next_id[first]] > 0))
                 goto post_domn;
         }
         continue;
@@ -429,7 +429,7 @@ post_domn:
 
         set_post_con_matrix(con_matrix, i, ni->next_id[first]);
         for (j = first+1; j < ni->next_n; ++j) {
-            if (ni->next_id[j] == sg->node_n-1 || ((i == 0 || rep_W[i][ni->next_id[j]] > 0) && node[ni->next_id[j]].post_domn_n > 1)) {
+            if (ni->next_id[j] == sg->node_n-1 || ((i == 0 && node[ni->next_id[j]].post_domn_n > 1) || rep_W[i][ni->next_id[j]] > 0)) {
                 set_post_con_matrix(con_matrix, i, ni->next_id[j]);
                 intersect_domn(&com, node[ni->next_id[j]].post_domn, &com_n, node[ni->next_id[j]].post_domn_n, 2);
             }

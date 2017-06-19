@@ -52,8 +52,8 @@ typedef struct {
 void sg_free_asm_group(SGasm_group *asm_g);
 SGasm_group *gen_asm(SG_group *sg_g, sg_para *sgp);
 int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b);
-cmptb_map_t *gen_iso_exon_map(gec_t *node_id, gec_t l, int map_n, int sg_node_n);
-void insert_iso_exon_map(cmptb_map_t **iso_map, int *iso_i, int map_n, cmptb_map_t *iso_m);
+cmptb_map_t *gen_iso_exon_map(gec_t *node_id, gec_t l, int map_n, int sg_node_n, int *se);
+void insert_iso_exon_map(cmptb_map_t **iso_map, int **iso_se, int *iso_i, int map_n, cmptb_map_t *iso_m, int *se);
 int asm_output(char *fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg_para *sgp);
 int cand_iso(int argc, char *argv[]);
 
