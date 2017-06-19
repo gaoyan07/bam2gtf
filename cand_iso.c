@@ -230,7 +230,7 @@ cmptb_map_t *gen_iso_exon_map(gec_t *exon_id, gec_t exon_n, int map_n, int sg_no
         }
     }
     iso_se[0] = (exon_id[0] == 0 ? exon_id[1] : exon_id[0]);
-    iso_se[1] = MAP_STEP - ((exon_id[exon_n-1] == sg_node_n-1 ? exon_id[exon_n-2] : exon_id[exon_n-1]) & MAP_STEP_M);
+    iso_se[1] = MAP_STEP_M - ((exon_id[exon_n-1] == sg_node_n-1 ? exon_id[exon_n-2] : exon_id[exon_n-1]) & MAP_STEP_M);
     return map;
 }
 
