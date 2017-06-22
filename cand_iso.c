@@ -969,7 +969,7 @@ int cand_iso(int argc, char *argv[])
             case 'v': sgp->novel_junc_cnt_min = atoi(optarg); break;
 
             case 'd': sgp->module_type = atoi(optarg); break;
-            case 'r': sgp->recur = 1;
+            case 'r': sgp->recur = 1; break;
 
             case 'o': strcpy(out_pre, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg); return cand_iso_usage();

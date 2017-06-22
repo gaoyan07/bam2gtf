@@ -29,6 +29,7 @@ rmats_gtools
 rgdb_gtools
 comp-gtf
 gdb_comp-gtf
+run.sh
 *.exe
 *.out
 *.app
