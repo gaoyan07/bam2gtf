@@ -27,10 +27,16 @@ const struct option asm_long_opt [] = {
     { "use-multi", 0, NULL, 'm' },
 
     { "exon-thres", 1, NULL, 'T' },
-    { "asm-exon", 1, NULL, 'e' },
-    { "iso-cnt", 1, NULL, 'C' },
+    { "asm-exon-thres", 1, NULL, 'e' },
+    { "iso-cnt-thres", 1, NULL, 'C' },
+
     { "junc-cnt", 1, NULL, 'c' },
     { "novel-jcnt", 1, NULL, 'v' },
+
+    // output specific module
+    { "recursive", 0, NULL, 'r' },
+    { "module-type", 1, NULL, 'd' },
+    { "exon-num", 1, NULL, 'E' },
 
     { "output", 1, NULL, 'o' },
 
@@ -55,10 +61,13 @@ int cand_iso_usage(void)
     err_printf("Note:    for multi-sample and multi-replicate, input should be list file(with -L) or in this format: \n");
     err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
     err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
+
     err_printf("Options:\n\n");
+
     err_printf("         -t --thread               number of threads to use. [1]\n");
     err_printf("         -L --list-input           use bam list file as input. Refer to \"example.list\". [False]\n");
     err_printf("\n");
+
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
     err_printf("         -u --un-pair              set -u to use both proper and unproper paired mapped read. [False] (proper paired only)\n");
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam file. [False] (uniq-mapped only)\n");
@@ -67,18 +76,29 @@ int cand_iso_usage(void)
     err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
     err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
     err_printf("\n");
-    err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
 
+    err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
     err_printf("\n");
+
     err_printf("         -T --exon-thres  [INT]    maximum number of exon for ASM to enumerate all possible isoforms.\n");
     err_printf("                                   For larger ASM, heuristic method will be applied. [%d]\n", ISO_EXON_ALL_CNT);
-    err_printf("         -e --iso-exon    [INT]    maximum number of exons for ASM to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
-    err_printf("         -C --iso-cnt     [INT]    maximum number of isoform count to keep ASM to candidate isoforms. [%d]\n", ISO_CNT_MAX); 
+    err_printf("         -e --iso-exon-thres [INT] maximum number of exons for ASM to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
+    err_printf("         -C --iso-cnt-thres  [INT] maximum number of isoform count to keep ASM to candidate isoforms. [%d]\n", ISO_CNT_MAX); 
+    err_printf("\n");
+
     err_printf("         -c --junc-cnt    [INT]    minimum number of read count for junction. [%d]\n", JUNC_READ_CNT_MIN); 
     err_printf("         -v --novel-jcnt  [INT]    minimum number of read count for novel-junction. [%d]\n", NOVEL_JUNC_READ_CNT_MIN); 
     err_printf("         -w --edge-wei    [DOU]    during weight-based candidate isoform generation, ignore edge in\n");
     err_printf("                                   splicing-graph whose weight is less than specified value. [%.2f]\n", ISO_EDGE_MIN_WEI);
     err_printf("\n");
+
+    err_printf("         -d --module-type [INT]    only output specific type of alternative splice module, skipped exon,\n");
+    err_printf("                                   alternative initial/terminal exon, 4 exon module ... Refer to \"type.list\". [0]\n");
+    err_printf("         -E --exon-num    [INT]    only output alternative splice module with specific exon number. -1 for all. [-1]\n");
+    err_printf("         -r --recursive            recursively output alternative splice module which are fully embedded\n");
+    err_printf("                                   in a larger module. [False]\n");
+    err_printf("\n");
+
     err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT. [in.bam/sj]\n");
     err_printf("                                   prefix.IsoMatrix & prefix.IsoExon\n");
 	err_printf("\n");
@@ -386,6 +406,7 @@ void read_exon_map_insert(read_exon_map **m, int *bundle_n, int *last_bi, int *b
     for (i = *bundle_n-1; i >= 0; --i) {
         r = read_exon_map_comp((*m)+i, m1);
         if (r == 0) {
+            *last_bi = i;
             (*m)[i].weight++; return;
         } else if (r > 0) break;
     }
@@ -394,9 +415,10 @@ void read_exon_map_insert(read_exon_map **m, int *bundle_n, int *last_bi, int *b
         (*m) = (read_exon_map*)_err_realloc(m, *bundle_m * sizeof(read_exon_map));
     }
     // insert m1 to (*m)[i+1]
-    if (i+1 <= *bundle_n-1) memmove((*m) + i+1 + 1, (*m) + i+1, (*bundle_n - i-1) * sizeof(read_exon_map));
-    read_exon_map_copy((*m)+i+1, m1);
-    *last_bi = i+1;
+    i = *bundle_n;
+    //if (i+1 <= *bundle_n-1) memmove((*m) + i+1 + 1, (*m) + i+1, (*bundle_n - i-1) * sizeof(read_exon_map));
+    read_exon_map_copy((*m)+i, m1);
+    *last_bi = i;
     (*bundle_n)++;
 }
 
@@ -531,25 +553,10 @@ int cmptb_map_exon_cnt(cmptb_map_t *union_map, int map_n) {
     return n;
 }
 
-// generate read-iso compatible matrix
-void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, int *bundle_n, cmptb_map_t **iso_map, int **iso_se, int iso_n, sg_para *sgp, int *asm_i, int src, int sink) {
-    int rep_i, b_i, r_i, iso_i; read_exon_map *rm; cmptb_map_t *im;
-    // .IsoExon
-    { 
-        int exon_i, exon_n, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
-        SGnode *node = sg->node;
-        cmptb_map_t *union_map = cmptb_map_union(iso_map, iso_n, map_n);
-        exon_n = cmptb_map_exon_cnt(union_map, map_n);
-
-        // TODO filter out adjacent exons
-        /* filter start */
+//if ((asm_node_n == 3 && (entry[i] == 0 || exit[j] == sg->node_n-1)) || asm_node_n == 4) {
+//if (entry[i] != 0 && exit[j] != sg->node_n-1) {
         /*int last_end = -1;
-        for (exon_i = src; exon_i <= sink; ++exon_i) {
-            if (is_cmptb_exon_iso(exon_i, union_map)) {
-                if (node[exon_i].start == last_end+1) return;
-                last_end = node[exon_i].end;
-            }
-        }
+
         int last_end = node[src].start - 1;
         for (exon_i = src; exon_i <= sink; ++exon_i) {
             if (is_cmptb_exon_iso(exon_i, union_map)) {
@@ -557,30 +564,176 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
                 last_end = node[exon_i].end;
             }
         }*/
-        /*  filter end  */
+int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int src, int sink, int node_n, int iso_n, int type, int *whole_exon_id, int **exon_id, int *iso_exon_n, int *exon_index) {
+
+    int i, exon_i, iso_i;
+    SGnode *node = sg->node; cmptb_map_t *im;
+
+    int _exon_i = 0;
+    for (exon_i = src; exon_i <= sink; ++exon_i) {
+        if (is_cmptb_exon_iso(exon_i, union_map)) {
+            exon_index[exon_i-src] = _exon_i;
+            whole_exon_id[_exon_i++] = exon_i;
+        }
+    }
+    for (iso_i = 0; iso_i < iso_n; ++iso_i) {
+        im = iso_map[iso_i];
+        _exon_i = 0;
+        for (exon_i = src; exon_i <= sink; ++exon_i) {
+            if (is_cmptb_exon_iso(exon_i, im)) {
+                exon_id[iso_i][_exon_i++] = exon_i;
+            }
+        }
+        iso_exon_n[iso_i] = _exon_i;
+    }
+
+    if (type == ALL_TYPE) return 1; // all
+    if (type == SE_TYPE) {
+        if (iso_n != 2) return 0;
+        // inclusion isoform
+        if (iso_exon_n[0] != node_n) return 0;
+        // first junction
+        if (node[exon_id[0][0]].end+1 == node[exon_id[0][1]].start) return 0;
+        // no middle junction
+        for (i = 1; i < node_n-2; ++i) {
+            if (node[exon_id[0][i]].end+1 != node[exon_id[0][i+1]].start) return 0;
+        }
+        // second junction
+        if (node[exon_id[0][node_n-1]].start-1 == node[exon_id[0][node_n-2]].end) return 0;
+        // exclusion isoform
+        if (iso_exon_n[1] != 2 || exon_id[1][0] != src || exon_id[1][1] != sink) return 0;
+    } else if ((type == A5SS_TYPE && sg->is_rev == 0) || (type == A3SS_TYPE && sg->is_rev == 1)) { // TODO
+        // if (node_n != 3 || iso_n != 2) return 0;
+        // same first node
+        for (i = 0; i < iso_n; ++i) {
+            if (exon_id[i][0] != src) return 0;
+        }
+        // same last node
+        for (i = 0; i < iso_n; ++i) {
+            if (exon_id[i][iso_exon_n[i]-1] != sink) return 0;
+        } 
+        // consecutive first and second ... exon
+        for (i = 0; i < node_n-2; ++i) {
+            if (node[whole_exon_id[i]].end+1 != node[whole_exon_id[i+1]].start) return 0;
+        }
+        // last junction
+        if (node[whole_exon_id[node_n-2]].end+1 == node[whole_exon_id[node_n-1]].start) return 0;
+    } else if ((type == A3SS_TYPE && sg->is_rev == 0) || (type == A5SS_TYPE && sg->is_rev == 1)) { // TODO
+        // if (node_n != 3 || iso_n != 2) return 0;
+        // same first node
+        for (i = 0; i < iso_n; ++i) {
+            if (exon_id[i][0] != src) return 0;
+        }
+        // same last node
+        for (i = 0; i < iso_n; ++i) {
+            if (exon_id[i][iso_exon_n[i]-1] != sink) return 0;
+        } 
+        // consecutive last  ... exon
+        for (i = 1; i < node_n-1; ++i) {
+            if (node[whole_exon_id[i]].end+1 != node[whole_exon_id[i+1]].start) return 0;
+        }
+        // first junction
+        if (node[whole_exon_id[0]].end+1 == node[whole_exon_id[1]].start) return 0;
+    } else if (type == MXE_TYPE) {
+        if (iso_n != 2 || node_n != 4) return 0; // TODO node_n == 4
+        if (exon_id[0][0] != src || exon_id[1][0] != src) return 0;
+        if (iso_exon_n[0] != 3 || iso_exon_n[1] != 3) return 0;
+        if (exon_id[0][2] != sink || exon_id[1][2] != sink) return 0;
+        // 4 junction
+        for (i = 0; i < node_n-1; ++i) {
+            if (node[whole_exon_id[i]].end+1 == node[whole_exon_id[i+1]].start) return 0;
+        }        
+    } else if (type == RI_TYPE) {
+        // if (node_n != 3 || iso_n != 2) return 0;
+        // same first node
+        for (i = 0; i < iso_n; ++i) {
+            if (exon_id[i][0] != src) return 0;
+        }
+        // same last node
+        for (i = 0; i < iso_n; ++i) {
+            if (exon_id[i][iso_exon_n[i]-1] != sink) return 0;
+        } 
+        // consecutive first and second ... exon
+        for (i = 0; i < node_n-1; ++i) {
+            if (node[whole_exon_id[i]].end+1 != node[whole_exon_id[i+1]].start) return 0;
+        }
+    } else if (type == _2SE_TYPE) {
+        if (iso_n != 2) return 0;
+        // inclusion isoform
+        if (iso_exon_n[0] != node_n) return 0;
+        // first junction
+        if (node[exon_id[0][0]].end+1 == node[exon_id[0][1]].start) return 0;
+        // 1 middle junction
+        int hit=0;
+        for (i = 1; i < node_n-2; ++i) {
+            if (node[exon_id[0][i]].end+1 != node[exon_id[0][i+1]].start) {
+                hit++;
+            }
+        }
+        if (hit != 1) return 0;
+        // second junction
+        if (node[exon_id[0][node_n-1]].start-1 == node[exon_id[0][node_n-2]].end) return 0;
+        // exclusion isoform
+        if (iso_exon_n[1] != 2 || exon_id[1][0] != src || exon_id[1][1] != sink) return 0;
+    } else if ((type == AIE_TYPE && sg->is_rev == 0) || (type == ATE_TYPE && sg->is_rev == 1)) { // XXX 2 node AIE
+        // different first node
+        for (i = 0; i < iso_n-1; ++i) {
+            if (exon_id[i][0] == exon_id[i+1][0]) return 0;
+        }
+        // same last node
+        for (i = 0; i < iso_n-1; ++i) {
+            if (exon_id[i][iso_exon_n[i]-1] != exon_id[i+1][iso_exon_n[i+1]-1]) return 0;
+        }
+    } else if ((type == ATE_TYPE && sg->is_rev == 0) || (type == AIE_TYPE && sg->is_rev == 1)) {
+        // same first node
+        for (i = 0; i < iso_n-1; ++i) {
+            if (exon_id[i][0] != exon_id[i+1][0]) return 0;
+        }
+        // different last node
+        int j;
+        for (i = 0; i < iso_n-1; ++i) {
+            for (j = i+1; j < iso_n; ++j) {
+                if (exon_id[i][iso_exon_n[i]-1] == exon_id[j][iso_exon_n[j]-1]) return 0;
+            }
+        }
+    }
+
+    return 1;
+}
+
+// generate read-iso compatible matrix
+void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, int *bundle_n, cmptb_map_t **iso_map, int **iso_se, int iso_n, sg_para *sgp, int *asm_i, int src, int sink) {
+    int rep_i, b_i, r_i, iso_i; read_exon_map *rm;
+    // .IsoExon
+    { 
+        int i, exon_i, exon_n, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
+        SGnode *node = sg->node;
+        cmptb_map_t *union_map = cmptb_map_union(iso_map, iso_n, map_n);
+        exon_n = cmptb_map_exon_cnt(union_map, map_n);
+        int *whole_exon_id = (int*)_err_calloc(exon_n, sizeof(int));
+        int **exon_id = (int**)_err_calloc(iso_n, sizeof(int*));
+        for (i = 0; i < iso_n; ++i) exon_id[i] = (int*)_err_calloc(exon_n, sizeof(int));
+        int *iso_exon_n = (int*)_err_calloc(iso_n, sizeof(int));
+        int *exon_index = (int*)_err_calloc(sink-src+1, sizeof(int));
+
+        if (check_module_type(sg, union_map, iso_map, src, sink, exon_n, iso_n, sgp->module_type, whole_exon_id, exon_id, iso_exon_n, exon_index) == 0) return;
 
         // exon header: ASM_ID, Exon_NUM, Isoform_NUM, strand, CHR_Name
         fprintf(sgp->out_fp[rep_n], "ASM#%d\t%d\t%d\t%c\t%s\n", *asm_i, exon_n, iso_n, "+-"[sg->is_rev], cname[sg->tid]);
         // exon coordinate pair: start, end
-        int *exon_index = (int*)_err_calloc(sink-src+1, sizeof(int)); int _exon_i = 0;
         for (exon_i = src; exon_i <= sink; ++exon_i) {
-            if (is_cmptb_exon_iso(exon_i, union_map)) {
+            if (is_cmptb_exon_iso(exon_i, union_map))
                 fprintf(sgp->out_fp[rep_n], "%d,%d\t", node[exon_i].start, node[exon_i].end);
-                exon_index[exon_i-src] = _exon_i++;
-            }
         } fprintf(sgp->out_fp[rep_n], "\n");
         for (iso_i = 0; iso_i < iso_n; ++iso_i) {
-            im = iso_map[iso_i];
-            exon_n = cmptb_map_exon_cnt(im, map_n);
-            fprintf(sgp->out_fp[rep_n], "%d", exon_n);
-            for (exon_i = src; exon_i <= sink; ++exon_i) {
-                if (is_cmptb_exon_iso(exon_i, im)) {
-                    fprintf(sgp->out_fp[rep_n], "\t%d", exon_index[exon_i-src]);
-                }
+            fprintf(sgp->out_fp[rep_n], "%d", iso_exon_n[iso_i]);
+            for (exon_i = 0; exon_i < iso_exon_n[iso_i]; ++exon_i) {
+                fprintf(sgp->out_fp[rep_n], "\t%d", exon_index[exon_id[iso_i][exon_i]-src]);
             } fprintf(sgp->out_fp[rep_n], "\n");
         }
 
         free(union_map); free(exon_index);
+        free(iso_exon_n); for (i = 0; i < iso_n; ++i) free(exon_id[i]); free(exon_id); free(whole_exon_id);
     }
     // .IsoMatrix
     {
@@ -617,7 +770,6 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
             free(ri_map);
         }
     }
-
     (*asm_i)++;
 }
 
@@ -685,29 +837,24 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8
 
                 int asm_node_n = sg_travl_n(sg, entry[i], exit[j], con_matrix);
 
-                // TODO only output simple models
-                /* filter start */
-                //if ((asm_node_n == 3 && (entry[i] == 0 || exit[j] == sg->node_n-1)) || asm_node_n == 4) {
-                //if (entry[i] != 0 && exit[j] != sg->node_n-1) {
-                    /*  filter end  */
-                    if (asm_node_n <= sgp->asm_exon_max) {
-                        if (asm_node_n <= sgp->exon_thres) { 
-                            iso_n = enum_gen_cand_iso(sg, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
-                        } else {
-                            // use sum(W) to generate isoform
-                            iso_n = bias_flow_gen_cand_iso(sg, rep_W, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
-                        }
-                        // cal read-iso cmptb matrix
-                            if (iso_n > 1) {
-                                read_iso_cmptb(sg, cname, M, rep_n, bundle_n, iso_map, iso_se, iso_n, sgp, asm_i, entry[i], exit[j]);
-                                last_exit = exit[j];
-                            }
-                        for (k = 0; k < sgp->iso_cnt_max; ++k) {
-                            free(iso_map[k]); free(iso_se[k]);
-                        }
-                    }
-                //}
+                if (sgp->exon_num != -1 && sgp->exon_num != asm_node_n) continue;
 
+                if (asm_node_n <= sgp->asm_exon_max) {
+                    if (asm_node_n <= sgp->exon_thres) { 
+                        iso_n = enum_gen_cand_iso(sg, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
+                    } else {
+                        // use sum(W) to generate isoform
+                        iso_n = bias_flow_gen_cand_iso(sg, rep_W, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
+                    }
+                    // cal read-iso cmptb matrix
+                    if (iso_n > 1) {
+                        read_iso_cmptb(sg, cname, M, rep_n, bundle_n, iso_map, iso_se, iso_n, sgp, asm_i, entry[i], exit[j]);
+                        if (sgp->recur == 0) last_exit = exit[j];
+                    }
+                    for (k = 0; k < sgp->iso_cnt_max; ++k) {
+                        free(iso_map[k]); free(iso_se[k]);
+                    }
+                }
                 break;
             }
         }
@@ -794,7 +941,7 @@ int cand_iso(int argc, char *argv[])
 {
     int c, i; char ref_fn[1024]="", out_pre[1024]="", *p;
     sg_para *sgp = sg_init_para();
-    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:lT:e:C:c:v:o:", asm_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:lT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 't': sgp->n_threads = atoi(optarg); break;
             case 'L': sgp->in_list = 1; break;
@@ -820,6 +967,9 @@ int cand_iso(int argc, char *argv[])
             case 'C': sgp->iso_cnt_max = atoll(optarg); break;
             case 'c': sgp->junc_cnt_min = atoi(optarg); break;
             case 'v': sgp->novel_junc_cnt_min = atoi(optarg); break;
+
+            case 'd': sgp->module_type = atoi(optarg); break;
+            case 'r': sgp->recur = 1;
 
             case 'o': strcpy(out_pre, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg); return cand_iso_usage();

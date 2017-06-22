@@ -24,6 +24,8 @@ sg_para *sg_init_para(void)
     sg_para *sgp = (sg_para*)_err_malloc(sizeof(sg_para));
     sgp->n_threads = 1;
     sgp->in_list = 0; sgp->rep_n = NULL; sgp->in_name = NULL;
+    sgp->exon_num = -1; sgp->module_type = 0; // 0: all module
+    sgp->recur = 0;
     sgp->sam_n = 0; sgp->tot_rep_n = 0;
     sgp->no_novel_sj = 1; sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = PAIR_T;

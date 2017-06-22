@@ -2,6 +2,17 @@
 #define _CAND_ISO_H
 #include "splice_graph.h"
 
+#define ALL_TYPE 0
+#define SE_TYPE 1
+#define A5SS_TYPE 2
+#define A3SS_TYPE 3
+#define MXE_TYPE 4
+#define RI_TYPE 5
+
+#define _2SE_TYPE 6
+#define AIE_TYPE 7
+#define ATE_TYPE 8
+
 #define ISO_EDGE_MIN_WEI 0.1
 #define ISO_EXON_ALL_CNT 10
 #define ISO_EXON_MAX 50

@@ -229,7 +229,10 @@ void bias_flow_iso_core(SG *sg, double **W, uint8_t **con_matrix, int src, int s
 int bias_flow_gen_cand_iso(SG *sg, double **rep_W, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp) {
     int i, iso_max = sgp->iso_cnt_max, iso_n=0;
     // XXX add annotation iso to iso_map firstly
-    for (i = 0; i < iso_max; ++i) iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
+    for (i = 0; i < iso_max; ++i) {
+        iso_map[i] = (cmptb_map_t*)_err_calloc(map_n, sizeof(cmptb_map_t));
+        iso_se[i] = (int*)_err_calloc(2, sizeof(int));
+    } 
 
     bias_flow_iso_core(sg, rep_W, con_matrix, src, sink, map_n, iso_map, iso_se, &iso_n, iso_max, sgp);
 

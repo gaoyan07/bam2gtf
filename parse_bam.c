@@ -585,6 +585,11 @@ int parse_bam_record1(bam1_t *b, ad_t *ad, sg_para *sgp)
     tid = b->core.tid; n_cigar = b->core.n_cigar; cigar = bam_get_cigar(b);
     bam_start = b->core.pos+1;
     ad->rlen = b->core.l_qseq;
+#ifdef __DEBUG__
+    int i;
+    for (i = 0; i < n_cigar; ++i) fprintf(stderr, "%d%c", cigar[i] >> 4, "MIDNSH"[cigar[i] & 0xf]);
+    fprintf(stderr, "\n");
+#endif
     // alignment details
     return bam2ad(tid, bam_start, is_uniq, n_cigar, cigar, ad, sgp);
 }
