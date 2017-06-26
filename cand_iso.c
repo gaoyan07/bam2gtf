@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <libgen.h>
 #include <string.h>
 #include <pthread.h>
 #include "cand_iso.h"
@@ -26,6 +27,7 @@ const struct option asm_long_opt [] = {
     { "only-novel", 0, NULL, 'l' },
     { "use-multi", 0, NULL, 'm' },
 
+    { "fully", 0, NULL, 'F' },
     { "exon-thres", 1, NULL, 'T' },
     { "asm-exon-thres", 1, NULL, 'e' },
     { "iso-cnt-thres", 1, NULL, 'C' },
@@ -57,7 +59,7 @@ void gen_bit_table16(void) {
 int cand_iso_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s iso [option] <in.gtf> <in.bam/sj>\n\n", PROG);
+    err_printf("Usage:   %s iso [option] <in.gtf> <in.bam/sj> [-o out_dir]\n\n", PROG);
     err_printf("Note:    for multi-sample and multi-replicate, input should be list file(with -L) or in this format: \n");
     err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
     err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
@@ -80,6 +82,7 @@ int cand_iso_usage(void)
     err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
     err_printf("\n");
 
+    err_printf("         -F --fully                count reads fully inside the module. [False]\n");
     err_printf("         -T --exon-thres  [INT]    maximum number of exon for ASM to enumerate all possible isoforms.\n");
     err_printf("                                   For larger ASM, heuristic method will be applied. [%d]\n", ISO_EXON_ALL_CNT);
     err_printf("         -e --iso-exon-thres [INT] maximum number of exons for ASM to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
@@ -94,13 +97,12 @@ int cand_iso_usage(void)
 
     err_printf("         -d --module-type [INT]    only output specific type of alternative splice module, skipped exon,\n");
     err_printf("                                   alternative initial/terminal exon, 4 exon module ... Refer to \"type.list\". [0]\n");
-    err_printf("         -E --exon-num    [INT]    only output alternative splice module with specific exon number. -1 for all. [-1]\n");
+    err_printf("         -E --exon-num    [INT]    only output alternative splice module with specific exon number. 0 for all. [0]\n");
     err_printf("         -r --recursive            recursively output alternative splice module which are fully embedded\n");
     err_printf("                                   in a larger module. [False]\n");
     err_printf("\n");
 
-    err_printf("         -o --output      [STR]    prefix of file name of output ASM & COUNT. [in.bam/sj]\n");
-    err_printf("                                   prefix.IsoMatrix & prefix.IsoExon\n");
+    err_printf("         -o --output      [STR]    directory output .IsoMatrix & .IsoExon\n");
 	err_printf("\n");
 	return 1;
 }
@@ -142,7 +144,7 @@ void cal_cand_node(SG *sg, int **entry, int **exit, int *entry_n, int *exit_n, u
     }
 }
 
-FILE **iso_output(sg_para *sgp, char *prefix)
+FILE **iso_output(sg_para *sgp, char *out_dir)
 {
     // .IsoMatrix && .IsoExon
     int i, out_n = sgp->tot_rep_n+1;
@@ -151,16 +153,11 @@ FILE **iso_output(sg_para *sgp, char *prefix)
     char **out_fn = (char**)_err_malloc(sizeof(char*) * out_n);
 
     for (i = 0; i < out_n-1; ++i) {
-         out_fn[i] = (char*)_err_malloc(strlen(prefix)+strlen(sgp->in_name[i])+30); strcpy(out_fn[i], sgp->in_name[i]); strcat(out_fn[i], prefix), strcat(out_fn[i], mat_suf);
+         out_fn[i] = (char*)_err_malloc(strlen(out_dir)+strlen(sgp->in_name[i])+30); 
+         strcpy(out_fn[i], out_dir); strcat(out_fn[i], "/"); strcat(out_fn[i], basename(sgp->in_name[i])); strcat(out_fn[i], mat_suf);
     }
-    out_fn[i] = (char*)_err_malloc(strlen(prefix)+strlen(sgp->in_name[0])+30); strcpy(out_fn[i], sgp->in_name[0]); strcat(out_fn[i], prefix); strcat(out_fn[i], exon_suf);
-    /* else {
-        for (i = 0; i < out_n-1; ++i) {
-            out_fn[i] = (char*)_err_malloc(strlen(prefix)+30); strcpy(out_fn[i], prefix); strcat(out_fn[i], mat_suf);
-        }
-        out_fn[i] = (char*)_err_malloc(strlen(prefix)+30); strcpy(out_fn[i], prefix); strcat(out_fn[i], exon_suf);
-    }*/
-
+    out_fn[i] = (char*)_err_malloc(strlen(out_dir)+strlen(sgp->in_name[0])+30); 
+    strcpy(out_fn[i], out_dir); strcat(out_fn[i], "/"); strcat(out_fn[i], basename(sgp->in_name[0])); strcat(out_fn[i], exon_suf);
     FILE **out_fp = (FILE**)_err_malloc(sizeof(FILE*) * out_n);
     for (i = 0; i < out_n; ++i) out_fp[i] = xopen(out_fn[i], "w");
     for (i = 0; i < out_n; ++i) free(out_fn[i]); 
@@ -213,6 +210,25 @@ int is_cmptb_read_iso(read_exon_map *read_map, cmptb_map_t *iso_exon_map, int *i
     return r;
 }
 
+int is_fully_cmptb_read_iso(read_exon_map *read_map, cmptb_map_t *iso_exon_map, int *iso_se) {
+    int start = read_map->map_s, read_si = read_map->map_si, end = read_map->map_e, read_ei = read_map->map_ei;
+    int i; cmptb_map_t iso_tmp_s, iso_tmp_e, r=1;
+    // set 0 for start/end
+    iso_tmp_s = iso_exon_map[start]; iso_tmp_e = iso_exon_map[end];
+
+    iso_exon_map[start] = (iso_exon_map[start] << read_si) >> read_si;
+    iso_exon_map[end] = (iso_exon_map[end] >> read_ei) << read_ei;
+    for (i = start; i <= end; ++i) {
+        // compare
+        if (iso_exon_map[i] != read_map->map[i-start]) {
+            r = 0;
+            break;
+        }
+    }
+    iso_exon_map[start] = iso_tmp_s; iso_exon_map[end] = iso_tmp_e;
+    return r;
+}
+
 int is_cmptb_exon_iso(int exon_i, cmptb_map_t *iso_exon_map) {
     return (iso_exon_map[exon_i >> MAP_STEP_N] >> (~exon_i & MAP_STEP_M)) & 1;
 }
@@ -254,7 +270,7 @@ cmptb_map_t *gen_iso_exon_map(gec_t *exon_id, gec_t exon_n, int map_n, int sg_no
     return map;
 }
 
-read_iso_map *gen_read_iso_map(read_exon_map *read_map, cmptb_map_t **iso_map, int **iso_se, int iso_n, int map_n, int *zero) {
+read_iso_map *gen_read_iso_map(read_exon_map *read_map, cmptb_map_t **iso_map, int **iso_se, int iso_n, int map_n, int *zero, uint8_t fully) {
     int iso_i; cmptb_map_t *im; int *se;
     *zero = 0;
     read_iso_map *rim = (read_iso_map*)_err_malloc(sizeof(read_iso_map));
@@ -263,9 +279,16 @@ read_iso_map *gen_read_iso_map(read_exon_map *read_map, cmptb_map_t **iso_map, i
     rim->map_n = map_n;
     for (iso_i = 0; iso_i < iso_n; ++iso_i) {
         im = iso_map[iso_i]; se = iso_se[iso_i];
-        if (is_cmptb_read_iso(read_map, im, se)) {
-            rim->map[iso_i >> MAP_STEP_N] |= (0x1ULL << (~iso_i & MAP_STEP_M));
-            *zero = 1;
+        if (fully) {
+            if (is_fully_cmptb_read_iso(read_map, im, se)) {
+                rim->map[iso_i >> MAP_STEP_N] |= (0x1ULL << (~iso_i & MAP_STEP_M));
+                *zero = 1;
+            }
+        } else {
+            if (is_cmptb_read_iso(read_map, im, se)) {
+                rim->map[iso_i >> MAP_STEP_N] |= (0x1ULL << (~iso_i & MAP_STEP_M));
+                *zero = 1;
+            }
         }
     }
     return rim;
@@ -553,17 +576,6 @@ int cmptb_map_exon_cnt(cmptb_map_t *union_map, int map_n) {
     return n;
 }
 
-//if ((asm_node_n == 3 && (entry[i] == 0 || exit[j] == sg->node_n-1)) || asm_node_n == 4) {
-//if (entry[i] != 0 && exit[j] != sg->node_n-1) {
-        /*int last_end = -1;
-
-        int last_end = node[src].start - 1;
-        for (exon_i = src; exon_i <= sink; ++exon_i) {
-            if (is_cmptb_exon_iso(exon_i, union_map)) {
-                if (node[exon_i].start != last_end+1) return;
-                last_end = node[exon_i].end;
-            }
-        }*/
 int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int src, int sink, int node_n, int iso_n, int type, int *whole_exon_id, int **exon_id, int *iso_exon_n, int *exon_index) {
 
     int i, exon_i, iso_i;
@@ -745,7 +757,7 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
                 rm = (read_map[rep_i])+b_i;
                 // gen read-iso map
                 int zero;
-                read_iso_map *rim = gen_read_iso_map(rm, iso_map, iso_se, iso_n, map_n, &zero);
+                read_iso_map *rim = gen_read_iso_map(rm, iso_map, iso_se, iso_n, map_n, &zero, sgp->fully);
                 if (zero != 0) {
                     // insert read-iso map, update weight
                     insert_read_iso_map(&ri_map, &ri_map_n, &ri_map_m, rim);
@@ -837,7 +849,7 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8
 
                 int asm_node_n = sg_travl_n(sg, entry[i], exit[j], con_matrix);
 
-                if (sgp->exon_num != -1 && sgp->exon_num != asm_node_n) continue;
+                if (sgp->exon_num != 0 && sgp->exon_num != asm_node_n) continue;
 
                 if (asm_node_n <= sgp->asm_exon_max) {
                     if (asm_node_n <= sgp->exon_thres) { 
@@ -939,9 +951,9 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
 /*****************************/
 int cand_iso(int argc, char *argv[])
 {
-    int c, i; char ref_fn[1024]="", out_pre[1024]="", *p;
+    int c, i; char ref_fn[1024]="", out_dir[1024]="", *p;
     sg_para *sgp = sg_init_para();
-    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:lT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:lFT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 't': sgp->n_threads = atoi(optarg); break;
             case 'L': sgp->in_list = 1; break;
@@ -962,6 +974,7 @@ int cand_iso(int argc, char *argv[])
             case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0; break; // XXX only novel
 
 
+            case 'F': sgp->fully = 1; break;
             case 'T': sgp->exon_thres = atoi(optarg); break;
             case 'e': sgp->asm_exon_max = atoi(optarg); break;
             case 'C': sgp->iso_cnt_max = atoll(optarg); break;
@@ -971,11 +984,15 @@ int cand_iso(int argc, char *argv[])
             case 'd': sgp->module_type = atoi(optarg); break;
             case 'r': sgp->recur = 1; break;
 
-            case 'o': strcpy(out_pre, optarg); break;
+            case 'o': strcpy(out_dir, optarg); break;
             default: err_printf("Error: unknown option: %s.\n", optarg); return cand_iso_usage();
         }
     }
     if (argc - optind != 2) return cand_iso_usage();
+    if (strlen(out_dir) == 0) {
+        err_printf("Please specify output directory with \"-o\" option.\n");
+        return cand_iso_usage();
+    }
 
     int seq_n = 0, seq_m; kseq_t *seq=0;
     if (strlen(ref_fn) != 0) {
@@ -998,7 +1015,7 @@ int cand_iso(int argc, char *argv[])
     err_fclose(gtf_fp); chr_name_free(cname);
 
     // 3. core process
-    sgp->out_fp = iso_output(sgp, out_pre); gen_bit_table16();
+    sgp->out_fp = iso_output(sgp, out_dir); gen_bit_table16();
     cand_iso_core(sg_g, sgp, bam_aux);
 
     sg_free_group(sg_g);
