@@ -28,7 +28,7 @@ sg_para *sg_init_para(void)
     sgp->recur = 0;
     sgp->sam_n = 0; sgp->tot_rep_n = 0;
     sgp->fully = 1;
-    sgp->no_novel_sj = 1; sgp->only_novel = 0;
+    sgp->no_novel_sj = 1; sgp->only_junc = 0, sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = PAIR_T;
     sgp->rm_edge = 0; sgp->edge_wt = ISO_EDGE_MIN_WEI;
     sgp->junc_cnt_min = JUNC_READ_CNT_MIN; sgp->novel_junc_cnt_min = NOVEL_JUNC_READ_CNT_MIN;

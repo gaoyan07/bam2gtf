@@ -24,6 +24,7 @@ const struct option asm_long_opt [] = {
     { "genome-file", 1, NULL, 'g' },
 
     { "edge-wei", 1, NULL, 'w' },
+    { "only-junc", 0, NULL, 'j' },
     { "only-novel", 0, NULL, 'l' },
     { "use-multi", 0, NULL, 'm' },
 
@@ -79,6 +80,7 @@ int cand_iso_usage(void)
     err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
     err_printf("\n");
 
+    err_printf("         -j --only-junc            only count junction-read count. [False]\n");
     err_printf("         -l --only-novel           only output ASM/ASE with novel-junctions. [False]\n");
     err_printf("\n");
 
@@ -522,6 +524,7 @@ read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, S
     while ((r = sam_itr_next(in, itr, b)) >= 0)  {
         if (parse_bam_record1(b, ad, sgp) <= 0) continue;
         if (ad->end < sg->start) continue;
+        if (sgp->only_junc && ad->intv_n <= 1) continue;
         else if (ad->start > sg->end) break;
 
         if (ad_sim_comp(ad, last_ad) == 0) {
@@ -953,7 +956,7 @@ int cand_iso(int argc, char *argv[])
 {
     int c, i; char ref_fn[1024]="", out_dir[1024]="", *p;
     sg_para *sgp = sg_init_para();
-    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:lFT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:jlFT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 't': sgp->n_threads = atoi(optarg); break;
             case 'L': sgp->in_list = 1; break;
@@ -971,6 +974,8 @@ int cand_iso(int argc, char *argv[])
             case 'g': strcpy(ref_fn, optarg); break;
 
             case 'w': sgp->rm_edge = 1, sgp->edge_wt = atof(optarg); break;
+
+            case 'j': sgp->only_junc = 1; break;
             case 'l': sgp->only_novel = 1, sgp->no_novel_sj=0; break; // XXX only novel
 
 

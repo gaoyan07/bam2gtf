@@ -2,6 +2,7 @@
 import re
 import sys
 
+
 fp=open(sys.argv[1], "r")
 line=fp.readline()
 while line:
