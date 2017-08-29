@@ -3,7 +3,7 @@
 #include <string.h>
 #include <getopt.h>
 #include "splice_graph.h"
-#include "cand_iso.h"
+#include "iso.h"
 #include "utils.h"
 #include "gtf.h"
 
@@ -28,7 +28,7 @@ sg_para *sg_init_para(void)
     sgp->recur = 0;
     sgp->sam_n = 0; sgp->tot_rep_n = 0;
     sgp->fully = 1;
-    sgp->no_novel_sj = 1; sgp->only_junc = 0, sgp->only_novel = 0;
+    sgp->no_novel_sj = 1; sgp->no_novel_exon = 1; sgp->only_junc = 0, sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = PAIR_T;
     sgp->rm_edge = 0; sgp->edge_wt = ISO_EDGE_MIN_WEI;
     sgp->junc_cnt_min = JUNC_READ_CNT_MIN; sgp->novel_junc_cnt_min = NOVEL_JUNC_READ_CNT_MIN;
@@ -45,11 +45,10 @@ void sg_free_para(sg_para *sgp)
 {
     if (sgp->in_name != NULL) {
         int i;
-        for (i = 0; i < sgp->tot_rep_n; ++i) {
+        for (i = 0; i < sgp->tot_rep_n; ++i)
             free(sgp->in_name[i]);
+        for (i = 0; i < sgp->fp_n; ++i)
             err_fclose(sgp->out_fp[i]);
-        }
-        err_fclose(sgp->out_fp[i]);
         free(sgp->in_name); free(sgp->out_fp);
     }
     if (sgp->rep_n != NULL) free(sgp->rep_n);
@@ -348,6 +347,26 @@ void intersect_domn(gec_t **com, gec_t *new_domn, gec_t *com_n, gec_t new_n, int
     *com_n = domn_i;
 }
 
+void sg_travl_iter(SG *sg, int cur_id, int src, int sink, uint8_t *node_visit, int *n) {
+    if (node_visit[cur_id-src] == 1) return; else node_visit[cur_id-src] = 1;
+    (*n)++;
+    if (cur_id == sink) return;
+    int i, next_id;
+    for (i = 0; i < sg->node[cur_id].next_n; ++i) {
+        next_id = sg->node[cur_id].next_id[i];
+        sg_travl_iter(sg, next_id, src, sink, node_visit, n);
+    }
+}
+
+int sg_travl(SG *sg, int src, int sink) {
+    int n = 0; uint8_t *node_visit = (uint8_t*)_err_calloc(sink-src+1, sizeof(uint8_t));
+    sg_travl_iter(sg, src, src, sink, node_visit, &n);
+    if (src == 0) n--; 
+    if (sink == sg->node_n-1) n--;
+    free(node_visit);
+    return n;
+}
+
 void sg_travl_n_iter(SG *sg, int cur_id, int src, int sink, uint8_t **con_matrix, uint8_t *node_visit, int *n) {
     if (node_visit[cur_id-src] == 1) return; else node_visit[cur_id-src] = 1;
     (*n)++;
@@ -522,7 +541,7 @@ void sg_merge_end(gene_t *gene) {
             if (gene->trans[j].exon[0].end != end[i]) continue;
             min = MIN_OF_TWO(min, gene->trans[j].exon[0].start);
         }
-        for (j = 0; j < gene->trans_n; ++j) { // merge init-exon's start, which share same end
+        for (j = 0; j < gene->trans_n; ++j) { // merge init-exon's start, that share same end
             if (gene->trans[j].exon[0].end != end[i]) continue;
             gene->trans[j].exon[0].start = min;
         }
@@ -533,7 +552,7 @@ void sg_merge_end(gene_t *gene) {
             if (gene->trans[j].exon[gene->trans[j].exon_n-1].start!= start[i]) continue;
             max = MAX_OF_TWO(max, gene->trans[j].exon[gene->trans[j].exon_n-1].end);
         }
-        for (j = 0; j < gene->trans_n; ++j) { // merge term-exon' end, which share same start
+        for (j = 0; j < gene->trans_n; ++j) { // merge term-exon' end, that share same start
             if (gene->trans[j].exon[gene->trans[j].exon_n-1].start!= start[i]) continue;
             gene->trans[j].exon[gene->trans[j].exon_n-1].end = max;
         }
@@ -607,6 +626,7 @@ void build_SpliceGraph_core(SG *sg, gene_t *gene)
     int i, j, don_id, acc_id, don_site_id=0, acc_site_id=0; exon_t e;
     
     sg->tid = gene->tid, sg->is_rev = gene->is_rev;
+    strcpy(sg->gene_name, gene->gname), strcpy(sg->gene_id, gene->gid);
     // gen sg node (pseu-exon)
     gen_sg_node(sg, gene);
 

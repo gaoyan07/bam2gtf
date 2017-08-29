@@ -95,6 +95,7 @@ typedef struct {
     SGedge *edge; int edge_n, edge_m; // sort by don_id and acc_id
     int tid; uint8_t is_rev;
     int start, end; // boundaries of splice-sites
+    char gene_name[1024], gene_id[1024];
 } SG;
 
 typedef struct {
@@ -126,13 +127,13 @@ typedef struct {
 typedef struct {
     int n_threads;
 
-    int sam_n, tot_rep_n, *rep_n;
+    int sam_n, tot_rep_n, *rep_n, fp_n;
     uint8_t in_list; char **in_name; FILE **out_fp;
 
     int module_type; int exon_num;
 
     uint8_t fully:1, recur:1, no_novel_sj:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
-    uint8_t only_junc;
+    uint8_t only_junc, no_novel_exon;
     int intron_len; double edge_wt;
     int junc_cnt_min, novel_junc_cnt_min, exon_thres, iso_cnt_max; int asm_exon_max;//, iso_read_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
@@ -181,10 +182,12 @@ int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_id, in
 #define set_post_con_matrix(m, i, j) m[i][j] |= 2
 #define is_con_matrix(m, i, j) (m[i][j] == 3)
 
+int sg_travl(SG *sg, int src, int sink);
 int sg_travl_n(SG *sg, int src, int sink, uint8_t **con_matrix);
 
 void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix);
 void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix);
+void gtf_print_trans(FILE *fp, char *source, char *gname, char *gid, char *cname, char strand, SG *sg, gec_t *node_id, gec_t l, int iso_i);
 
 SG_group *construct_SpliceGraph(FILE *gtf_fp, char *fn, chr_name_t *cname);
 

@@ -93,7 +93,7 @@ typedef struct {
     trans_t *trans; int trans_n, anno_tran_n, trans_m;
     int tid; uint8_t is_rev;
     int start, end;
-    char gname[100];
+    char gname[1024], gid[1024];
 } gene_t;
 
 typedef struct {

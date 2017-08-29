@@ -53,12 +53,8 @@ int comp_gtf_intron(read_trans_t T, intron_group_t I)
 {
     int i, j, iden, dis;
 
-    //for(i = 0; i < T.trans_n; ++i)
-        //printf("all: %s\t%d\n", T.t[i].tname, T.t[i].cov);
     i = 0, j = 0, iden=0, dis=0;
     while (i < T.trans_n && j < I.intron_n) {
-        //if (strcmp(T.t[i].tname, "m130614_092349_42175_c100535482550000001823081711101347_s1_p0/96492/ccs.path1") == 0)
-        //    printf("ok");
         if (I.intron[j].tid < T.t[i].tid || (I.intron[j].tid == T.t[i].tid && I.intron[j].end <= T.t[i].start)) {
             j++;
         } else if (I.intron[j].tid > T.t[i].tid || (I.intron[j].tid == T.t[i].tid && I.intron[j].start >= T.t[i].end)) {

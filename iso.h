@@ -1,6 +1,7 @@
-#ifndef _CAND_ISO_H
-#define _CAND_ISO_H
+#ifndef _ISO_H
+#define _ISO_H
 #include "splice_graph.h"
+#include "parse_bam.h"
 
 #define ALL_TYPE 0
 #define SE_TYPE 1
@@ -65,7 +66,15 @@ SGasm_group *gen_asm(SG_group *sg_g, sg_para *sgp);
 int cal_asm_exon_cnt(SG_group *sg_g, samFile *in, bam_hdr_t *h, bam1_t *b);
 cmptb_map_t *gen_iso_exon_map(gec_t *node_id, gec_t l, int map_n, int sg_node_n, int *se);
 void insert_iso_exon_map(cmptb_map_t **iso_map, int **iso_se, int *iso_i, int map_n, cmptb_map_t *iso_m, int *se);
+read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, SG *sg, char **cname, sg_para *sgp);
+void add_pseu_wei(SG *sg, double **W, uint8_t **con_matrix);
 int asm_output(char *fn, char *prefix, SG_group *sg_g, SGasm_group *asm_g, sg_para *sgp);
-int cand_iso(int argc, char *argv[]);
+int cand_asm(int argc, char *argv[]);
+int full_iso(int argc, char *argv[]);
+
+
+int bias_flow_gen_cand_asm(SG *sg, double **rep_weight, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp);
+int enum_gen_cand_asm(SG *sg, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp);
+int bias_flow_gen_full_iso(SG *sg, char **cname, double **weight, uint8_t **con_matrix, int src, int sink, sg_para *sgp);
 
 #endif

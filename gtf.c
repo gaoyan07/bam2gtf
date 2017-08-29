@@ -3,6 +3,7 @@
 #include <string.h>
 #include "gtf.h"
 #include "utils.h"
+#include "splice_graph.h"
 #include "htslib/htslib/sam.h"
 
 extern int gen_trans(bam1_t *b, trans_t *t, int exon_min);
@@ -401,7 +402,7 @@ void reverse_exon_order(gene_group_t *gg) {
 // exon sorted by start
 int read_gene_group(FILE *gtf, char *fn, chr_name_t *cname, gene_group_t *gg)
 {
-    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[100], tname[100], tag[20];
+    char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[1024], gid[1024], tname[1024], tag[20];
     gene_t *cur_g=0; trans_t *cur_t=0; exon_t *cur_e=0;
     gg->gene_n = 0;
 
@@ -410,7 +411,8 @@ int read_gene_group(FILE *gtf, char *fn, chr_name_t *cname, gene_group_t *gg)
         sscanf(line, "%s\t%*s\t%s\t%d\t%d\t%*s\t%c\t%*s\t%[^\n]", ref, type, &start, &end, &strand, add_info);
         int tid = get_chr_id(cname, ref);
         uint8_t is_rev = (strand == '-' ? 1 : 0);
-        strcpy(tag, "gene_id"); gtf_add_info(add_info, tag, gname);
+        strcpy(tag, "gene_id"); gtf_add_info(add_info, tag, gid);
+        strcpy(tag, "gene_name"); gtf_add_info(add_info, tag, gname);
         strcpy(tag, "transcript_id"); gtf_add_info(add_info, tag, tname);
  
         if (strcmp(type, "gene") == 0) { // new gene starts old gene ends
@@ -418,7 +420,7 @@ int read_gene_group(FILE *gtf, char *fn, chr_name_t *cname, gene_group_t *gg)
             cur_g = gg->g + gg->gene_n-1;
             cur_g->tid = tid; cur_g->is_rev = is_rev;
             cur_g->start = start; cur_g->end = end;
-            strcpy(cur_g->gname, gname);
+            strcpy(cur_g->gname, gname); strcpy(cur_g->gid, gid);
             cur_g->trans_n = 0;
         } else if (strcmp(type, "transcript") == 0) { // new trans starts, old trans ends
             if (cur_g == 0) err_fatal_core(__func__, "GTF format error in %s.\n", fn);
@@ -504,3 +506,30 @@ void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char 
     }
 }
 
+void gtf_print_trans(FILE *fp, char *source, char *gname, char *gid, char *cname, char strand, SG *sg, gec_t *node_id, gec_t l, int iso_i) {
+    int i = 0, mi = 0;
+    // merge node if necessary
+    int *start = (int*)_err_malloc(l * sizeof(int)), *end = (int*)_err_malloc(l * sizeof(int));
+    start[mi] = sg->node[node_id[i]].start;
+    for (i = 1; i < l; ++i) {
+        if (sg->node[node_id[i]].start != sg->node[node_id[i-1]].end + 1) {
+            end[mi++] = sg->node[node_id[i-1]].end;
+            start[mi] = sg->node[node_id[i]].start;
+        }
+    } end[mi++] = sg->node[node_id[i-1]].end;
+
+    // print transcript line
+    fprintf(fp, "%s\t%s\t%s\t%d\t%d\t%c\t%c\t%c\tgene_id \"%s\"; gene_name \"%s\"; transcript_id \"%s_novel#%d\";\n", cname, source, "transcript", sg->node[node_id[0]].start, sg->node[node_id[l-1]].end, '.', strand, '.', sg->gene_id, sg->gene_name, sg->gene_id, iso_i);
+
+    // print exon line
+    if (strand == '+') {
+        for (i = 0; i < mi; ++i) {
+            fprintf(fp, "%s\t%s\t%s\t%d\t%d\t%c\t%c\t%c\tgene_id \"%s\"; gene_name \"%s\"; transcript_id \"%s_novel#%d\"; exon_number \"%d\";\n", cname, source, "exon", start[i], end[i], '.', strand, '.', gid, gname, sg->gene_id, iso_i, i+1);
+        }
+    } else {
+        for (i = mi-1; i >= 0; --i) {
+            fprintf(fp, "%s\t%s\t%s\t%d\t%d\t%c\t%c\t%c\tgene_id \"%s\"; gene_name \"%s\"; transcript_id \"%s_novel#%d\"; exon_number \"%d\";\n", cname, source, "exon", start[i], end[i], '.', strand, '.', gid, gname, sg->gene_id, iso_i, i+1);
+        }
+    }
+    free(start); free(end);
+}

@@ -4,12 +4,12 @@
 #include <libgen.h>
 #include <string.h>
 #include <pthread.h>
-#include "cand_iso.h"
+#include "iso.h"
 #include "utils.h"
 #include "gtf.h"
 #include "splice_graph.h"
 #include "update_sg.h"
-#include "asm2iso.h"
+#include "iso.h"
 #include "parse_bam.h"
 #include "kstring.h"
 
@@ -57,10 +57,10 @@ void gen_bit_table16(void) {
     }
 }
 
-int cand_iso_usage(void)
+int cand_asm_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s iso [option] <in.gtf> <in.bam/sj> [-o out_dir]\n\n", PROG);
+    err_printf("Usage:   %s asm [option] <in.gtf> <in.bam/sj> [-o out_dir]\n\n", PROG);
     err_printf("Note:    for multi-sample and multi-replicate, input should be list file(with -L) or in this format: \n");
     err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
     err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
@@ -88,7 +88,7 @@ int cand_iso_usage(void)
     err_printf("         -T --exon-thres  [INT]    maximum number of exon for ASM to enumerate all possible isoforms.\n");
     err_printf("                                   For larger ASM, heuristic method will be applied. [%d]\n", ISO_EXON_ALL_CNT);
     err_printf("         -e --iso-exon-thres [INT] maximum number of exons for ASM to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
-    err_printf("         -C --iso-cnt-thres  [INT] maximum number of isoform count to keep ASM to candidate isoforms. [%d]\n", ISO_CNT_MAX); 
+    err_printf("         -C --iso-cnt-thres  [INT] maximum number of isoform count to retain ASM. [%d]\n", ISO_CNT_MAX); 
     err_printf("\n");
 
     err_printf("         -c --junc-cnt    [INT]    minimum number of read count for junction. [%d]\n", JUNC_READ_CNT_MIN); 
@@ -212,7 +212,7 @@ int is_cmptb_read_iso(read_exon_map *read_map, cmptb_map_t *iso_exon_map, int *i
     return r;
 }
 
-int is_fully_cmptb_read_iso(read_exon_map *read_map, cmptb_map_t *iso_exon_map, int *iso_se) {
+int is_fully_cmptb_read_iso(read_exon_map *read_map, cmptb_map_t *iso_exon_map) { //, int *iso_se) { XXX
     int start = read_map->map_s, read_si = read_map->map_si, end = read_map->map_e, read_ei = read_map->map_ei;
     int i; cmptb_map_t iso_tmp_s, iso_tmp_e, r=1;
     // set 0 for start/end
@@ -282,7 +282,7 @@ read_iso_map *gen_read_iso_map(read_exon_map *read_map, cmptb_map_t **iso_map, i
     for (iso_i = 0; iso_i < iso_n; ++iso_i) {
         im = iso_map[iso_i]; se = iso_se[iso_i];
         if (fully) {
-            if (is_fully_cmptb_read_iso(read_map, im, se)) {
+            if (is_fully_cmptb_read_iso(read_map, im)) { //, se)) { XXX
                 rim->map[iso_i >> MAP_STEP_N] |= (0x1ULL << (~iso_i & MAP_STEP_M));
                 *zero = 1;
             }
@@ -788,41 +788,41 @@ void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, i
     (*asm_i)++;
 }
 
-void add_pseu_wei(SG *sg, double **rep_W, uint8_t **con_matrix) {
+void add_pseu_wei(SG *sg, double **W, uint8_t **con_matrix) {
     int i, j, next_id, pre_id; double w;
     for (i = 0; i < sg->node[0].next_n; ++i) {
         next_id = sg->node[0].next_id[i];
-        //rep_W[0][next_id] = 10; // XXX pseudo weigh
+        //W[0][next_id] = 10; // XXX pseudo weigh
         w = 0;
-        if (is_con_matrix(con_matrix, 0, next_id) && rep_W[0][next_id] == 0) {
+        if (is_con_matrix(con_matrix, 0, next_id) && W[0][next_id] == 0) {
             for (j = 0; j < sg->node[next_id].pre_n; ++j) {
                 pre_id = sg->node[next_id].pre_id[j];
                 if (pre_id != 0 && is_con_matrix(con_matrix, pre_id, next_id)) {
-                    w = rep_W[pre_id][next_id];
+                    w = W[pre_id][next_id];
                     break;
                 }
 
             }
-            rep_W[0][next_id] = w * 0.8; // XXX pseudo weigh
+            W[0][next_id] = w * 0.8; // XXX pseudo weigh
         }
     }
     for (i = 0; i < sg->node[sg->node_n-1].pre_n; ++i) {
         pre_id = sg->node[sg->node_n-1].pre_id[i];
         //rep_W[pre_id][sg->node_n-1] = 10; // XXX pseudo weigh
         w = 0;
-        if (is_con_matrix(con_matrix, pre_id, sg->node_n-1) && rep_W[pre_id][sg->node_n-1] == 0) {
+        if (is_con_matrix(con_matrix, pre_id, sg->node_n-1) && W[pre_id][sg->node_n-1] == 0) {
             for (j = 0; j < sg->node[pre_id].next_n; ++j) {
                 next_id = sg->node[pre_id].next_id[j];
                 if (next_id != sg->node_n-1 && is_con_matrix(con_matrix, pre_id, next_id)) {
-                    w = rep_W[pre_id][next_id];
+                    w = W[pre_id][next_id];
                 }
             }
-            rep_W[pre_id][sg->node_n-1] = w * 0.8;
+            W[pre_id][sg->node_n-1] = w * 0.8;
         }
     }
 }
 
-void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8_t **con_matrix, int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
+void gen_cand_asm(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8_t **con_matrix, int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
     int entry_n, exit_n; int *entry, *exit;
 
     cal_pre_domn(sg, rep_W, con_matrix), cal_post_domn(sg, rep_W, con_matrix);
@@ -856,10 +856,10 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8
 
                 if (asm_node_n <= sgp->asm_exon_max) {
                     if (asm_node_n <= sgp->exon_thres) { 
-                        iso_n = enum_gen_cand_iso(sg, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
+                        iso_n = enum_gen_cand_asm(sg, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
                     } else {
                         // use sum(W) to generate isoform
-                        iso_n = bias_flow_gen_cand_iso(sg, rep_W, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
+                        iso_n = bias_flow_gen_cand_asm(sg, rep_W, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
                     }
                     // cal read-iso cmptb matrix
                     if (iso_n > 1) {
@@ -877,7 +877,7 @@ void gen_cand_iso(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8
     free(iso_map); free(iso_se); free(entry); free(exit);
 }
 
-void update_W(double **rep_W, double ***W, int rep_n, SG *sg, int junc_cnt_min) {
+void update_rep_W(double **rep_W, double ***W, int rep_n, SG *sg, int junc_cnt_min) {
     int i, j, rep_i;
     for (i = 0; i < sg->node_n-1; ++i) {
         for (j = i+1; j < sg->node_n; ++j) {
@@ -898,7 +898,7 @@ void update_W(double **rep_W, double ***W, int rep_n, SG *sg, int junc_cnt_min) 
     }
 }
 
-int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
+int cand_asm_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
 {
     err_func_format_printf(__func__, "generate candidate isoform and read-isoform compatible matrix for each gene ...\n");
     int sg_i, asm_i, rep_i; SG *sg; 
@@ -928,9 +928,9 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
             M[rep_i] = bam_sg_cmptb(bam_aux[rep_i], W[rep_i], bundle_n+rep_i, sg, sg_g->cname->chr_name, sgp);
             hit += bundle_n[rep_i];
         }
-        update_W(rep_W, W, sgp->tot_rep_n, sg, sgp->junc_cnt_min); // use sum(W) of total reps
+        update_rep_W(rep_W, W, sgp->tot_rep_n, sg, sgp->junc_cnt_min); // use sum(W) of total reps
         // 3. flow network decomposition
-        if (hit > 0) gen_cand_iso(sg, sg_g->cname->chr_name, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
+        if (hit > 0) gen_cand_asm(sg, sg_g->cname->chr_name, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
         
         // free variables
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
@@ -952,7 +952,7 @@ int cand_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
 }
 
 /*****************************/
-int cand_iso(int argc, char *argv[])
+int cand_asm(int argc, char *argv[])
 {
     int c, i; char ref_fn[1024]="", out_dir[1024]="", *p;
     sg_para *sgp = sg_init_para();
@@ -965,10 +965,10 @@ int cand_iso(int argc, char *argv[])
             case 'u': sgp->read_type = SING_T; break;
             case 'm': sgp->use_multi = 1; break;
             case 'a': sgp->anchor_len[0] = strtol(optarg, &p, 10);
-                      if (*p != 0) sgp->anchor_len[1] = strtol(p+1, &p, 10); else return cand_iso_usage();
-                      if (*p != 0) sgp->anchor_len[2] = strtol(p+1, &p, 10); else return cand_iso_usage();
-                      if (*p != 0) sgp->anchor_len[3] = strtol(p+1, &p, 10); else return cand_iso_usage();
-                      if (*p != 0) sgp->anchor_len[4] = strtol(p+1, &p, 10); else return cand_iso_usage();
+                      if (*p != 0) sgp->anchor_len[1] = strtol(p+1, &p, 10); else return cand_asm_usage();
+                      if (*p != 0) sgp->anchor_len[2] = strtol(p+1, &p, 10); else return cand_asm_usage();
+                      if (*p != 0) sgp->anchor_len[3] = strtol(p+1, &p, 10); else return cand_asm_usage();
+                      if (*p != 0) sgp->anchor_len[4] = strtol(p+1, &p, 10); else return cand_asm_usage();
                       break;
             case 'i': sgp->intron_len = atoi(optarg); break;
             case 'g': strcpy(ref_fn, optarg); break;
@@ -990,13 +990,13 @@ int cand_iso(int argc, char *argv[])
             case 'r': sgp->recur = 1; break;
 
             case 'o': strcpy(out_dir, optarg); break;
-            default: err_printf("Error: unknown option: %s.\n", optarg); return cand_iso_usage();
+            default: err_printf("Error: unknown option: %s.\n", optarg); return cand_asm_usage();
         }
     }
-    if (argc - optind != 2) return cand_iso_usage();
+    if (argc - optind != 2) return cand_asm_usage();
     if (strlen(out_dir) == 0) {
         err_printf("Please specify output directory with \"-o\" option.\n");
-        return cand_iso_usage();
+        return cand_asm_usage();
     }
 
     int seq_n = 0, seq_m; kseq_t *seq=0;
@@ -1008,7 +1008,8 @@ int cand_iso(int argc, char *argv[])
     }
     // 0. parse input bam file names
     bam_aux_t **bam_aux = (sgp->in_list ? sg_par_input_list(sgp, argv[optind+1]) : sg_par_input(sgp, argv[optind+1]));
-    if (sgp->tot_rep_n <= 0) return cand_iso_usage();
+    sgp->fp_n = sgp->tot_rep_n + 1;
+    if (sgp->tot_rep_n <= 0) return cand_asm_usage();
 
     // 1. set cname --- 1 thread
     chr_name_t *cname = chr_name_init();
@@ -1021,7 +1022,7 @@ int cand_iso(int argc, char *argv[])
 
     // 3. core process
     sgp->out_fp = iso_output(sgp, out_dir); gen_bit_table16();
-    cand_iso_core(sg_g, sgp, bam_aux);
+    cand_asm_core(sg_g, sgp, bam_aux);
 
     sg_free_group(sg_g);
     if (seq_n > 0) {
