@@ -27,6 +27,9 @@ int ad_comp(ad_t *ad1, ad_t *ad2);
 ad_t *ad_init(int n);
 void ad_copy(ad_t *dest, ad_t *src);
 int parse_bam_record1(bam1_t *b, ad_t *ad, sg_para *sgp);
+int push_exon_coor(exon_t **e, int *e_n, int *e_m, ad_t *ad);
+int push_sj(int **don, int *don_n, int *don_m, ad_t *ad);
+exon_t *infer_exon_coor(int *infer_e_n, exon_t *e, int e_n, int *don, int don_n);
 
 kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m);
 int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, SG_group *sg_g, int *sg_ad_idx, ad_t **AD_group, int *AD_n, int AD_m, sj_t **SJ_group, int *SJ_n, int SJ_m, sg_para *sgp);

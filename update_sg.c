@@ -5,7 +5,6 @@
 #include "utils.h"
 
 int add_novel_sg_edge(SG *sg, double **wei_matrix, sg_para *sgp) {
-    if (sgp->no_novel_sj) return 0;
     int i, j, hit; gec_t don_id, acc_id;
     SGnode *node = sg->node; int edge_id;
     for (i = 0; i < sg->node_n-1; ++i) {

@@ -18,6 +18,7 @@ const struct option asm_long_opt [] = {
 
     { "list-input", 0, NULL, 'L' },
     { "novel-sj", 0, NULL, 'n' },
+    { "novel-exon", 0, NULL, 'N' },
     { "un-pair", 0, NULL, 'u' },
     { "anchor-len", 1, NULL, 'a' },
     { "intron-len", 1, NULL, 'i' },
@@ -71,7 +72,10 @@ int cand_asm_usage(void)
     err_printf("         -L --list-input           use bam list file as input. Refer to \"example.list\". [False]\n");
     err_printf("\n");
 
-    err_printf("         -n --novel-sj             allow novel splice-junction in the ASM. [False]\n");
+    err_printf("         -n --novel-sj             allow novel splice-junction in the ASM.\n");
+    err_printf("                                   Novel splice-junction here means novel combination of known splice-sites. [False]\n");
+    err_printf("         -N --novel-exon           allow novel exon in the ASM.\n");
+    err_printf("                                   Novel exon here means novel splice sites or novel intron-retation. [False]\n");
     err_printf("         -u --un-pair              set -u to use both proper and unproper paired mapped read. [False] (proper paired only)\n");
     err_printf("         -m --use-multi            use both uniq- and multi-mapped reads in the bam file. [False] (uniq-mapped only)\n");
     err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d].\n", ANCHOR_MIN_LEN);
@@ -508,10 +512,8 @@ map_END:
     return read_map;
 }
 
-read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, SG *sg, char **cname, sg_para *sgp) {
-    samFile *in = bam_aux->in;  hts_idx_t *idx = bam_aux->idx; bam_hdr_t *h = bam_aux->h; bam1_t *b = bam_aux->b;
-    char reg[1024]; sprintf(reg, "%s:%d-%d", cname[sg->tid], sg->start, sg->end);
-    hts_itr_t *itr = sam_itr_querys(idx, h, reg);
+read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, hts_itr_t *itr, double **wei_matrix, int *b_n, SG *sg, sg_para *sgp) {
+    samFile *in = bam_aux->in;  bam1_t *b = bam_aux->b;
 
     ad_t *ad = ad_init(1), *last_ad = ad_init(1); gec_t *exon_id, *last_exon_id, exon_n, exon_m, last_exon_n, last_exon_m; uint8_t cmptb, last_cmptb;
     int i, r, bundle_n = 0, last_bi=-1, bundle_m = 10000;//, N = sg->node_n;
@@ -547,10 +549,9 @@ read_exon_map *bam_sg_cmptb(bam_aux_t *bam_aux, double **wei_matrix, int *b_n, S
         ad_copy(last_ad, ad); 
     }
     if (r < -1) err_func_format_printf("BAM file error. \"%s\"", bam_aux->fn);
-    add_novel_sg_edge(sg, wei_matrix, sgp);
+    if (sgp->no_novel_sj == 0) add_novel_sg_edge(sg, wei_matrix, sgp);
 
     *b_n = bundle_n; 
-    hts_itr_destroy(itr); 
     free_ad_group(ad, 1); free_ad_group(last_ad, 1);
     free(exon_id), free(last_exon_id);
     return read_map;
@@ -580,7 +581,6 @@ int cmptb_map_exon_cnt(cmptb_map_t *union_map, int map_n) {
 }
 
 int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int src, int sink, int node_n, int iso_n, int type, int *whole_exon_id, int **exon_id, int *iso_exon_n, int *exon_index) {
-
     int i, exon_i, iso_i;
     SGnode *node = sg->node; cmptb_map_t *im;
 
@@ -898,19 +898,52 @@ void update_rep_W(double **rep_W, double ***W, int rep_n, SG *sg, int junc_cnt_m
     }
 }
 
-int cand_asm_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
+int bam_infer_exon(bam_aux_t *bam_aux, hts_itr_t *itr, exon_t **e, int *e_n, int *e_m, int **don, int *don_n, int *don_m, sg_para *sgp) {
+    samFile *in = bam_aux->in;  bam1_t *b = bam_aux->b; int r; ad_t *ad = ad_init(1), *last_ad = ad_init(1);
+    while ((r = sam_itr_next(in, itr, b)) >= 0)  {
+        if (parse_bam_record1(b, ad, sgp) <= 0 || ad_sim_comp(ad, last_ad) == 0) continue;
+        // 1. ad => update exonic coordinates
+        *e_n = push_exon_coor(e, e_n, e_m, ad);
+        // 2. ad => update splice-junction
+        push_sj(don, don_n, don_m, ad);
+
+        ad_copy(last_ad, ad); 
+    }
+    if (r < -1) err_func_format_printf("BAM file error. \"%s\"", bam_aux->fn);
+
+    free_ad_group(ad, 1); free_ad_group(last_ad, 1);
+    return *e_n;
+}
+
+int cand_asm_core(gene_group_t *gg, int g_n, sg_para *sgp, bam_aux_t **bam_aux)
 {
     err_func_format_printf(__func__, "generate candidate isoform and read-isoform compatible matrix for each gene ...\n");
-    int sg_i, asm_i, rep_i; SG *sg; 
+    int g_i, asm_i, rep_i;
     read_exon_map **M = (read_exon_map**)_err_malloc(sgp->tot_rep_n * sizeof(read_exon_map*));
     double ***W = (double***)_err_malloc(sgp->tot_rep_n * sizeof(double**));
     int *bundle_n = (int*)_err_malloc(sgp->tot_rep_n * sizeof(int));
-    int i, hit = 0;
+    int i, hit = 0; char **cname = bam_aux[0]->h->target_name;
 
     asm_i = 0;
-    for (sg_i = 0; sg_i < sg_g->SG_n; ++sg_i) {
-        sg = sg_g->SG[sg_i];
-        if (sg->node_n - 2 < 3) continue; // ignore simple genes
+    for (g_i = 0; g_i < g_n; ++g_i) {
+        gene_t *gene = gg->g+g_i;
+        exon_t *infer_e = NULL; int infer_e_n = 0;
+
+        char reg[1024]; sprintf(reg, "%s:%d-%d", cname[gene->tid], gene->start, gene->end);
+        if (sgp->no_novel_exon == 0) {
+            exon_t *bam_e = (exon_t*)_err_malloc(sizeof(exon_t)); int bam_e_n = 0, bam_e_m=1;
+            int *don=(int*)_err_malloc(sizeof(int)), don_n=0, don_m=1;
+            for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
+                hts_itr_t *itr = sam_itr_querys(bam_aux[rep_i]->idx, bam_aux[rep_i]->h, reg);
+                bam_infer_exon(bam_aux[rep_i], itr, &bam_e, &bam_e_n, &bam_e_m, &don, &don_n, &don_m, sgp);
+                hts_itr_destroy(itr); 
+            }
+            // 3. use splice-junction to split exons
+            infer_e = infer_exon_coor(&infer_e_n, bam_e, bam_e_n, don, don_n);
+            free(bam_e); free(don);
+        }
+
+        SG *sg = build_SpliceGraph_novel_exon_core(gene, infer_e, infer_e_n);  free(infer_e);
 
         double **rep_W = (double**)_err_calloc(sg->node_n, sizeof(double*));
         uint8_t **con_matrix = (uint8_t**)_err_calloc(sg->node_n, sizeof(uint8_t*)); // connect matrix
@@ -918,19 +951,20 @@ int cand_asm_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
             rep_W[i] = (double*)_err_calloc(sg->node_n, sizeof(double));
             con_matrix[i] = (uint8_t*)_err_calloc(sg->node_n, sizeof(uint8_t));
         }
-        // 0. read bam bundle for each gene
         hit = 0;
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
             // 1. generate read-exon compatible array
             // 2. update SG with bamBundle
             // OR (optional) only known transcript
             W[rep_i] = (double**)_err_calloc(sg->node_n, sizeof(double*));
-            M[rep_i] = bam_sg_cmptb(bam_aux[rep_i], W[rep_i], bundle_n+rep_i, sg, sg_g->cname->chr_name, sgp);
+            hts_itr_t *itr = sam_itr_querys(bam_aux[rep_i]->idx, bam_aux[rep_i]->h, reg);
+            M[rep_i] = bam_sg_cmptb(bam_aux[rep_i], itr, W[rep_i], bundle_n+rep_i, sg, sgp);
+            hts_itr_destroy(itr); 
             hit += bundle_n[rep_i];
         }
         update_rep_W(rep_W, W, sgp->tot_rep_n, sg, sgp->junc_cnt_min); // use sum(W) of total reps
         // 3. flow network decomposition
-        if (hit > 0) gen_cand_asm(sg, sg_g->cname->chr_name, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
+        if (hit > 0) gen_cand_asm(sg, cname, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
         
         // free variables
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
@@ -945,9 +979,13 @@ int cand_asm_core(SG_group *sg_g, sg_para *sgp, bam_aux_t **bam_aux)
         for (i = 0; i < sg->node_n; ++i) {
             free(rep_W[i]); free(con_matrix[i]);
         } free(rep_W); free(con_matrix);
+
+        sg_free(sg);
     }
+
     free(bundle_n); free(W); free(M);
     err_func_format_printf(__func__, "generate candidate isoform and read-isoform compatible matrix for each gene done!\n");
+
     return 0;
 }
 
@@ -956,12 +994,13 @@ int cand_asm(int argc, char *argv[])
 {
     int c, i; char ref_fn[1024]="", out_dir[1024]="", *p;
     sg_para *sgp = sg_init_para();
-    while ((c = getopt_long(argc, argv, "t:Lnuma:i:g:w:jlFT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "t:LnNuma:i:g:w:jlFT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 't': sgp->n_threads = atoi(optarg); break;
             case 'L': sgp->in_list = 1; break;
 
             case 'n': sgp->no_novel_sj=0; break;
+            case 'N': sgp->no_novel_exon=0; break;
             case 'u': sgp->read_type = SING_T; break;
             case 'm': sgp->use_multi = 1; break;
             case 'a': sgp->anchor_len[0] = strtol(optarg, &p, 10);
@@ -1015,16 +1054,17 @@ int cand_asm(int argc, char *argv[])
     chr_name_t *cname = chr_name_init();
     bam_set_cname(bam_aux[0]->h, cname);
     // 2. build splice-graph --- 1 thread (Optional in future, infer exon-intron boundaries by bam records)
-    FILE *gtf_fp = xopen(argv[optind], "r");
-    // build from GTF file // XXX OR from bam file
-    SG_group *sg_g = construct_SpliceGraph(gtf_fp, argv[optind], cname);
-    err_fclose(gtf_fp); chr_name_free(cname);
+    // build from GTF file
+    // SG_group *sg_g = construct_SpliceGraph(argv[optind], cname);
+    gene_group_t *gg = gene_group_init();
+    int g_n = read_gene_group(argv[optind], cname, gg);
+    chr_name_free(cname);
 
     // 3. core process
     sgp->out_fp = iso_output(sgp, out_dir); gen_bit_table16();
-    cand_asm_core(sg_g, sgp, bam_aux);
+    cand_asm_core(gg, g_n, sgp, bam_aux);
 
-    sg_free_group(sg_g);
+    gene_group_free(gg);
     if (seq_n > 0) {
         for (i = 0; i < seq_n; ++i) { free(seq[i].name.s), free(seq[i].seq.s); }
         free(seq);

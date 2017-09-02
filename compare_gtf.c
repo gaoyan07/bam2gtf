@@ -89,7 +89,7 @@ int comp_gtf_core(read_trans_t T1, read_trans_t T2, int dis)
             err_printf("%s\t%d\t%d\t%d\n", T1.t[i].tname, T1.t[i].tid, T1.t[i].start, T1.t[i].end);
             i++;
         } else {
-            if (check_iden(T1.t[i], T2.t[j], dis)) {
+            if (check_iden(T1.t+i, T2.t+j, dis)) {
                 iden++;
                 i++;
                 printf("both: %s\t%d\n", T2.t[j].tname, T2.t[j].cov);
@@ -122,7 +122,7 @@ int read_anno_trans1(read_trans_t *T, FILE *fp)
         if (strcmp(type, "transcript") == 0) {
             if (t->exon_n != 0) {
                 add_read_trans(T, *t);
-                set_trans(T->t+T->trans_n-1, tname);
+                set_trans_name(T->t+T->trans_n-1, NULL, NULL, NULL, tname);
                 T->t[T->trans_n-1].cov = cov;
             }
             t->exon_n = 0;
@@ -137,7 +137,7 @@ int read_anno_trans1(read_trans_t *T, FILE *fp)
     }
     if (t->exon_n != 0) {
         add_read_trans(T, *t);
-        set_trans(T->t+T->trans_n-1, tname);
+        set_trans_name(T->t+T->trans_n-1, NULL, NULL, NULL, tname);
         T->t[T->trans_n-1].cov = cov;
     }
     trans_free(t);

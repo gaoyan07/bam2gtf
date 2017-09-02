@@ -17,7 +17,7 @@ chrom["chr11"]=11; chrom["chr12"]=12; chrom["chr13"]=13; chrom["chr14"]=14; chro
 chrom["chr16"]=16; chrom["chr17"]=17; chrom["chr18"]=18; chrom["chr19"]=19; chrom["chr20"]=20;
 chrom["chr21"]=21; chrom["chr22"]=22; chrom["chrX"]=23; chrom["chrY"]=24; chrom["chrM"]=25;
 } 
-($0 !~ /^#/ && ($3 == "transcript" || $3 == "exon")){ 
+($0 !~ /^#/ && ($3 ~ "transcript" || $3 == "exon")){ 
     if ($3 == "transcript") {
         if (chrom[$1] == "") {
             chr_m += 1;

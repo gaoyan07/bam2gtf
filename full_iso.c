@@ -28,8 +28,7 @@ const struct option full_iso_long_opt [] = {
 
     { "only-novel", 0, NULL, 'l' },
 
-    { "exon-thres", 1, NULL, 'T' },
-    { "asm-exon-thres", 1, NULL, 'e' },
+    { "iso-exon-thres", 1, NULL, 'e' },
     { "iso-cnt-thres", 1, NULL, 'C' },
 
     { "junc-cnt", 1, NULL, 'c' },
@@ -57,19 +56,21 @@ int full_iso_usage(void)
     err_printf("         -t --thread               number of threads to use. [1]\n");
     err_printf("\n");
 
-    err_printf("         -n --novel-sj             allow novel splice-junction to be added in SG. [False]\n");
-    err_printf("         -N --novel-exon           allow novel exon/splice-site to be added in SG. [False]\n");
+    err_printf("         -n --novel-sj             allow novel splice-junction in the SG.\n");
+    err_printf("                                   Novel splice-junction here means novel combination of known splice-sites. [False]\n");
+    err_printf("         -N --novel-exon           allow novel exon in the SG.\n");
+    err_printf("                                   Novel exon here means novel splice sites or novel intron-retation. [False]\n");
     err_printf("         -a --anchor-len  [INT]    minimum anchor length for junction read. [%d].\n", ANCHOR_MIN_LEN);
     err_printf("         -i --intron-len  [INT]    minimum intron length for junction read. [%d]\n", INTRON_MIN_LEN);
     err_printf("         -g --genome-file [STR]    genome.fa. Use genome sequence to classify intron-motif. \n");
     err_printf("                                   If no genome file is give, intron-motif will be set as 0(non-canonical) [None]\n");
     err_printf("\n");
 
-    err_printf("         -l --only-novel           only output isoform with novel-junctions. [False]\n");
+    err_printf("         -l --only-novel           only output isoform having novel-junctions. [False]\n");
     err_printf("\n");
 
-    err_printf("         -e --iso-exon-thres [INT] maximum number of exons for SG to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
-    err_printf("         -C --iso-cnt-thres  [INT] maximum number of isoform count to retain SG. [%d]\n", ISO_CNT_MAX); 
+    err_printf("         -e --iso-exon    [INT]    maximum number of exons for SG to generate candidate isoforms. [%d]\n", ISO_EXON_MAX); 
+    err_printf("         -C --iso-cnt     [INT]    maximum number of isoform count to retain SG. [%d]\n", ISO_CNT_MAX); 
     err_printf("\n");
 
     err_printf("         -c --junc-cnt    [INT]    minimum number of read count for junction. [%d]\n", JUNC_READ_CNT_MIN); 
@@ -136,16 +137,30 @@ void gen_full_iso(SG *sg, char **cname,  double **W, read_exon_map *M, sg_para *
     for (i = 0; i < sg->node_n; ++i) free(con_matrix[i]); free(con_matrix);
 }
 
-int full_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t *bam_aux)
+int full_iso_core(gene_group_t *gg, int g_n, sg_para *sgp, bam_aux_t *bam_aux)
 {
     err_func_format_printf(__func__, "generate candidate isoform and read-isoform compatible matrix for each gene ...\n");
-    int sg_i, iso_i; SG *sg; 
-    int i, bundle_n;
+    int g_i, iso_i; 
+    int i, bundle_n; char **cname = bam_aux->h->target_name;
 
     iso_i = 0;
-    for (sg_i = 0; sg_i < sg_g->SG_n; ++sg_i) {
-        sg = sg_g->SG[sg_i];
-        // if (sg->node_n - 2 < 3) continue; // ignore simple genes XXX
+    for (g_i = 0; g_i < g_n; ++g_i) {
+        gene_t *gene = gg->g+g_i;
+        int infer_e_n = 0; exon_t *infer_e = NULL; 
+
+        char reg[1024]; sprintf(reg, "%s:%d-%d", cname[gene->tid], gene->start, gene->end);
+        if (sgp->no_novel_exon == 0) {
+            exon_t *bam_e = (exon_t*)_err_malloc(sizeof(exon_t)); int bam_e_n = 0, bam_e_m=1;
+            int *don=(int*)_err_malloc(sizeof(int)), don_n=0, don_m=1;
+            hts_itr_t *itr = sam_itr_querys(bam_aux->idx, bam_aux->h, reg);
+            bam_infer_exon(bam_aux, itr, &bam_e, &bam_e_n, &bam_e_m, &don, &don_n, &don_m, sgp);
+            hts_itr_destroy(itr); 
+            infer_e = infer_exon_coor(&infer_e_n, bam_e, bam_e_n, don, don_n);
+            free(bam_e); free(don); 
+        }
+
+        // 2. build splice-graph --- 1 thread
+        SG *sg = build_SpliceGraph_novel_exon_core(gene, infer_e, infer_e_n); free(infer_e);
 
         // 0. read bam bundle for each gene
         // 1. generate read-exon compatible array
@@ -153,19 +168,18 @@ int full_iso_core(SG_group *sg_g, sg_para *sgp, bam_aux_t *bam_aux)
         // OR (optional) only known transcript
         double **W = (double**)_err_calloc(sg->node_n, sizeof(double*));
         // M will be needed in HeaviestHundling, not in enum or flow-decom
-        read_exon_map *M = bam_sg_cmptb(bam_aux, W, &bundle_n, sg, sg_g->cname->chr_name, sgp); 
+        hts_itr_t *itr = sam_itr_querys(bam_aux->idx, bam_aux->h, reg);
+        read_exon_map *M = bam_sg_cmptb(bam_aux, itr, W, &bundle_n, sg, sgp); 
+        hts_itr_destroy(itr); 
 
         filter_W(W, sg->node_n, sgp->junc_cnt_min);
         // 3. flow network decomposition OR enumerate all possible isoforms
-        if (bundle_n > 0) gen_full_iso(sg, sg_g->cname->chr_name, W, M, sgp, &iso_i);
+        if (bundle_n > 0) gen_full_iso(sg, cname, W, M, sgp, &iso_i);
         
         // free variables
-            for (i = 0; i < sg->node_n; ++i) {
-                free(W[i]);
-            } free(W);
-            for (i = 0; i < bundle_n; ++i) {
-                free(M[i].map);
-            } free(M);
+        for (i = 0; i < sg->node_n; ++i) free(W[i]); free(W);
+        for (i = 0; i < bundle_n; ++i) free(M[i].map); free(M);
+        sg_free(sg);
     }
     err_func_format_printf(__func__, "generate candidate isoform and read-isoform compatible matrix for each gene done!\n");
     return 0;
@@ -227,17 +241,16 @@ int full_iso(int argc, char *argv[])
     // 1. set cname --- 1 thread
     chr_name_t *cname = chr_name_init();
     bam_set_cname(bam_aux[0]->h, cname);
-    // 2. build splice-graph --- 1 thread (Optional in future, infer exon-intron boundaries by bam records)
-    FILE *gtf_fp = xopen(argv[optind], "r");
-    // build from GTF file // XXX OR from bam file
-    SG_group *sg_g = construct_SpliceGraph(gtf_fp, argv[optind], cname);
-    err_fclose(gtf_fp); chr_name_free(cname);
+    // 2. read gtf file
+    gene_group_t *gg = gene_group_init();
+    int g_n = read_gene_group(argv[optind], cname, gg);
+    chr_name_free(cname);
 
     // 3. core process
     sgp->out_fp = full_iso_output(sgp, out_dir); gen_bit_table16();
-    full_iso_core(sg_g, sgp, bam_aux[0]);
+    full_iso_core(gg, g_n, sgp, bam_aux[0]);
 
-    sg_free_group(sg_g);
+    gene_group_free(gg);
     if (seq_n > 0) {
         for (i = 0; i < seq_n; ++i) { free(seq[i].name.s), free(seq[i].seq.s); }
         free(seq);

@@ -371,6 +371,104 @@ int gen_sj(uint8_t is_uniq, int tid, int start, int n_cigar, uint32_t *c, kseq_t
     return sj_i;
 }
 
+int push_exon_coor(exon_t **e, int *e_n, int *e_m, ad_t *ad) {
+    // 1. insert ad to e
+    int ad_i, e_i;
+    int tid = ad->tid, start, end;
+    for (ad_i = 0; ad_i < ad->intv_n; ++ad_i) {
+        if(ad_i == 0) {
+            start = ad->start;
+            end = ad->exon_end[0];
+        } else {
+            start = ad->intr_end[ad_i-1] + 1;
+            end = ad->exon_end[ad_i];
+        }
+
+        int hit = 0, ins_i;
+        for (e_i = *e_n-1; e_i >= 0; --e_i) {
+            // 2. merge end
+            if ((*e)[e_i].start == start) {
+                (*e)[e_i].end = MAX_OF_TWO((*e)[e_i].end, end);
+                hit = 1;
+                break;
+            }
+            if ((*e)[e_i].start < start) {
+                ins_i = e_i+1;
+                if (*e_n == *e_m) _realloc(*e, *e_m, exon_t)
+                // insert (start,end) to (*e)[ins_i]
+                if (ins_i < *e_n) memmove((*e)+ins_i+1, (*e)+ins_i, (*e_n-ins_i) * sizeof(exon_t));
+                (*e)[ins_i] = (exon_t){tid, 0, start, end};
+                hit = 1;
+                ++(*e_n);
+                break;
+            }
+        }
+        if (hit == 0) {
+            ins_i = 0;
+            if (*e_n == *e_m) _realloc(*e, *e_m, exon_t)
+            // insert (start,end) to (*e)[e_i+1]
+            if (ins_i < *e_n) memmove((*e)+ins_i+1, (*e)+ins_i, (*e_n-ins_i) * sizeof(exon_t));
+            (*e)[ins_i] = (exon_t){tid, 0, start, end};
+            ++(*e_n);
+        }
+    }
+    return *e_n;
+}
+
+int push_sj(int **don, int *don_n, int *don_m, ad_t *ad) {
+    int ad_i; int don_site, acc_site;
+    for (ad_i = 0; ad_i < ad->intv_n-1; ++ad_i) {
+        don_site = ad->exon_end[ad_i]+1;
+        acc_site = ad->intr_end[ad_i];
+        _bin_insert(don_site, (*don), (*don_n), (*don_m), int)
+        _bin_insert(acc_site+1, (*don), (*don_n), (*don_m), int)
+    }
+    return 0;
+}
+
+exon_t *infer_exon_coor(int *infer_e_n, exon_t *e, int e_n, int *don, int don_n) {
+    *infer_e_n = 0;
+    if (e_n <= 1) return NULL;
+
+    int e_i;
+    exon_t *merged_e = (exon_t*)_err_malloc(sizeof(exon_t)); int m_e_i = 0, m_e_n, m_e_m = 1;
+    // 1. merge overlap exons
+    merged_e[0] = e[0]; m_e_i = 0;
+    for (e_i = 1; e_i < e_n; ++e_i) {
+        if (merged_e[m_e_i].end >= e[e_i].start) {
+            // update
+            merged_e[m_e_i].end = MAX_OF_TWO(merged_e[m_e_i].end, e[e_i].end);
+        } else {
+            // copy e_i to cur_e_i+1
+            if (++m_e_i == m_e_m) _realloc(merged_e, m_e_m, exon_t)
+            // insert (start,end) to (*e)[ins_i]
+            merged_e[m_e_i] = e[e_i]; 
+        }
+    }
+    m_e_n = m_e_i + 1;
+    // 2. split based on don/acc site
+    exon_t *infer_e = (exon_t*)_err_malloc(sizeof(exon_t)); int s_e_n = 0, s_e_m = 1;
+    int don_i = 0, start;
+    for (m_e_i = 0; m_e_i < m_e_n; ++m_e_i) {
+        start = merged_e[m_e_i].start;
+        while (don_i < don_n) {
+            if (don[don_i] > merged_e[m_e_i].end) break;
+            else if (don[don_i] > merged_e[m_e_i].start){
+                if (s_e_n == s_e_m) _realloc(infer_e, s_e_m, exon_t)
+                infer_e[s_e_n++] = (exon_t){0, 0, start, don[don_i]-1};
+                start = don[don_i];
+                don_i++;
+            } else don_i++;
+        }
+
+        if (s_e_n == s_e_m) _realloc(infer_e, s_e_m, exon_t)
+        infer_e[s_e_n++] = (exon_t){0, 0, start, merged_e[m_e_i].end};
+    }
+     
+    *infer_e_n = s_e_n;
+    free(merged_e);
+    return infer_e;
+}
 
 // only junction-read are kept in AD_T
 int parse_bam(int tid, int start, int *_end, int n_cigar, const uint32_t *c, uint8_t is_uniq, kseq_t *seq, int seq_n, ad_t **ad_g, int *ad_n, int *ad_m, sj_t **sj, int *sj_n, int *sj_m, sg_para *sgp)

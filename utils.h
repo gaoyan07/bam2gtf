@@ -25,8 +25,8 @@
 
 /* Contact: Heng Li <lh3@sanger.ac.uk> */
 
-#ifndef LH3_UTILS_H
-#define LH3_UTILS_H
+#ifndef UTILS_H
+#define UTILS_H
 
 #include <stdint.h>
 #include <stdio.h>

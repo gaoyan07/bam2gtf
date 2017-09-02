@@ -300,9 +300,7 @@ int bias_flow_full_iso_core(SG *sg, char **cname, double **W, uint8_t **con_matr
 
     while (1) {
         if ((l = heaviest_path(sg, W, con_matrix, bias, src, sink, node_id, capacities, bv, sgp->edge_wt)) <= 0) break;
-        // XXX strand
-        //fprintf(sgp->out_fp[0], "%s\t%s\t%s\t%d\t%d\t%c\t%c\t%c\tgene_id \"%s\"; gene_name \"%s\";\n", cname[sg->tid], source, "gene", sg->start, sg->end, '.', '+', '.', sg->gene_id, sg->gene_name);
-        gtf_print_trans(sgp->out_fp[0], source, sg->gene_name, sg->gene_id, cname[sg->tid], '+', sg, node_id, l, iso_n);
+        gtf_print_trans(sgp->out_fp[0], source, sg->gene_name, sg->gene_id, cname[sg->tid], "+-"[sg->is_rev], sg, node_id, l, iso_n);
 
         int s = 0, t = l-1;
         normalize_bias_factor(bv, s, t);
@@ -323,4 +321,14 @@ int bias_flow_gen_full_iso(SG *sg, char **cname, double **W, uint8_t **con_matri
     int iso_n = bias_flow_full_iso_core(sg, cname, W, con_matrix, src, sink, sgp->iso_cnt_max, sgp);
 
     return iso_n;
+}
+
+int heaviest_bundling_gen_asm(SG *sg, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp) {
+    return 0;
+}
+
+
+int heaviest_bundling_gen_full_iso(SG *sg, char **cname, double **W, uint8_t **con_matrix, int src, int sink, sg_para *sgp) {
+    
+    return 0;
 }

@@ -5,40 +5,13 @@
 #include <stdio.h>
 #include "htslib/htslib/sam.h"
 
-/* TAB-separated standard GTF columns */
-/*
- * col-num      content                                     value/format
- * -------------------------------------------------------------------------------------------------------------------------
- *    1     chromosome name                             chr{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,X,Y,M}
- *    2     annotation source                           {ENSEMBL,HAVANA,etc.}
- *    3     feature-type                                {gene,transcript,exon,CDS,UTR,start_codon,stop_codon,Selenocysteine}
- *    4     genomic start location                      integer-value (1-based)
- *    5     genomic end location                        integer-value
- *    6     score (not used)                            .
- *    7     genomic strand                              {+,-}
- *    8     genomic phase (for CDS features)            {0,1,2,.}
- *    9     additional information as key-value pairs   see below
- */
-/*
- *  key name                value format
- * ------------------------------------------------------------------------------------
- * gene_id              ENSGXXXXXXXXXXX *
- * transcript_id        ENSTXXXXXXXXXXX *
- * gene_type            list of biotypes
- * gene_status          {KNOWN, NOVEL, PUTATIVE}
- * gene_name            string
- * transcript_type      list of biotypes
- * transcript_status    {KNOWN, NOVEL, PUTATIVE}
- * transcript_name      string
- * exon_number          indicates the biological position of the exon in the transcript
- * exon_id              ENSEXXXXXXXXXXX *
- * level                1 (verified loci),
- *                      2 (manually annotated loci),
- *                      3 (automatically annotated loci)
- */
 #define MAX_SITE 2147483647
 #define DON_SITE_F 0
 #define ACC_SITE_F 1
+
+typedef struct {
+    int start, end; //1-base
+} coor_t;
 
 typedef struct {
     int32_t tid; uint8_t is_rev;
@@ -67,10 +40,10 @@ typedef struct {
     uint8_t *novel_exon_map, *novel_sj_map; // 3-bit map: l-iden | r-iden | both-iden
     int tid; uint8_t is_rev;
     int start, end;
-    char tname[100];
-    char gname[100];
+    char tname[100], trans_id[100];
+    char gname[100], gid[100];
     int novel_gene_flag, cov;
-    uint8_t lfull:2, lnoth:2, rfull:2, rnoth:2; 
+    uint8_t lfull:2, lnoth:2, rfull:2, rnoth:2;
     uint8_t full:2, novel:2, all_novel:2, all_iden:2;
 } trans_t;
 
@@ -98,7 +71,6 @@ typedef struct {
 
 typedef struct {
     gene_t *g; int gene_n, gene_m;
-    int tid, start, end;
 } gene_group_t;
 
 typedef struct {
@@ -118,7 +90,7 @@ int bam_set_cname(bam_hdr_t *h, chr_name_t *cname);
 trans_t *trans_init(int n);
 int add_exon(trans_t *t, int tid, int start, int end, uint8_t is_rev);
 void sort_exon(trans_t *t);
-int set_trans(trans_t *t, char *qname);
+int set_trans_name(trans_t *t, char *gid, char *gname, char *trans_id, char *tname);
 trans_t *exon_realloc(trans_t *t);
 void trans_free(trans_t *t);
 
@@ -145,11 +117,11 @@ gene_group_t *gene_group_realloc(gene_group_t *gg);
 void add_gene(gene_group_t *gg, gene_t g, int novel_gene_flag);
 void set_gene_group(gene_group_t *gg);
 void gene_group_free(gene_group_t *gg);
-int read_gene_group(FILE *gtf, char *fn, chr_name_t *cname, gene_group_t *gg);
+int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg);
 
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);
-int print_read_trans(read_trans_t r, bam_hdr_t *h, char *src, FILE *out);
+int print_read_trans(read_trans_t *anno_T, read_trans_t *novel_T, bam_hdr_t *h, char *src, FILE *out);
 int print_gene(gene_t g, FILE *out);
 void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char **group_line, int *group_line_n);
 void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
@@ -177,6 +149,7 @@ void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 #define ALL_MIN3 1    // AT/AC, GT/AT all-map
 
 
-int check_iden(trans_t t1, trans_t t2, int dis);
+int check_sub_iden(trans_t *t1, trans_t *t2, int dis);
+int check_iden(trans_t *t1, trans_t *t2, int dis);
 
 #endif

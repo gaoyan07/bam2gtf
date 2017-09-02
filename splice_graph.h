@@ -163,6 +163,7 @@ void sg_free_para(sg_para *sgp);
 SG *sg_init_node(SG *sg);
 SG *sg_init_site(SG *sg);
 SG_group *sg_init_group(int g_n);
+void sg_free(SG *sg);
 void sg_free_group(SG_group *sg_g);
 
 int sg_update_node(SG *sg, exon_t e, int start, int end);
@@ -189,7 +190,8 @@ void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix);
 void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix);
 void gtf_print_trans(FILE *fp, char *source, char *gname, char *gid, char *cname, char strand, SG *sg, gec_t *node_id, gec_t l, int iso_i);
 
-SG_group *construct_SpliceGraph(FILE *gtf_fp, char *fn, chr_name_t *cname);
+SG *build_SpliceGraph_novel_exon_core(gene_t *gene, exon_t *bam_e, int bam_e_n);
+SG_group *construct_SpliceGraph(char *fn, chr_name_t *cname);
 
 int build_sg(int argc, char *argv[]);
 
