@@ -25,6 +25,7 @@ const struct option asm_long_opt [] = {
     { "genome-file", 1, NULL, 'g' },
 
     { "edge-wei", 1, NULL, 'w' },
+    { "gtf-event", 0, NULL, 'f' },
     { "only-junc", 0, NULL, 'j' },
     { "only-novel", 0, NULL, 'l' },
     { "use-multi", 0, NULL, 'm' },
@@ -72,6 +73,7 @@ int cand_asm_usage(void)
     err_printf("         -L --list-input           use bam list file as input. Refer to \"example.list\". [False]\n");
     err_printf("\n");
 
+    err_printf("         -f --gtf-event            only output gtf annotation event. [False]\n");
     err_printf("         -n --novel-sj             allow novel splice-junction in the ASM.\n");
     err_printf("                                   Novel splice-junction here means novel combination of known splice-sites. [False]\n");
     err_printf("         -N --novel-exon           allow novel exon in the ASM.\n");
@@ -102,7 +104,7 @@ int cand_asm_usage(void)
     err_printf("\n");
 
     err_printf("         -d --module-type [INT]    only output specific type of alternative splice module, skipped exon,\n");
-    err_printf("                                   alternative initial/terminal exon, 4 exon module ... Refer to \"type.list\". [0]\n");
+    err_printf("                                   alternative initial/terminal exon, 4 exon module ... Refer to \"module_type.list\". [0]\n");
     err_printf("         -E --exon-num    [INT]    only output alternative splice module with specific exon number. 0 for all. [0]\n");
     err_printf("         -r --recursive            recursively output alternative splice module which are fully embedded\n");
     err_printf("                                   in a larger module. [False]\n");
@@ -717,75 +719,84 @@ int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int
 }
 
 // generate read-iso compatible matrix
-void read_iso_cmptb(SG *sg, char **cname, read_exon_map **read_map, int rep_n, int *bundle_n, cmptb_map_t **iso_map, int **iso_se, int iso_n, sg_para *sgp, int *asm_i, int src, int sink) {
+void read_iso_cmptb(SG *sg, uint8_t **con_matrix, char **cname, read_exon_map **read_map, int rep_n, int *bundle_n, cmptb_map_t **iso_map, int **iso_se, int iso_n, sg_para *sgp, int *asm_i, int src, int sink) {
     int rep_i, b_i, r_i, iso_i; read_exon_map *rm;
     // .IsoExon
-    { 
-        int i, exon_i, exon_n, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
-        SGnode *node = sg->node;
-        cmptb_map_t *union_map = cmptb_map_union(iso_map, iso_n, map_n);
-        exon_n = cmptb_map_exon_cnt(union_map, map_n);
-        int *whole_exon_id = (int*)_err_calloc(exon_n, sizeof(int));
-        int **exon_id = (int**)_err_calloc(iso_n, sizeof(int*));
-        for (i = 0; i < iso_n; ++i) exon_id[i] = (int*)_err_calloc(exon_n, sizeof(int));
-        int *iso_exon_n = (int*)_err_calloc(iso_n, sizeof(int));
-        int *exon_index = (int*)_err_calloc(sink-src+1, sizeof(int));
+    int i, exon_i, exon_n, map_n = 1 + ((sg->node_n-1) >> MAP_STEP_N);
+    SGnode *node = sg->node;
+    cmptb_map_t *union_map = cmptb_map_union(iso_map, iso_n, map_n);
+    exon_n = cmptb_map_exon_cnt(union_map, map_n);
+    int *whole_exon_id = (int*)_err_calloc(exon_n, sizeof(int));
+    int **exon_id = (int**)_err_calloc(iso_n, sizeof(int*));
+    for (i = 0; i < iso_n; ++i) exon_id[i] = (int*)_err_calloc(exon_n, sizeof(int));
+    int *iso_exon_n = (int*)_err_calloc(iso_n, sizeof(int));
+    int *exon_index = (int*)_err_calloc(sink-src+1, sizeof(int));
 
-        if (check_module_type(sg, union_map, iso_map, src, sink, exon_n, iso_n, sgp->module_type, whole_exon_id, exon_id, iso_exon_n, exon_index) == 0) return;
+    if (check_module_type(sg, union_map, iso_map, src, sink, exon_n, iso_n, sgp->module_type, whole_exon_id, exon_id, iso_exon_n, exon_index) == 0) goto ASMEnd;
 
-        // exon header: ASM_ID, Exon_NUM, Isoform_NUM, strand, CHR_Name
-        fprintf(sgp->out_fp[rep_n], "ASM#%d\t%d\t%d\t%c\t%s\n", *asm_i, exon_n, iso_n, "+-"[sg->is_rev], cname[sg->tid]);
-        // exon coordinate pair: start, end
-        for (exon_i = src; exon_i <= sink; ++exon_i) {
-            if (is_cmptb_exon_iso(exon_i, union_map))
-                fprintf(sgp->out_fp[rep_n], "%d,%d\t", node[exon_i].start, node[exon_i].end);
+    // exon header: ASM_ID, Exon_NUM, Isoform_NUM, strand, CHR_Name
+    fprintf(sgp->out_fp[rep_n], "ASM#%d\t%d\t%d\t%c\t%s\t%s\t%s\n", *asm_i, exon_n, iso_n, "+-"[sg->is_rev], cname[sg->tid], sg->gene_name, sg->gene_id);
+    // exon coordinate pair: start, end
+    for (exon_i = src; exon_i <= sink; ++exon_i) {
+        if (is_cmptb_exon_iso(exon_i, union_map))
+            fprintf(sgp->out_fp[rep_n], "%d,%d\t", node[exon_i].start, node[exon_i].end);
+    } fprintf(sgp->out_fp[rep_n], "\n");
+    for (iso_i = 0; iso_i < iso_n; ++iso_i) {
+        fprintf(sgp->out_fp[rep_n], "%d", iso_exon_n[iso_i]);
+        for (exon_i = 0; exon_i < iso_exon_n[iso_i]; ++exon_i) {
+            fprintf(sgp->out_fp[rep_n], "\t%d", exon_index[exon_id[iso_i][exon_i]-src]);
         } fprintf(sgp->out_fp[rep_n], "\n");
-        for (iso_i = 0; iso_i < iso_n; ++iso_i) {
-            fprintf(sgp->out_fp[rep_n], "%d", iso_exon_n[iso_i]);
-            for (exon_i = 0; exon_i < iso_exon_n[iso_i]; ++exon_i) {
-                fprintf(sgp->out_fp[rep_n], "\t%d", exon_index[exon_id[iso_i][exon_i]-src]);
-            } fprintf(sgp->out_fp[rep_n], "\n");
-        }
+    }
 
-        free(union_map); free(exon_index);
-        free(iso_exon_n); for (i = 0; i < iso_n; ++i) free(exon_id[i]); free(exon_id); free(whole_exon_id);
-    }
+
     // .IsoMatrix
-    {
-        for (rep_i = 0; rep_i < rep_n; ++rep_i) {
-            int bn = bundle_n[rep_i];
-            int ri_map_n = 0, ri_map_m = 1000, map_n = 1 + ((iso_n-1) >> MAP_STEP_N);
-            read_iso_map *ri_map = read_iso_map_init(ri_map_m, map_n);
-            for (b_i = 0; b_i < bn; ++b_i) {
-                rm = (read_map[rep_i])+b_i;
-                // gen read-iso map
-                int zero;
-                read_iso_map *rim = gen_read_iso_map(rm, iso_map, iso_se, iso_n, map_n, &zero, sgp->fully);
-                if (zero != 0) {
-                    // insert read-iso map, update weight
-                    insert_read_iso_map(&ri_map, &ri_map_n, &ri_map_m, rim);
-                }
-                read_iso_map_free(rim);
+    // calculate up/down pseudo length
+    int up_pseu_len = 0, down_pseu_len = 0;
+    // longest path from src to 0
+    int src_len = (src == 0) ? 0 : (sg->node[src].end - sg->node[src].start + 1);
+    up_pseu_len = dag_longest_path(sg, con_matrix, 0, src) - src_len;
+    // longest path track from sink to sg->node_n-1
+    int sink_len = (sink == sg->node_n-1) ? 0 : (sg->node[sink].end - sg->node[sink].start + 1);
+    down_pseu_len = dag_longest_path(sg, con_matrix, sink, sg->node_n-1) - sink_len;
+
+    for (rep_i = 0; rep_i < rep_n; ++rep_i) {
+        int bn = bundle_n[rep_i];
+        int ri_map_n = 0, ri_map_m = 1000, map_n = 1 + ((iso_n-1) >> MAP_STEP_N);
+        read_iso_map *ri_map = read_iso_map_init(ri_map_m, map_n);
+        for (b_i = 0; b_i < bn; ++b_i) {
+            rm = (read_map[rep_i])+b_i;
+            // gen read-iso map
+            int zero;
+            read_iso_map *rim = gen_read_iso_map(rm, iso_map, iso_se, iso_n, map_n, &zero, sgp->fully);
+            if (zero != 0) {
+                // insert read-iso map, update weight
+                insert_read_iso_map(&ri_map, &ri_map_n, &ri_map_m, rim);
             }
-            // matrix header: ASM_ID, ReadBundle_NUM, Isoform_NUM
-            int tot_wei = 0;
-            for (r_i = 0; r_i < ri_map_n; ++r_i) tot_wei += ri_map[r_i].weight;
-            fprintf(sgp->out_fp[rep_i], "ASM#%d\t%d\t%d\n", *asm_i, tot_wei, iso_n);
-            // output read-iso compatible matrix
-            for (r_i = 0; r_i < ri_map_n; ++r_i) {
-                // read length and count
-                fprintf(sgp->out_fp[rep_i], "%d\t%d", ri_map[r_i].rlen, ri_map[r_i].weight);
-                // read-iso compatible matrix
-                for (iso_i = 0; iso_i < iso_n; ++iso_i) {
-                    fprintf(sgp->out_fp[rep_i], "\t%ld", 0x1 & (ri_map[r_i].map[iso_i >> MAP_STEP_N] >> (~iso_i & MAP_STEP_M)));
-                } fprintf(sgp->out_fp[rep_i], "\n");
-            }
-            for (r_i = 0; r_i < ri_map_m; ++r_i) 
-                free(ri_map[r_i].map);
-            free(ri_map);
+            read_iso_map_free(rim);
         }
+        // matrix header: ASM_ID, ReadBundle_NUM, Isoform_NUM
+        int tot_wei = 0;
+        for (r_i = 0; r_i < ri_map_n; ++r_i) tot_wei += ri_map[r_i].weight;
+        fprintf(sgp->out_fp[rep_i], "ASM#%d\t%d\t%d\t%d\t%d\n", *asm_i, tot_wei, iso_n, up_pseu_len, down_pseu_len);
+        // output read-iso compatible matrix
+        for (r_i = 0; r_i < ri_map_n; ++r_i) {
+            // read length and count
+            fprintf(sgp->out_fp[rep_i], "%d\t%d", ri_map[r_i].rlen, ri_map[r_i].weight);
+            // read-iso compatible matrix
+            for (iso_i = 0; iso_i < iso_n; ++iso_i) {
+                fprintf(sgp->out_fp[rep_i], "\t%ld", 0x1 & (ri_map[r_i].map[iso_i >> MAP_STEP_N] >> (~iso_i & MAP_STEP_M)));
+            } fprintf(sgp->out_fp[rep_i], "\n");
+        }
+        for (r_i = 0; r_i < ri_map_m; ++r_i) 
+            free(ri_map[r_i].map);
+        free(ri_map);
     }
+
     (*asm_i)++;
+
+ASMEnd:
+    free(union_map); free(exon_index);
+    free(iso_exon_n); for (i = 0; i < iso_n; ++i) free(exon_id[i]); free(exon_id); free(whole_exon_id);
 }
 
 void add_pseu_wei(SG *sg, double **W, uint8_t **con_matrix) {
@@ -822,7 +833,7 @@ void add_pseu_wei(SG *sg, double **W, uint8_t **con_matrix) {
     }
 }
 
-void gen_cand_asm(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8_t **con_matrix, int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
+void gen_cand_asm(SG *sg, gene_t * gene, char **cname, read_exon_map **M, double **rep_W, uint8_t **con_matrix, int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
     int entry_n, exit_n; int *entry, *exit;
 
     cal_pre_domn(sg, rep_W, con_matrix), cal_post_domn(sg, rep_W, con_matrix);
@@ -854,21 +865,24 @@ void gen_cand_asm(SG *sg, char **cname, read_exon_map **M, double **rep_W, uint8
 
                 if (sgp->exon_num != 0 && sgp->exon_num != asm_node_n) continue;
 
-                if (asm_node_n <= sgp->asm_exon_max) {
+                iso_n = 0;
+                if (sgp->only_gtf) {
+                    iso_n = anno_gen_cand_asm(sg, gene, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
+                } else if (asm_node_n <= sgp->asm_exon_max) {
                     if (asm_node_n <= sgp->exon_thres) { 
                         iso_n = enum_gen_cand_asm(sg, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
                     } else {
                         // use sum(W) to generate isoform
                         iso_n = bias_flow_gen_cand_asm(sg, rep_W, con_matrix, entry[i], exit[j], iso_map, iso_se, map_n, sgp);
                     }
-                    // cal read-iso cmptb matrix
-                    if (iso_n > 1) {
-                        read_iso_cmptb(sg, cname, M, rep_n, bundle_n, iso_map, iso_se, iso_n, sgp, asm_i, entry[i], exit[j]);
-                        if (sgp->recur == 0) last_exit = exit[j];
-                    }
-                    for (k = 0; k < sgp->iso_cnt_max; ++k) {
-                        free(iso_map[k]); free(iso_se[k]);
-                    }
+                }
+                // cal read-iso cmptb matrix
+                if (iso_n > 1) {
+                    read_iso_cmptb(sg, con_matrix, cname, M, rep_n, bundle_n, iso_map, iso_se, iso_n, sgp, asm_i, entry[i], exit[j]);
+                    if (sgp->recur == 0) last_exit = exit[j];
+                }
+                for (k = 0; k < sgp->iso_cnt_max; ++k) {
+                    free(iso_map[k]); free(iso_se[k]);
                 }
                 break;
             }
@@ -964,7 +978,7 @@ int cand_asm_core(gene_group_t *gg, int g_n, sg_para *sgp, bam_aux_t **bam_aux)
         }
         update_rep_W(rep_W, W, sgp->tot_rep_n, sg, sgp->junc_cnt_min); // use sum(W) of total reps
         // 3. flow network decomposition
-        if (hit > 0) gen_cand_asm(sg, cname, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
+        if (hit > 0) gen_cand_asm(sg, gene, cname, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
         
         // free variables
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
@@ -994,11 +1008,12 @@ int cand_asm(int argc, char *argv[])
 {
     int c, i; char ref_fn[1024]="", out_dir[1024]="", *p;
     sg_para *sgp = sg_init_para();
-    while ((c = getopt_long(argc, argv, "t:LnNuma:i:g:w:jlFT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "t:LnNuma:i:g:w:fjlFT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 't': sgp->n_threads = atoi(optarg); break;
             case 'L': sgp->in_list = 1; break;
 
+            case 'f': sgp->only_gtf = 1; break;
             case 'n': sgp->no_novel_sj=0; break;
             case 'N': sgp->no_novel_exon=0; break;
             case 'u': sgp->read_type = SING_T; break;

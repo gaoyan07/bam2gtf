@@ -27,8 +27,8 @@ sg_para *sg_init_para(void)
     sgp->exon_num = 0; sgp->module_type = 0; // 0: all module
     sgp->recur = 0;
     sgp->sam_n = 0; sgp->tot_rep_n = 0;
-    sgp->fully = 1;
-    sgp->no_novel_sj = 1; sgp->no_novel_exon = 1; sgp->only_junc = 0, sgp->only_novel = 0;
+    sgp->fully = 0;
+    sgp->only_gtf = 0, sgp->no_novel_sj = 1; sgp->no_novel_exon = 1; sgp->only_junc = 0, sgp->only_novel = 0;
     sgp->use_multi = 0; sgp->read_type = PAIR_T;
     sgp->rm_edge = 0; sgp->edge_wt = ISO_EDGE_MIN_WEI;
     sgp->junc_cnt_min = JUNC_READ_CNT_MIN; sgp->novel_junc_cnt_min = NOVEL_JUNC_READ_CNT_MIN;
@@ -561,19 +561,26 @@ void sg_merge_end(gene_t *gene) {
 
 void gen_trans_split_exon(coor_pair_t *coor, int coor_n, trans_t *t) {
     int j, k, p, q;
-    for (j = 0; j < t->exon_n; ++j) {
+    int node_id;
+    int exon_n = t->exon_n;
+    for (j = 0; j < exon_n; ++j) {
         int start = t->exon[j].start, end = t->exon[j].end;
+        node_id = 1;
         for (k = 0; k < coor_n; ++k) {
-            if (start > coor[k].end) continue;
-            else if (end < coor[k].start) break;
+            if (start > coor[k].end) {
+                node_id += (coor[k].n - 1);
+                continue;
+            } else if (end < coor[k].start) break;
             for (p = 0; p < coor[k].n; ++p) {
                 if (coor[k].s[p] > t->exon[j].start) {
                     t->exon[j].end = coor[k].s[p]-1;
+                    t->exon[j].sg_node_id = node_id+p-1;
                     exon_t e = t->exon[j];
                     for (q = p; q < coor[k].n-1 && coor[k].s[q] <= end; ++q) {
                         e.start = coor[k].s[q], e.end = coor[k].s[q+1]-1;
-                        if (t->exon_n == t->exon_m) _realloc(t->exon, t->exon_m, exon_t)
-                            t->exon[t->exon_n++] = e;
+                        if (t->exon_n == t->exon_m) _realloc(t->exon, t->exon_m, exon_t) 
+                        t->exon[t->exon_n] = e;
+                        t->exon[t->exon_n++].sg_node_id = node_id+q;
                     }
                     goto next_exon;
                 }
@@ -589,7 +596,7 @@ SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans)
     int i, j; exon_t e;
     // merge init/term exon
     // XXX should be optional
-    sg_merge_end(gene);
+    // sg_merge_end(gene);
     // generate node
     for (i = 0; i < gene->trans_n; ++i) {
         for (j = 0; j < gene->trans[i].exon_n; ++j) {
@@ -615,8 +622,15 @@ SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans)
     gen_split_node(sg, coor, coor_n);
 
     // split exon in gene
-    for (i = 0; i < gene->trans_n; ++i) 
+    for (i = 0; i < gene->trans_n; ++i) {
         gen_trans_split_exon(coor, coor_n, gene->trans+i);
+        int j;
+        for (j = 0; j < gene->trans[i].exon_n; ++j) {
+            if (gene->trans[i].exon[j].start != sg->node[gene->trans[i].exon[j].sg_node_id].start || 
+                gene->trans[i].exon[j].end != sg->node[gene->trans[i].exon[j].sg_node_id].end)
+                printf("here");
+        }
+    }
     if (bam_trans != NULL) gen_trans_split_exon(coor, coor_n, bam_trans);
 
     for (i = 0; i < coor_n; ++i) free(coor[i].s); free(coor);

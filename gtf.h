@@ -18,6 +18,7 @@ typedef struct {
     int32_t start, end; //1-based, ref
                         //0: start of init exon
                         //MAX: end of term exon
+    int sg_node_id;
 } exon_t;
 
 typedef struct {
