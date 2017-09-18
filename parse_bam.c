@@ -684,7 +684,7 @@ int parse_bam_record1(bam1_t *b, ad_t *ad, sg_para *sgp)
     bam_start = b->core.pos+1;
     ad->rlen = b->core.l_qseq;
 #ifdef __DEBUG__
-    err_printf("%s ", bam_get_qname(b));
+    err_printf("%s %d ", bam_get_qname(b), b->core.pos+1);
     int i;
     for (i = 0; i < n_cigar; ++i) fprintf(stderr, "%d%c", cigar[i] >> 4, "MIDNSH"[cigar[i] & 0xf]);
     fprintf(stderr, "\n");

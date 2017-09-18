@@ -74,7 +74,8 @@ int cand_asm(int argc, char *argv[]);
 int full_iso(int argc, char *argv[]);
 
 
-int dag_longest_path(SG *sg, uint8_t **con_matrix, int src, int sink);
+int dag_longest_path_from_sink(SG *sg, uint8_t **con_matrix, int src, int sink);
+int dag_longest_path_from_src(SG *sg, uint8_t **con_matrix, int src, int sink);
 
 int bias_flow_gen_cand_asm(SG *sg, double **rep_weight, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp);
 int enum_gen_cand_asm(SG *sg, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp);

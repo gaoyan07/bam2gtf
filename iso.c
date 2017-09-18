@@ -240,7 +240,7 @@ int bias_flow_gen_cand_asm(SG *sg, double **rep_W, uint8_t **con_matrix, int src
     return iso_n;
 }
 
-int dag_longest_path(SG *sg, uint8_t **con_matrix, int src, int sink) {
+int dag_longest_path_from_src(SG *sg, uint8_t **con_matrix, int src, int sink) {
     int *m = (int*)_err_calloc(sg->node_n, sizeof(int));
 
     if (src == 0 || src == sg->node_n-1) m[src] = 0;
@@ -260,6 +260,30 @@ int dag_longest_path(SG *sg, uint8_t **con_matrix, int src, int sink) {
         m[cur_id] = cur_len + max;
     }
     int ret = m[sink];
+    free(m);
+    return ret;
+}
+
+int dag_longest_path_from_sink(SG *sg, uint8_t **con_matrix, int src, int sink) {
+    int *m = (int*)_err_calloc(sg->node_n, sizeof(int));
+
+    if (sink == 0 || sink == sg->node_n-1) m[sink] = 0;
+    else m[sink] = sg->node[sink].end - sg->node[sink].start + 1;
+    int next_id = sink, cur_id, i, j, max, cur_len;
+
+    for (i = sink-1; i >= src; --i) {
+        cur_id = i;
+        if (cur_id == 0) cur_len = 0;
+        else cur_len = sg->node[cur_id].end - sg->node[cur_id].start + 1;
+        max = 0;
+        for (j = 0; j < sg->node[cur_id].next_n; ++j) {
+            next_id = sg->node[cur_id].next_id[j];
+            if (is_con_matrix(con_matrix, cur_id, next_id) && m[next_id] > max)
+                max = m[next_id];
+        }
+        m[cur_id] = cur_len + max;
+    }
+    int ret = m[src];
     free(m);
     return ret;
 }
