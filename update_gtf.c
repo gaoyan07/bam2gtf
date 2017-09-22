@@ -23,7 +23,7 @@ extern const char PROG[20];
 update_gtf_para *update_gtf_init_para(void) {
     update_gtf_para *ugp = (update_gtf_para*)_err_malloc(sizeof(update_gtf_para));
     ugp->input_mode = 0/*bam*/, ugp->full_len_level = 5/*most relax*/, ugp->uncla = 0, ugp->only_bam = 0;
-    ugp->intron_fp = NULL, ugp->out_gtf_fp = stdout;
+    ugp->intron_fp = NULL, ugp->out_gtf_fp = stdout; strcpy(ugp->source, PROG);
     ugp->min_exon = INTER_EXON_MIN_LEN, ugp->min_intron = INTRON_MIN_LEN, ugp->ss_dis = SPLICE_DISTANCE;
 
     return ugp;
@@ -56,64 +56,32 @@ void check_exon_junction(trans_t *bam_t, trans_t anno_t, int dis, int *iden_n, i
 {
     int i,j, left=0,right=0, last_j=-1;
     *iden_n=0, *iden_intron_n = 0, *not_iden_iden=0;
-    if (bam_t->is_rev) { // '-' strand
-        for (i = 0; i < bam_t->exon_n; ++i) {
-            for (j = 0; j < anno_t.exon_n; ++j) {
-                // for exon
-                if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis || i==bam_t->exon_n-1) left = 1;
-                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis || i==0) right = 1;
-                if (left) set_l_iden(bam_t->novel_exon_map[i]);
-                if (right) set_r_iden(bam_t->novel_exon_map[i]);
-                if (left && right) set_b_iden(bam_t->novel_exon_map[i]);
-                left = right = 0;
-                // for junction
-                if (i != bam_t->exon_n-1 && j != anno_t.exon_n-1) {
-                    if (abs(bam_t->exon[i].start - anno_t.exon[j].start) <= dis) left=1;
-                    if (abs(bam_t->exon[i+1].end - anno_t.exon[j+1].end) <= dis) right=1;
-                    if (left) set_l_iden(bam_t->novel_sj_map[i]);
-                    if (right) set_r_iden(bam_t->novel_sj_map[i]);
-                    if (left && right) {
-                        set_b_iden(bam_t->novel_sj_map[i]);
+    for (i = 0; i < bam_t->exon_n; ++i) {
+        for (j = 0; j < anno_t.exon_n; ++j) {
+            // for exon
+            if (abs(bam_t->exon[i].start-anno_t.exon[j].start) <= dis || i==0) left = 1;
+            if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis || i==bam_t->exon_n-1) right = 1;
+            if (left) set_l_iden(bam_t->novel_exon_map[i]);
+            if (right) set_r_iden(bam_t->novel_exon_map[i]);
+            if (left && right) set_b_iden(bam_t->novel_exon_map[i]);
+            left = right = 0;
+            // for junction
+            if (i != bam_t->exon_n-1 && j != anno_t.exon_n-1) {
+                if (abs(bam_t->exon[i].end-anno_t.exon[j].end) <= dis) left = 1;
+                if (abs(bam_t->exon[i+1].start-anno_t.exon[j+1].start) <= dis) right= 1;
+                if (left) set_l_iden(bam_t->novel_sj_map[i]);
+                if (right) set_r_iden(bam_t->novel_sj_map[i]);
+                if (left && right) {
+                    set_b_iden(bam_t->novel_sj_map[i]);
 
-                        if (last_j != -1 && j != last_j+1) *not_iden_iden = 1;
-                        last_j = j; *iden_intron_n += 1;
-                        if (intron_map) intron_map[i] = 1;
-                    }
-                    *iden_n += (left+right);
-
-                    left = right = 0;
-                    if (anno_t.exon[j+1].end < bam_t->exon[i+1].end) break;
+                    if (last_j != -1 && j != last_j+1) *not_iden_iden = 1;
+                    last_j = j; *iden_intron_n += 1;
+                    if (intron_map) intron_map[i] = 1;
                 }
-            }
-        }
-    } else { // '+' strand
-        for (i = 0; i < bam_t->exon_n; ++i) {
-            for (j = 0; j < anno_t.exon_n; ++j) {
-                // for exon
-                if (abs(bam_t->exon[i].start-anno_t.exon[j].start) <= dis || i==0) left = 1;
-                if (abs(bam_t->exon[i].end - anno_t.exon[j].end) <= dis || i==bam_t->exon_n-1) right = 1;
-                if (left) set_l_iden(bam_t->novel_exon_map[i]);
-                if (right) set_r_iden(bam_t->novel_exon_map[i]);
-                if (left && right) set_b_iden(bam_t->novel_exon_map[i]);
+                *iden_n += (left+right);
+
                 left = right = 0;
-                // for junction
-                if (i != bam_t->exon_n-1 && j != anno_t.exon_n-1) {
-                    if (abs(bam_t->exon[i].end-anno_t.exon[j].end) <= dis) left = 1;
-                    if (abs(bam_t->exon[i+1].start-anno_t.exon[j+1].start) <= dis) right= 1;
-                    if (left) set_l_iden(bam_t->novel_sj_map[i]);
-                    if (right) set_r_iden(bam_t->novel_sj_map[i]);
-                    if (left && right) {
-                        set_b_iden(bam_t->novel_sj_map[i]);
-
-                        if (last_j != -1 && j != last_j+1) *not_iden_iden = 1;
-                        last_j = j; *iden_intron_n += 1;
-                        if (intron_map) intron_map[i] = 1;
-                    }
-                    *iden_n += (left+right);
-
-                    left = right = 0;
-                    if (anno_t.exon[j+1].start > bam_t->exon[i+1].start) break;
-                }
+                if (anno_t.exon[j+1].start > bam_t->exon[i+1].start) break;
             }
         }
     }
@@ -140,16 +108,9 @@ int check_short_sj(trans_t *bam_t, int *intron_map, intron_group_t *I, int *intr
             i++; *intron_i = i;
         } else if (I->intron[i].tid > bam_t->tid) return 0;
         else {
-            if (bam_t->is_rev) { // '-' strand
-                for (j = 0; j < bam_t->exon_n-1; ++j) {
-                    if (intron_map[j] == 0 && check_short_sj1(bam_t->tid, bam_t->exon[j+1].end+1, bam_t->exon[j].start-1, bam_t->is_rev, I, i, dis) == 0)
-                        return 0;
-                }
-            } else { // '+' strand
-                for (j = 0; j < bam_t->exon_n-1; ++j) {
-                    if (intron_map[j] == 0 && check_short_sj1(bam_t->tid, bam_t->exon[j].end+1, bam_t->exon[j+1].start-1, bam_t->is_rev, I, i, dis) == 0)
-                        return 0;
-                }
+            for (j = 0; j < bam_t->exon_n-1; ++j) {
+                if (intron_map[j] == 0 && check_short_sj1(bam_t->tid, bam_t->exon[j].end+1, bam_t->exon[j+1].start-1, bam_t->is_rev, I, i, dis) == 0)
+                    return 0;
             }
             return 1;
         }
@@ -169,42 +130,22 @@ int check_full(trans_t *t, trans_t anno_t, int level)
     int i = t->exon_n-1, j = anno_t.exon_n-1;
     if (level == 1) { // identical first and last splice-site
         if (t->lfull == 0) {
-            if (t->is_rev) {
-                if (t->exon[i].end == anno_t.exon[j].end) t->lfull = 1;
-            } else {
-                if (t->exon[0].end == anno_t.exon[0].end) t->lfull = 1;
-            }
+            if (t->exon[0].end == anno_t.exon[0].end) t->lfull = 1;
         }
         if (t->rfull == 0) {
-            if (t->is_rev) {
-                if (t->exon[0].start == anno_t.exon[0].start) t->rfull = 1;
-            } else {
-                if (t->exon[i].start == anno_t.exon[j].start) t->rfull = 1;
-            }
+            if (t->exon[i].start == anno_t.exon[j].start) t->rfull = 1;
         }
     } else if (level == 2) { // overlapping first and last exon
         if (t->lfull == 0) {
-            if (t->is_rev) {
-                if (exon_overlap(t->exon[i], anno_t.exon[j])) t->lfull = 1;
-            } else {
-                if (exon_overlap(t->exon[0], anno_t.exon[0])) t->lfull = 1;
-            }
+            if (exon_overlap(t->exon[0], anno_t.exon[0])) t->lfull = 1;
         }
         if (t->rfull == 0) {
-            if (t->is_rev) {
-                if (exon_overlap(t->exon[0], anno_t.exon[0])) t->rfull = 1;
-            } else {
-                if (exon_overlap(t->exon[i], anno_t.exon[j])) t->rfull = 1;
-            }
+            if (exon_overlap(t->exon[i], anno_t.exon[j])) t->rfull = 1;
         }
     } else if (level == 3) { // overlapping first and last exon, or overlapping nothing
         int ii;
         if (t->lfull == 0) {
-            if (t->is_rev) {
-                i = t->exon_n-1; j = anno_t.exon_n-1;
-            } else {
-                i = 0; j = 0;
-            }
+            i = 0; j = 0;
             int ii;
             if (exon_overlap(t->exon[i], anno_t.exon[j])) t->lfull = 1;
             else {
@@ -214,11 +155,7 @@ int check_full(trans_t *t, trans_t anno_t, int level)
             }
         }
         if (t->rfull == 0) {
-            if (t->is_rev) {
-                i = 0, j = 0;
-            } else {
-                i = t->exon_n-1, j = anno_t.exon_n-1;
-            }
+            i = t->exon_n-1, j = anno_t.exon_n-1;
             if (exon_overlap(t->exon[i], anno_t.exon[j])) t->rfull = 1;
             else { // overlap nothing
                 for (ii = 0; ii < anno_t.exon_n; ++ii) {
@@ -228,11 +165,7 @@ int check_full(trans_t *t, trans_t anno_t, int level)
         }
     } else if (level == 4) { // XXX most 5' exon meets #3, most 3' exon has a polyA+ tail of 15bp or longer
         if (t->lfull == 0) {
-            if (t->is_rev) {
-                i = t->exon_n-1; j = anno_t.exon_n-1;
-            } else {
-                i = 0; j = 0;
-            }
+            i = 0; j = 0;
             int ii;
             if (exon_overlap(t->exon[i], anno_t.exon[j])) t->lfull = 1;
             else {
@@ -321,24 +254,14 @@ int merge_trans1(trans_t *t1, trans_t *t2, int dis)
     int i = t1->exon_n-1, j = t2->exon_n-1;
     if (check_iden(t1, t2, dis)) {
         t2->cov++;
-        if (t2->is_rev) { // '-'
-            if (t1->exon[0].end > t2->exon[0].end) {
-                t2->exon[0].end = t1->exon[0].end;
-                t2->end = t1->exon[0].end;
-            }
-            if (t1->exon[i].start < t2->exon[j].start) {
-                t2->exon[j].start = t1->exon[i].start;
-                t2->start = t1->exon[i].start;
-            }
-        } else { // '+'
-            if (t1->exon[0].start < t2->exon[0].start)  {
-                t2->exon[0].start = t1->exon[0].start;
-                t2->start = t1->exon[0].start;
-            }
-            if (t1->exon[i].end > t2->exon[j].end) {
-                t2->exon[j].end = t1->exon[i].end;
-                t2->end = t1->exon[i].end;
-            }
+
+        if (t1->exon[0].start < t2->exon[0].start)  {
+            t2->exon[0].start = t1->exon[0].start;
+            t2->start = t1->exon[0].start;
+        }
+        if (t1->exon[i].end > t2->exon[j].end) {
+            t2->exon[j].end = t1->exon[i].end;
+            t2->end = t1->exon[i].end;
         }
         return 1;
     } else if (check_sub_iden(t1, t2, dis)) return 1;

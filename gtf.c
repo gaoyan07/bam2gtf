@@ -57,27 +57,14 @@ int check_sub_iden(trans_t *t1, trans_t *t2, int dis) {
         l = t2; s = t1;
     }
     int i, j, match=0;
-    if (l->is_rev) { // '-' strand
-        for (i = 0; i < l->exon_n; ++i) {
-            if ((abs(l->exon[i].start - s->exon[0].start) <= dis) && abs(l->exon[i+1].end - s->exon[1].end) <= dis) {
-                match = 1;
-                for (i = i+1, j = 1; i < l->exon_n-1 && j < s->exon_n-1; ++i, ++j) {
-                    if (abs(l->exon[i].start - s->exon[j].start) > dis) return 0;
-                    if (abs(l->exon[i+1].end - s->exon[j+1].end) > dis) return 0;
-                }
-                break;
+    for (i = 0; i < l->exon_n-1; ++i) {
+        if ((abs(l->exon[i].end - s->exon[0].end) <= dis) && (abs(l->exon[i+1].start - s->exon[1].start) <= dis)) {
+            match = 1;
+            for (i = i+1, j = 1; i < l->exon_n-1 && j < s->exon_n-1; ++i, ++j) {
+                if (abs(l->exon[i].end - s->exon[j].end) > dis) return 0;
+                if (abs(l->exon[i+1].start - s->exon[j+1].start) > dis) return 0;
             }
-        }
-    } else { // '+' strand
-        for (i = 0; i < l->exon_n-1; ++i) {
-            if ((abs(l->exon[i].end - s->exon[0].end) <= dis) && (abs(l->exon[i+1].start - s->exon[1].start) <= dis)) {
-                match = 1;
-                for (i = i+1, j = 1; i < l->exon_n-1 && j < s->exon_n-1; ++i, ++j) {
-                    if (abs(l->exon[i].end - s->exon[j].end) > dis) return 0;
-                    if (abs(l->exon[i+1].start - s->exon[j+1].start) > dis) return 0;
-                }
-                break;
-            }
+            break;
         }
     }
     return match;
@@ -87,16 +74,9 @@ int check_iden(trans_t *t1, trans_t *t2, int dis)
 {
     if (t1->is_rev != t2->is_rev || t1->exon_n != t2->exon_n) return 0;
     int i;
-    if (t1->is_rev) { // '-' strand
-        for (i = 0; i < t1->exon_n-1; ++i) {
-            if (abs(t1->exon[i].start - t2->exon[i].start) > dis) return 0;
-            if (abs(t1->exon[i+1].end - t2->exon[i+1].end) > dis) return 0;
-        }
-    } else { // '+' strand
-        for (i = 0; i < t1->exon_n-1; ++i) {
-            if (abs(t1->exon[i].end - t2->exon[i].end) > dis) return 0;
-            if (abs(t1->exon[i+1].start - t2->exon[i+1].start) > dis) return 0;
-        }
+    for (i = 0; i < t1->exon_n-1; ++i) {
+        if (abs(t1->exon[i].end - t2->exon[i].end) > dis) return 0;
+        if (abs(t1->exon[i+1].start - t2->exon[i+1].start) > dis) return 0;
     }
     return 1;
 }
@@ -106,8 +86,8 @@ int set_trans_name(trans_t *t, char *gid, char *gname, char *tname, char *trans_
     sort_exon(t);
     t->tid = t->exon[0].tid;
     t->is_rev = t->exon[0].is_rev;
-    t->start = t->is_rev ? t->exon[t->exon_n-1].start : t->exon[0].start;
-    t->end = t->is_rev ? t->exon[0].end: t->exon[t->exon_n-1].end;
+    t->start = t->exon[0].start;
+    t->end = t->exon[t->exon_n-1].end;
     if (gid) strcpy(t->gid, gid);
     if (gname) strcpy(t->gname, gname);
     if (trans_id) strcpy(t->trans_id, trans_id);
@@ -508,8 +488,13 @@ int print_read_trans(read_trans_t *anno_T, read_trans_t *novel_T, bam_hdr_t *h, 
 
         fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\t%s\n", h->target_name[novel_T->t[i].tid], src, "transcript", novel_T->t[i].start, novel_T->t[i].end, "+-"[novel_T->t[i].is_rev], name+1);
 
-        for (j = 0; j < novel_T->t[i].exon_n; ++j)
-            fprintf(out, "%s\t%s\t%s\t%d\t%d\t%d\t%c\t.\t%s\n", h->target_name[novel_T->t[i].exon[j].tid], src, "exon", novel_T->t[i].exon[j].start, novel_T->t[i].exon[j].end, score_min+score_step*novel_T->t[i].cov, "+-"[novel_T->t[i].exon[j].is_rev], name+1);
+        if (novel_T->t[i].is_rev) { // '-' strand
+            for (j = novel_T->t[i].exon_n-1; j >= 0; --j)
+                fprintf(out, "%s\t%s\t%s\t%d\t%d\t%d\t%c\t.\t%s\n", h->target_name[novel_T->t[i].exon[j].tid], src, "exon", novel_T->t[i].exon[j].start, novel_T->t[i].exon[j].end, score_min+score_step*novel_T->t[i].cov, "+-"[novel_T->t[i].exon[j].is_rev], name+1);
+        } else { // '+' strand
+            for (j = 0; j < novel_T->t[i].exon_n; ++j)
+                fprintf(out, "%s\t%s\t%s\t%d\t%d\t%d\t%c\t.\t%s\n", h->target_name[novel_T->t[i].exon[j].tid], src, "exon", novel_T->t[i].exon[j].start, novel_T->t[i].exon[j].end, score_min+score_step*novel_T->t[i].cov, "+-"[novel_T->t[i].exon[j].is_rev], name+1);
+        }
     }
     err_printf("Total novel transcript: %d\n", novel_T->trans_n);
     return 0;
