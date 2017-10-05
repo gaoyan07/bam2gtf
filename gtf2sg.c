@@ -390,7 +390,7 @@ int sg_travl_n(SG *sg, int src, int sink, uint8_t **con_matrix) {
 
 // calculate predominate nodes with edge weight
 // XXX require at least one rep has >0 weight
-void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
+void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix, int min_cnt)
 {
     int i, j, first; SGnode *ni, *node;
     for (i = 0; i < sg->node_n; ++i) {
@@ -401,7 +401,7 @@ void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
         gec_t com_n, com_m, *com;
 
         for (first = 0; first < ni->pre_n; ++first) {
-            if (ni->pre_id[first] == 0 || ((i == sg->node_n-1 && node[ni->pre_id[first]].pre_domn_n > 1) || rep_W[ni->pre_id[first]][i] > 0))
+            if (ni->pre_id[first] == 0 || ((i == sg->node_n-1 && node[ni->pre_id[first]].pre_domn_n > 1) || rep_W[ni->pre_id[first]][i] >= min_cnt))
                 goto pre_domn;
         }
         continue;
@@ -413,7 +413,7 @@ pre_domn:
 
         set_pre_con_matrix(con_matrix, ni->pre_id[first], i);
         for (j = first+1; j < ni->pre_n; ++j) {
-            if (ni->pre_id[j] == 0 || ((i == sg->node_n-1 && node[ni->pre_id[j]].pre_domn_n > 1) || rep_W[ni->pre_id[j]][i] > 0)) {
+            if (ni->pre_id[j] == 0 || ((i == sg->node_n-1 && node[ni->pre_id[j]].pre_domn_n > 1) || rep_W[ni->pre_id[j]][i] >= min_cnt)) {
                 set_pre_con_matrix(con_matrix, ni->pre_id[j], i);
                 intersect_domn(&com, node[ni->pre_id[j]].pre_domn, &com_n, node[ni->pre_id[j]].pre_domn_n, 1);
             }
@@ -428,7 +428,7 @@ pre_domn:
     }
 }
 
-void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
+void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix, int min_cnt)
 {
     int i, j, first; SGnode *ni, *node;
     for (i = sg->node_n-1; i >= 0; --i) {
@@ -439,7 +439,7 @@ void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix)
         gec_t com_n, com_m, *com;
         first = 0;
         for (first = 0; first < ni->next_n; ++first) {
-            if (ni->next_id[first] == sg->node_n-1 || ((i == 0 && node[ni->next_id[first]].post_domn_n > 1) || rep_W[i][ni->next_id[first]] > 0))
+            if (ni->next_id[first] == sg->node_n-1 || ((i == 0 && node[ni->next_id[first]].post_domn_n > 1) || rep_W[i][ni->next_id[first]] >= min_cnt))
                 goto post_domn;
         }
         continue;
@@ -450,7 +450,7 @@ post_domn:
 
         set_post_con_matrix(con_matrix, i, ni->next_id[first]);
         for (j = first+1; j < ni->next_n; ++j) {
-            if (ni->next_id[j] == sg->node_n-1 || ((i == 0 && node[ni->next_id[j]].post_domn_n > 1) || rep_W[i][ni->next_id[j]] > 0)) {
+            if (ni->next_id[j] == sg->node_n-1 || ((i == 0 && node[ni->next_id[j]].post_domn_n > 1) || rep_W[i][ni->next_id[j]] >= min_cnt)) {
                 set_post_con_matrix(con_matrix, i, ni->next_id[j]);
                 intersect_domn(&com, node[ni->next_id[j]].post_domn, &com_n, node[ni->next_id[j]].post_domn_n, 2);
             }
@@ -595,8 +595,7 @@ SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans)
 {
     int i, j; exon_t e;
     // merge init/term exon
-    // XXX should be optional
-    // sg_merge_end(gene);
+    sg_merge_end(gene);
     // generate node
     for (i = 0; i < gene->trans_n; ++i) {
         for (j = 0; j < gene->trans[i].exon_n; ++j) {

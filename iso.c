@@ -389,7 +389,7 @@ int anno_gen_cand_asm(SG *sg, gene_t *gene, uint8_t **con_matrix, int src, int s
         // find exon_id of src and sink
         if (src == 0) {
             src_ei = 0;
-            pre_id = 0;
+            pre_id = trans->exon[0].sg_node_id;
         } else {
             start = sg->node[src].start, end = sg->node[src].end;
             for (j = 0; j < trans->exon_n; ++j) {

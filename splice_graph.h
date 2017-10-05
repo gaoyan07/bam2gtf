@@ -186,8 +186,8 @@ int err_sg_bin_sch_edge(const char *func, const int line, SG *sg, int don_id, in
 int sg_travl(SG *sg, int src, int sink);
 int sg_travl_n(SG *sg, int src, int sink, uint8_t **con_matrix);
 
-void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix);
-void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix);
+void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix, int min_cnt);
+void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix, int min_cnt);
 void gtf_print_trans(FILE *fp, char *source, char *gname, char *gid, char *cname, char strand, SG *sg, gec_t *node_id, gec_t l, int iso_i);
 
 SG *build_SpliceGraph_novel_exon_core(gene_t *gene, exon_t *bam_e, int bam_e_n);

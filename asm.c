@@ -844,7 +844,7 @@ void add_pseu_wei(SG *sg, double **W, uint8_t **con_matrix) {
 void gen_cand_asm(SG *sg, gene_t * gene, char **cname, read_exon_map **M, double **rep_W, uint8_t **con_matrix, int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
     int entry_n, exit_n; int *entry, *exit;
 
-    cal_pre_domn(sg, rep_W, con_matrix), cal_post_domn(sg, rep_W, con_matrix);
+    cal_pre_domn(sg, rep_W, con_matrix, sgp->junc_cnt_min), cal_post_domn(sg, rep_W, con_matrix, sgp->junc_cnt_min);
     cal_cand_node(sg, &entry, &exit, &entry_n, &exit_n, con_matrix);
     if (entry_n == 0 || exit_n == 0) {
         free(entry); free(exit); return;
@@ -985,8 +985,8 @@ int cand_asm_core(gene_group_t *gg, int g_n, sg_para *sgp, bam_aux_t **bam_aux)
             hit += bundle_n[rep_i];
         }
         update_rep_W(rep_W, W, sgp->tot_rep_n, sg, sgp->junc_cnt_min); // use sum(W) of total reps
-        // 3. flow network decomposition
-        if (hit > 0) gen_cand_asm(sg, gene, cname, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
+        // 3. generate asm
+        gen_cand_asm(sg, gene, cname, M, rep_W, con_matrix, sgp->tot_rep_n, bundle_n, sgp, &asm_i);
         
         // free variables
         for (rep_i = 0; rep_i < sgp->tot_rep_n; ++rep_i) {
@@ -1049,6 +1049,7 @@ int cand_asm(int argc, char *argv[])
             case 'v': sgp->novel_junc_cnt_min = atoi(optarg); break;
 
             case 'd': sgp->module_type = atoi(optarg); break;
+            case 'E': sgp->exon_num = atoi(optarg); break;
             case 'r': sgp->recur = 1; break;
 
             case 'o': strcpy(out_dir, optarg); break;
