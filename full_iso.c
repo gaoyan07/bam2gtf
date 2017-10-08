@@ -160,7 +160,7 @@ int full_iso_core(gene_group_t *gg, int g_n, sg_para *sgp, bam_aux_t *bam_aux)
         }
 
         // 2. build splice-graph --- 1 thread
-        SG *sg = build_SpliceGraph_novel_exon_core(gene, infer_e, infer_e_n); free(infer_e);
+        SG *sg = build_SpliceGraph_novel_exon_core(NULL, gene, cname, infer_e, infer_e_n); free(infer_e);
 
         // 0. read bam bundle for each gene
         // 1. generate read-exon compatible array

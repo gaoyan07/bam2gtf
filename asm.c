@@ -62,7 +62,7 @@ void gen_bit_table16(void) {
 int cand_asm_usage(void)
 {
     err_printf("\n");
-    err_printf("Usage:   %s asm [option] <in.gtf> <in.bam/sj> [-o out_dir]\n\n", PROG);
+    err_printf("Usage:   %s asm [option] <in.gtf> <in.bam/list> -o out_dir\n\n", PROG);
     err_printf("Note:    for multi-sample and multi-replicate, input should be list file(with -L) or in this format: \n");
     err_printf("             \"SAM1-REP1,REP2,REP3;SAM2-REP1,REP2,REP3\"\n");
     err_printf("         use \':\' to separate samples, \',\' to separate replicates.\n\n");
@@ -111,6 +111,7 @@ int cand_asm_usage(void)
     err_printf("\n");
 
     err_printf("         -o --output      [STR]    directory output .IsoMatrix & .IsoExon\n");
+    err_printf("         -G --gtf-out     [STR]    file name of formatted GTF\n");
 	err_printf("\n");
 	return 1;
 }
@@ -841,7 +842,7 @@ void add_pseu_wei(SG *sg, double **W, uint8_t **con_matrix) {
     }
 }
 
-void gen_cand_asm(SG *sg, gene_t * gene, char **cname, read_exon_map **M, double **rep_W, uint8_t **con_matrix, int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
+void gen_cand_asm(SG *sg, gene_t *gene, char **cname, read_exon_map **M, double **rep_W, uint8_t **con_matrix, int rep_n, int *bundle_n, sg_para *sgp, int *asm_i) {
     int entry_n, exit_n; int *entry, *exit;
 
     cal_pre_domn(sg, rep_W, con_matrix, sgp->junc_cnt_min), cal_post_domn(sg, rep_W, con_matrix, sgp->junc_cnt_min);
@@ -945,6 +946,7 @@ int cand_asm_core(gene_group_t *gg, int g_n, sg_para *sgp, bam_aux_t **bam_aux)
     double ***W = (double***)_err_malloc(sgp->tot_rep_n * sizeof(double**));
     int *bundle_n = (int*)_err_malloc(sgp->tot_rep_n * sizeof(int));
     int i, hit = 0; char **cname = bam_aux[0]->h->target_name;
+    FILE *gtf_fp = sgp->gtf_fp;
 
     asm_i = 0;
     for (g_i = 0; g_i < g_n; ++g_i) {
@@ -965,7 +967,7 @@ int cand_asm_core(gene_group_t *gg, int g_n, sg_para *sgp, bam_aux_t **bam_aux)
             free(bam_e); free(don);
         }
 
-        SG *sg = build_SpliceGraph_novel_exon_core(gene, infer_e, infer_e_n);  free(infer_e);
+        SG *sg = build_SpliceGraph_novel_exon_core(gtf_fp, gene, cname, infer_e, infer_e_n);  free(infer_e);
 
         double **rep_W = (double**)_err_calloc(sg->node_n, sizeof(double*));
         uint8_t **con_matrix = (uint8_t**)_err_calloc(sg->node_n, sizeof(uint8_t*)); // connect matrix
@@ -1014,9 +1016,9 @@ int cand_asm_core(gene_group_t *gg, int g_n, sg_para *sgp, bam_aux_t **bam_aux)
 /*****************************/
 int cand_asm(int argc, char *argv[])
 {
-    int c, i; char ref_fn[1024]="", out_dir[1024]="", *p;
+    int c, i; char ref_fn[1024]="", out_dir[1024]="", out_gtf[1024]="", *p;
     sg_para *sgp = sg_init_para();
-    while ((c = getopt_long(argc, argv, "t:LnNuma:i:g:w:fjlFT:e:C:c:v:d:ro:", asm_long_opt, NULL)) >= 0) {
+    while ((c = getopt_long(argc, argv, "t:LnNuma:i:g:w:fjlFT:e:C:c:v:d:ro:G:", asm_long_opt, NULL)) >= 0) {
         switch (c) {
             case 't': sgp->n_threads = atoi(optarg); break;
             case 'L': sgp->in_list = 1; break;
@@ -1053,6 +1055,7 @@ int cand_asm(int argc, char *argv[])
             case 'r': sgp->recur = 1; break;
 
             case 'o': strcpy(out_dir, optarg); break;
+            case 'G': strcpy(out_gtf, optarg); sgp->gtf_fp = xopen(out_gtf, "w"); break;
             default: err_printf("Error: unknown option: %s.\n", optarg); return cand_asm_usage();
         }
     }
@@ -1094,6 +1097,7 @@ int cand_asm(int argc, char *argv[])
         free(seq);
     }
     for (i = 0; i < sgp->tot_rep_n; ++i) bam_aux_destroy(bam_aux[i]); 
+    if (sgp->gtf_fp != NULL) err_fclose(sgp->gtf_fp);
     free(bam_aux); sg_free_para(sgp);
     return 0;
 }

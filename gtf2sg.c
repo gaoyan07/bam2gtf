@@ -29,6 +29,7 @@ sg_para *sg_init_para(void)
     sgp->sam_n = 0; sgp->tot_rep_n = 0;
     sgp->fully = 0;
     sgp->only_gtf = 0, sgp->no_novel_sj = 1; sgp->no_novel_exon = 1; sgp->only_junc = 0, sgp->only_novel = 0;
+    sgp->gtf_fp = NULL;
     sgp->use_multi = 0; sgp->read_type = PAIR_T;
     sgp->rm_edge = 0; sgp->edge_wt = ISO_EDGE_MIN_WEI;
     sgp->junc_cnt_min = JUNC_READ_CNT_MIN; sgp->novel_junc_cnt_min = NOVEL_JUNC_READ_CNT_MIN;
@@ -529,31 +530,36 @@ void gen_split_node(SG *sg, coor_pair_t *coor, int coor_n) {
 void sg_merge_end(gene_t *gene) {
     int *end = (int*)_err_malloc(5 * sizeof(int)), n1 = 0, m1 = 5;
     int *start = (int*)_err_malloc(5 * sizeof(int)), n2 = 0, m2 = 5;
-    int i, j, min, max;
+    int i, j, max, min;
     for (i = 0; i < gene->trans_n; ++i) {
+        if (gene->trans[i].exon_n == 1) continue;
         _bin_insert(gene->trans[i].exon[0].end, end, n1, m1, int)
         _bin_insert(gene->trans[i].exon[gene->trans[i].exon_n-1].start, start, n2, m2, int)
     }
     for (i = 0; i < n1; ++i) {
-        min = MAX_SITE;
+        max = 0;
         for (j = 0; j < gene->trans_n; ++j) {
+            if (gene->trans[j].exon_n == 1) continue;
             if (gene->trans[j].exon[0].end != end[i]) continue;
-            min = MIN_OF_TWO(min, gene->trans[j].exon[0].start);
+            max = MAX_OF_TWO(max, gene->trans[j].exon[0].start);
         }
         for (j = 0; j < gene->trans_n; ++j) { // merge init-exon's start, that share same end
+            if (gene->trans[j].exon_n == 1) continue;
             if (gene->trans[j].exon[0].end != end[i]) continue;
-            gene->trans[j].exon[0].start = min;
+            gene->trans[j].exon[0].start = max;
         }
     }
     for (i = 0; i < n2; ++i) {
-        max = 0;
+        min = MAX_SITE;
         for (j = 0; j < gene->trans_n; ++j) {
+            if (gene->trans[j].exon_n == 1) continue;
             if (gene->trans[j].exon[gene->trans[j].exon_n-1].start!= start[i]) continue;
-            max = MAX_OF_TWO(max, gene->trans[j].exon[gene->trans[j].exon_n-1].end);
+            min = MIN_OF_TWO(min, gene->trans[j].exon[gene->trans[j].exon_n-1].end);
         }
         for (j = 0; j < gene->trans_n; ++j) { // merge term-exon' end, that share same start
+            if (gene->trans[j].exon_n == 1) continue;
             if (gene->trans[j].exon[gene->trans[j].exon_n-1].start!= start[i]) continue;
-            gene->trans[j].exon[gene->trans[j].exon_n-1].end = max;
+            gene->trans[j].exon[gene->trans[j].exon_n-1].end = min;
         }
     }
     free(start), free(end);
@@ -637,7 +643,7 @@ SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans)
 }
 
 // construct splice-graph for each gene and bam infered exons
-SG *build_SpliceGraph_novel_exon_core(gene_t *gene, exon_t *bam_e, int bam_e_n)
+SG *build_SpliceGraph_novel_exon_core(FILE *gtf_fp, gene_t *gene, char **cname, exon_t *bam_e, int bam_e_n)
 {
     SG *sg = sg_init();
     int i, j, don_id, acc_id, don_site_id=0, acc_site_id=0; exon_t e;
@@ -656,6 +662,7 @@ SG *build_SpliceGraph_novel_exon_core(gene_t *gene, exon_t *bam_e, int bam_e_n)
     strcpy(sg->gene_name, gene->gname), strcpy(sg->gene_id, gene->gid);
     // gen sg node (pseu-exon)
     gen_sg_node(sg, gene, bam_trans);
+    if (gtf_fp != NULL) print_gene(gtf_fp, "gtools", gene, cname);
 
     // alloc for next_id/pre_id/pre_domn/post_domn
     sg_init_node(sg); sg_init_site(sg);
@@ -663,7 +670,6 @@ SG *build_SpliceGraph_novel_exon_core(gene_t *gene, exon_t *bam_e, int bam_e_n)
     // search node and generate edge 
     for (i = 0; i < gene->trans_n; ++i) {
         // keep 1 exon transcript ???
-        // XXX if (gene->trans[i].exon_n == 1) continue;
         e = gene->trans[i].exon[0];
 
         acc_id = don_id = _err_sg_bin_sch_node(sg, e);
@@ -758,7 +764,6 @@ SG *build_SpliceGraph_core(gene_t *gene)
     // search node and generate edge 
     for (i = 0; i < gene->trans_n; ++i) {
         // keep 1 exon transcript ???
-        // XXX if (gene->trans[i].exon_n == 1) continue;
         e = gene->trans[i].exon[0];
 
         acc_id = don_id = _err_sg_bin_sch_node(sg, e);
@@ -810,8 +815,6 @@ SG *build_SpliceGraph_core(gene_t *gene)
 
         sg->node[acc_id].is_termi = 1;
     }
-    // after update!!! cal pre/post domn
-    // cal_pre_domn(sg); cal_post_domn(sg); 
     return sg;
 }
 
@@ -819,7 +822,6 @@ SG_group *construct_SpliceGraph(char *fn, chr_name_t *cname)
 {
     err_func_format_printf(__func__, "constructing splice-graph with GTF file ...\n", __func__);
     gene_group_t *gg = gene_group_init();
-    // XXX optional: merge overlapping genes into 1 complex gene
     int g_n = read_gene_group(fn, cname, gg); // add sub-transcript
     SG_group *sg_g = sg_init_group(g_n);
     int i;
@@ -831,7 +833,9 @@ SG_group *construct_SpliceGraph(char *fn, chr_name_t *cname)
     sg_g->cname->chr_n = cname->chr_n;
     for (i = 0; i < sg_g->cname->chr_n; ++i) strcpy(sg_g->cname->chr_name[i], cname->chr_name[i]);
 
-    for (i = 0; i < gg->gene_n; ++i) sg_g->SG[i] = build_SpliceGraph_core(gg->g+i);
+    for (i = 0; i < gg->gene_n; ++i) {
+        sg_g->SG[i] = build_SpliceGraph_core(gg->g+i);
+    }
 
     gene_group_free(gg);
     err_func_format_printf(__func__, "constructing splice-graph with GTF file done!\n");

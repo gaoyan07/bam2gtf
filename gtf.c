@@ -406,7 +406,7 @@ void reverse_exon_order(gene_group_t *gg) {
     }
 }
 
-// read all anno from GTF file
+// merge overlapping gene into one complex
 // sorted with chr and start
 // exon sorted by start
 int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
@@ -415,6 +415,7 @@ int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
     char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[1024], gid[1024], trans_name[1024], trans_id[1024], tag[20];
     gene_t *cur_g=0; trans_t *cur_t=0; exon_t *cur_e=0;
     gg->gene_n = 0;
+    int last_tid=-1, last_rev=-1, last_start=-1, last_end=-1;
 
     while (fgets(line, 1024, gtf) != NULL) {
         if (line[0] == '#') continue;
@@ -427,6 +428,12 @@ int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
         strcpy(tag, "transcript_name"); gtf_add_info(add_info, tag, trans_name);
  
         if (strcmp(type, "gene") == 0) { // new gene starts old gene ends
+            if (tid == last_tid && is_rev == last_rev &&  start < last_end) {
+                if (start < last_start) last_start = start;
+                if (end > last_end) last_end = end;
+                continue;
+            }
+            last_tid = tid, last_rev = is_rev, last_start = start, last_end = end;
             if (++gg->gene_n == gg->gene_m) gg = gene_group_realloc(gg);
             cur_g = gg->g + gg->gene_n-1;
             cur_g->tid = tid; cur_g->is_rev = is_rev;
@@ -500,6 +507,36 @@ int print_read_trans(read_trans_t *anno_T, read_trans_t *novel_T, bam_hdr_t *h, 
     return 0;
 }
 
+void print_gene(FILE *out, char *src, gene_t *gene, char **cname) {
+    int i, j; char tmp[1024], name[1024];
+    // print gene line
+    memset(tmp, 0, 1024); memset(name, 0, 1024);
+    if (strlen(gene->gid) > 0) sprintf(tmp, " gene_id \"%s\";", gene->gid), strcat(name, tmp);
+    if (strlen(gene->gname) > 0) sprintf(tmp, " gene_name \"%s\";", gene->gname), strcat(name, tmp);
+    fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\t%s\n", cname[gene->tid], src, "gene", gene->start, gene->end, "+-"[gene->is_rev], name+1);
+
+    for (i = 0; i < gene->trans_n; ++i) {
+        trans_t *t = gene->trans + i;
+        memset(tmp, 0, 1024); memset(name, 0, 1024);
+        if (strlen(gene->gid) > 0) sprintf(tmp, " gene_id \"%s\";", gene->gid), strcat(name, tmp);
+        if (strlen(t->trans_id) > 0) sprintf(tmp, " transcript_id \"%s\";", t->trans_id), strcat(name, tmp);
+        if (strlen(gene->gname) > 0) sprintf(tmp, " gene_name \"%s\";", gene->gname), strcat(name, tmp);
+        if (strlen(t->tname) > 0) sprintf(tmp, " transcript_name \"%s\";", t->tname), strcat(name, tmp);
+
+        // print transcript line
+        fprintf(out, "%s\t%s\t%s\t%d\t%d\t.\t%c\t.\t%s\n", cname[t->tid], src, "transcript", t->start, t->end, "+-"[t->is_rev], name+1);
+
+        // print exon line
+        if (t->is_rev) { // '-' strand
+            for (j = t->exon_n-1; j >= 0; --j)
+                fprintf(out, "%s\t%s\t%s\t%d\t%d\t0\t%c\t.\t%s\n", cname[t->exon[j].tid], src, "exon", t->exon[j].start, t->exon[j].end, "+-"[t->exon[j].is_rev], name+1);
+        } else { // '+' strand
+            for (j = 0; j < t->exon_n; ++j)
+                fprintf(out, "%s\t%s\t%s\t%d\t%d\t0\t%c\t.\t%s\n", cname[t->exon[j].tid], src, "exon", t->exon[j].start, t->exon[j].end, "+-"[t->exon[j].is_rev], name+1);
+        }
+    }
+}
+
 /*void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out)
 {
     if (g.trans_n <= g.anno_tran_n) return;
@@ -561,3 +598,4 @@ void gtf_print_trans(FILE *fp, char *source, char *gname, char *gid, char *cname
     }
     free(start); free(end);
 }
+

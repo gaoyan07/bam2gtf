@@ -123,7 +123,7 @@ int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg);
 int print_exon(exon_t e, FILE *out);
 int print_trans(trans_t t, bam_hdr_t *h, char *src, FILE *out);
 int print_read_trans(read_trans_t *anno_T, read_trans_t *novel_T, bam_hdr_t *h, char *src, FILE *out);
-int print_gene(gene_t g, FILE *out);
+void print_gene(FILE* out, char *src, gene_t *g, char **cname);
 void print_gene_group(gene_group_t gg, bam_hdr_t *h, char *src, FILE *out, char **group_line, int *group_line_n);
 void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 

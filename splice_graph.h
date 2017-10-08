@@ -133,7 +133,7 @@ typedef struct {
     int module_type; int exon_num;
 
     uint8_t fully:1, recur:1, no_novel_sj:1, only_novel:1, use_multi:1, read_type:1, merge_out:1, rm_edge:1;
-    uint8_t only_gtf, only_junc, no_novel_exon;
+    uint8_t only_gtf, only_junc, no_novel_exon; FILE *gtf_fp;
     int intron_len; double edge_wt;
     int junc_cnt_min, novel_junc_cnt_min, exon_thres, iso_cnt_max; int asm_exon_max;//, iso_read_cnt_min;
     int anchor_len[5]; // [anno, non-canonical, GT/AG, GC/AG, AT/AC]
@@ -190,7 +190,7 @@ void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix, int min_cnt);
 void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix, int min_cnt);
 void gtf_print_trans(FILE *fp, char *source, char *gname, char *gid, char *cname, char strand, SG *sg, gec_t *node_id, gec_t l, int iso_i);
 
-SG *build_SpliceGraph_novel_exon_core(gene_t *gene, exon_t *bam_e, int bam_e_n);
+SG *build_SpliceGraph_novel_exon_core(FILE *gtf_fp, gene_t *gene, char **cname, exon_t *bam_e, int bam_e_n);
 SG_group *construct_SpliceGraph(char *fn, chr_name_t *cname);
 
 int build_sg(int argc, char *argv[]);
