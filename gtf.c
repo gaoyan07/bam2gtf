@@ -397,7 +397,7 @@ void reverse_exon_order(gene_group_t *gg) {
         if (gg->g[i].is_rev == 0) continue;
         for (j = 0; j < gg->g[i].trans_n; ++j) {
             int exon_n = gg->g[i].trans[j].exon_n;
-            for (k = 0; k < (exon_n-1) >> 1; ++k) {
+            for (k = 0; k < exon_n >> 1; ++k) {
                 tmp = gg->g[i].trans[j].exon[k];
                 gg->g[i].trans[j].exon[k] = gg->g[i].trans[j].exon[exon_n-1-k];
                 gg->g[i].trans[j].exon[exon_n-1-k] = tmp;
@@ -411,6 +411,7 @@ void reverse_exon_order(gene_group_t *gg) {
 // exon sorted by start
 int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
 {
+    err_func_format_printf(__func__, "read gene annotation from GTF file ...\n");
     FILE *gtf = fopen(fn, "r");
     char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[1024], gid[1024], trans_name[1024], trans_id[1024], tag[20];
     gene_t *cur_g=0; trans_t *cur_t=0; exon_t *cur_e=0;
@@ -429,8 +430,14 @@ int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
  
         if (strcmp(type, "gene") == 0) { // new gene starts old gene ends
             if (tid == last_tid && is_rev == last_rev &&  start < last_end) {
-                if (start < last_start) last_start = start;
-                if (end > last_end) last_end = end;
+                if (start < last_start) {
+                    last_start = start;
+                    cur_g->start = start;
+                }
+                if (end > last_end) {
+                    last_end = end;
+                    cur_g->end = end;
+                }
                 continue;
             }
             last_tid = tid, last_rev = is_rev, last_start = start, last_end = end;
@@ -462,6 +469,7 @@ int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
     // sort with cname
     qsort(gg->g, gg->gene_n, sizeof(gene_t), gene_group_comp);
     err_fclose(gtf);
+    err_func_format_printf(__func__, "read gene annotation from GTF file done!\n");
     return gg->gene_n;
 }
 
