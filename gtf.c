@@ -416,7 +416,7 @@ int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
     char line[1024], ref[100]="\0", type[20]="\0"; int start, end; char strand, add_info[1024], gname[1024], gid[1024], trans_name[1024], trans_id[1024], tag[20];
     gene_t *cur_g=0; trans_t *cur_t=0; exon_t *cur_e=0;
     gg->gene_n = 0;
-    int last_tid=-1, last_rev=-1, last_start=-1, last_end=-1;
+    int last_tid=-1, last_start=-1, last_end=-1;
 
     while (fgets(line, 1024, gtf) != NULL) {
         if (line[0] == '#') continue;
@@ -429,7 +429,7 @@ int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
         strcpy(tag, "transcript_name"); gtf_add_info(add_info, tag, trans_name);
  
         if (strcmp(type, "gene") == 0) { // new gene starts old gene ends
-            if (tid == last_tid && is_rev == last_rev &&  start < last_end) {
+            if (tid == last_tid &&  start < last_end) {
                 if (start < last_start) {
                     last_start = start;
                     cur_g->start = start;
@@ -440,7 +440,7 @@ int read_gene_group(char *fn, chr_name_t *cname, gene_group_t *gg)
                 }
                 continue;
             }
-            last_tid = tid, last_rev = is_rev, last_start = start, last_end = end;
+            last_tid = tid, last_start = start, last_end = end;
             if (++gg->gene_n == gg->gene_m) gg = gene_group_realloc(gg);
             cur_g = gg->g + gg->gene_n-1;
             cur_g->tid = tid; cur_g->is_rev = is_rev;
