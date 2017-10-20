@@ -515,16 +515,16 @@ void split_exon(coor_pair_t *coor, int coor_n, int start, int end, int *coor_i) 
 
 void gen_split_node(SG *sg, coor_pair_t *coor, int coor_n) {
     sg->node_n = 0;
-    sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, 0, 0}, 0, 0);
+    sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, 0, 0, 0}, 0, 0);
     int i, j;
     for (i = 0; i < coor_n; ++i) {
         for (j = 0; j < coor[i].n-1; ++j) {
-            sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, coor[i].s[j], coor[i].s[j+1]-1}, coor[i].s[j], coor[i].s[j+1]-1); 
+            sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, coor[i].s[j], coor[i].s[j+1]-1, 0}, coor[i].s[j], coor[i].s[j+1]-1); 
             sg_update_site(sg, coor[i].s[j]-1, ACC_SITE_F);
             sg_update_site(sg, coor[i].s[j+1], DON_SITE_F);
         }
     }
-    sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, MAX_SITE, MAX_SITE}, MAX_SITE, MAX_SITE);
+    sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, MAX_SITE, MAX_SITE, 0}, MAX_SITE, MAX_SITE);
 }
 
 void sg_merge_end(gene_t *gene) {
@@ -597,53 +597,65 @@ next_exon:;
     sort_exon(t);
 }
 
-SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans)
+SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans, int do_split)
 {
     int i, j; exon_t e;
     // merge init/term exon
     sg_merge_end(gene);
     // generate node
+    sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, 0, 0, 0}, 0, 0);
     for (i = 0; i < gene->trans_n; ++i) {
         for (j = 0; j < gene->trans[i].exon_n; ++j) {
             e = gene->trans[i].exon[j];
             sg_update_node(sg, e, e.start, e.end);
+            if (! do_split) {
+                sg_update_site(sg, e.start-1, ACC_SITE_F);
+                sg_update_site(sg, e.end+1, DON_SITE_F);
+            }
         }
     }
     if (bam_trans != NULL) {
         for (i = 0; i < bam_trans->exon_n; ++i) {
             sg_update_node(sg, bam_trans->exon[i], bam_trans->exon[i].start, bam_trans->exon[i].end);
+            if (! do_split) {
+                sg_update_site(sg, bam_trans->exon[i].start-1, ACC_SITE_F);
+                sg_update_site(sg, bam_trans->exon[i].end+1, DON_SITE_F);
+            }
         }
     }
+    sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, MAX_SITE, MAX_SITE, 0}, MAX_SITE, MAX_SITE);
 
-    int coor_n = 0, coor_i, coor_m = gene->trans[0].exon_n; coor_pair_t *coor = (coor_pair_t*)_err_malloc(coor_m * sizeof(coor_pair_t));
-    // merege into exonic region
-    for (i = 0; i < sg->node_n; ++i)
-        merge_exon(&coor, &coor_n, &coor_m, sg->node[i].start, sg->node[i].end);
-    // split gene-exon into splice-exon
-    coor_i = 0;
-    for (i = 0; i < sg->node_n; ++i)
-        split_exon(coor, coor_n, sg->node[i].start, sg->node[i].end, &coor_i);
-    // generate split-node
-    gen_split_node(sg, coor, coor_n);
+    if (do_split) {
+        int coor_n = 0, coor_i, coor_m = gene->trans[0].exon_n; coor_pair_t *coor = (coor_pair_t*)_err_malloc(coor_m * sizeof(coor_pair_t));
+        // merege into exonic region
+        for (i = 0; i < sg->node_n; ++i)
+            merge_exon(&coor, &coor_n, &coor_m, sg->node[i].start, sg->node[i].end);
+        // split gene-exon into splice-exon
+        coor_i = 0;
+        for (i = 0; i < sg->node_n; ++i)
+            split_exon(coor, coor_n, sg->node[i].start, sg->node[i].end, &coor_i);
+        // generate split-node
+        gen_split_node(sg, coor, coor_n);
 
-    // split exon in gene
-    for (i = 0; i < gene->trans_n; ++i) {
-        gen_trans_split_exon(coor, coor_n, gene->trans+i);
-        int j;
-        for (j = 0; j < gene->trans[i].exon_n; ++j) {
-            if (gene->trans[i].exon[j].start != sg->node[gene->trans[i].exon[j].sg_node_id].start || 
-                gene->trans[i].exon[j].end != sg->node[gene->trans[i].exon[j].sg_node_id].end)
-                printf("here");
+        // split exon in gene
+        for (i = 0; i < gene->trans_n; ++i) {
+            gen_trans_split_exon(coor, coor_n, gene->trans+i);
+            int j;
+            for (j = 0; j < gene->trans[i].exon_n; ++j) {
+                if (gene->trans[i].exon[j].start != sg->node[gene->trans[i].exon[j].sg_node_id].start || 
+                        gene->trans[i].exon[j].end != sg->node[gene->trans[i].exon[j].sg_node_id].end)
+                    printf("here");
+            }
         }
-    }
-    if (bam_trans != NULL) gen_trans_split_exon(coor, coor_n, bam_trans);
+        if (bam_trans != NULL) gen_trans_split_exon(coor, coor_n, bam_trans);
 
-    for (i = 0; i < coor_n; ++i) free(coor[i].s); free(coor);
+        for (i = 0; i < coor_n; ++i) free(coor[i].s); free(coor);
+    }
     return sg;
 }
 
 // construct splice-graph for each gene and bam infered exons
-SG *build_SpliceGraph_novel_exon_core(FILE *gtf_fp, gene_t *gene, char **cname, exon_t *bam_e, int bam_e_n)
+SG *build_SpliceGraph_novel_exon_core(FILE *gtf_fp, gene_t *gene, char **cname, exon_t *bam_e, int bam_e_n, int do_split)
 {
     SG *sg = sg_init();
     int i, j, don_id, acc_id, don_site_id=0, acc_site_id=0; exon_t e;
@@ -661,7 +673,7 @@ SG *build_SpliceGraph_novel_exon_core(FILE *gtf_fp, gene_t *gene, char **cname, 
     sg->tid = gene->tid, sg->is_rev = gene->is_rev;
     strcpy(sg->gene_name, gene->gname), strcpy(sg->gene_id, gene->gid);
     // gen sg node (pseu-exon)
-    gen_sg_node(sg, gene, bam_trans);
+    gen_sg_node(sg, gene, bam_trans, do_split);
     if (gtf_fp != NULL) print_gene(gtf_fp, "gtools", gene, cname);
 
     // alloc for next_id/pre_id/pre_domn/post_domn
@@ -756,7 +768,7 @@ SG *build_SpliceGraph_core(gene_t *gene)
     sg->tid = gene->tid, sg->is_rev = gene->is_rev;
     strcpy(sg->gene_name, gene->gname), strcpy(sg->gene_id, gene->gid);
     // gen sg node (pseu-exon)
-    gen_sg_node(sg, gene, NULL);
+    gen_sg_node(sg, gene, NULL, 0);
 
     // alloc for next_id/pre_id/pre_domn/post_domn
     sg_init_node(sg); sg_init_site(sg);

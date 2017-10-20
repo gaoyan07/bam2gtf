@@ -217,6 +217,19 @@ gene_t *gene_init(void) {
     return g; 
 }
 
+gene_t *copy_gene(gene_t *g) {
+    gene_t *r_g = gene_init();
+    r_g->tid = g->tid; r_g->is_rev = g->is_rev;
+    r_g->start = g->start, r_g->end = g->end;
+    strcpy(r_g->gname, g->gname), strcpy(r_g->gid, g->gid);
+    int i;
+    for (i = 0; i < g->trans_n; ++i) {
+        add_trans(r_g, g->trans[i], 0);
+    }
+
+    return r_g;
+}
+
 void add_trans(gene_t *g, trans_t t, int novel_gene_flag)
 {
     if (g->trans_n == g->trans_m) g = trans_realloc(g);
@@ -394,8 +407,8 @@ int read_sj_group(FILE *sj_fp, chr_name_t *cname, sj_t **sj_group, int sj_m)
 void reverse_exon_order(gene_group_t *gg) {
     int i, j, k; exon_t tmp;
     for (i = 0; i < gg->gene_n; ++i) {
-        if (gg->g[i].is_rev == 0) continue;
         for (j = 0; j < gg->g[i].trans_n; ++j) {
+            if (gg->g[i].trans[i].is_rev == 0) continue;
             int exon_n = gg->g[i].trans[j].exon_n;
             for (k = 0; k < exon_n >> 1; ++k) {
                 tmp = gg->g[i].trans[j].exon[k];

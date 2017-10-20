@@ -199,6 +199,36 @@ int path_filter(gec_t *id, gec_t l, gec_t sg_node_n) {
     return (n>=1 ? 1 : 0);
 }
 
+void bias_flow_iso_core(SG *sg, double **W, uint8_t **con_matrix, int src, int sink, gec_t **iso_path, gec_t *iso_path_idx, int *iso_n, int iso_max, sg_para *sgp) {
+    double *bias = cal_flow_bias(sg, W, con_matrix, src, sink);
+    gec_t *node_id = (gec_t*)_err_malloc((sink-src+1) * sizeof(gec_t));
+    double *capacities = (double*)_err_malloc((sink-src+1) * sizeof(double));
+    double *bv =  (double*)_err_malloc((sink-src+1) * sizeof(double));
+
+    gec_t l;
+    //err_printf("%d %d\t%d %d\n", src, sink, sg->node[src].start, sg->node[sink].end);
+
+    while (1) {
+        if ((l = heaviest_path(sg, W, con_matrix, bias, src, sink, node_id, capacities, bv, sgp->edge_wt)) <= 0) break;
+
+        int s = 0, t = l-1;
+        //err_printf("%d\n", l);
+        normalize_bias_factor(bv, s, t);
+        bias_flow(capacities, bv, s, t);
+        recal_flow_cap(W, capacities, node_id, l);
+        // node_id, l => iso_exon_map
+        if (path_filter(node_id, l, sg->node_n) == 0) continue;
+        int i;
+        for (i = 0; i < l; ++i) {
+            iso_path[*iso_n][i] = node_id[i];
+        } 
+        iso_path_idx[*iso_n] = l;
+        (*iso_n)++;
+        if (*iso_n == iso_max) break; // XXX top iso_max, weight based
+    }
+    free(bias); free(node_id); free(capacities); free(bv);
+}
+/*
 void bias_flow_iso_core(SG *sg, double **W, uint8_t **con_matrix, int src, int sink, int map_n, cmptb_map_t **iso_map, int **iso_se, int *iso_n, int iso_max, sg_para *sgp) {
     double *bias = cal_flow_bias(sg, W, con_matrix, src, sink);
     gec_t *node_id = (gec_t*)_err_malloc((sink-src+1) * sizeof(gec_t));
@@ -225,9 +255,21 @@ void bias_flow_iso_core(SG *sg, double **W, uint8_t **con_matrix, int src, int s
         if (*iso_n == iso_max) break; // XXX top iso_max, weight based
     }
     free(bias); free(node_id); free(capacities); free(bv);
-}
+}*/
 
-int bias_flow_gen_cand_asm(SG *sg, double **rep_W, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp) {
+// return: iso_exon_path, iso_start_end
+int bias_flow_gen_cand_asm(SG *sg, double **rep_W, uint8_t **con_matrix, int src, int sink, gec_t **iso_path, gec_t *iso_path_idx, sg_para *sgp) {
+    int i, iso_max = sgp->iso_cnt_max, iso_n=0;
+    // XXX add annotation iso to iso_map firstly
+    for (i = 0; i < iso_max; ++i) {
+        iso_path[i] = (gec_t*)_err_calloc(sg->node_n, sizeof(gec_t));
+    } 
+
+    bias_flow_iso_core(sg, rep_W, con_matrix, src, sink, iso_path, iso_path_idx, &iso_n, iso_max, sgp);
+
+    return iso_n;
+}
+/*int bias_flow_gen_cand_asm(SG *sg, double **rep_W, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp) {
     int i, iso_max = sgp->iso_cnt_max, iso_n=0;
     // XXX add annotation iso to iso_map firstly
     for (i = 0; i < iso_max; ++i) {
@@ -238,7 +280,7 @@ int bias_flow_gen_cand_asm(SG *sg, double **rep_W, uint8_t **con_matrix, int src
     bias_flow_iso_core(sg, rep_W, con_matrix, src, sink, map_n, iso_map, iso_se, &iso_n, iso_max, sgp);
 
     return iso_n;
-}
+}*/
 
 int dag_longest_path_from_src(SG *sg, uint8_t **con_matrix, int src, int sink) {
     int *m = (int*)_err_calloc(sg->node_n, sizeof(int));
@@ -288,6 +330,40 @@ int dag_longest_path_from_sink(SG *sg, uint8_t **con_matrix, int src, int sink) 
     return ret;
 }
 
+// return: iso_exon_path, iso_start_end
+void enum_gen_cand_asm_core(gec_t **iso_path, gec_t *iso_path_idx, int *iso_n, int iso_max, SG *sg, uint8_t **con_matrix, int cur_id, int src, int sink, uint8_t *node_visit, gec_t *path, gec_t *path_idx) {
+    int next_id, i;
+    SGnode *node = sg->node;
+
+    node_visit[cur_id-src] = 1;
+    path[*path_idx] = cur_id;
+    (*path_idx)++;
+
+    if (cur_id == sink) { // src-sink path
+        if (path_filter(path, *path_idx, sg->node_n)) {
+            if (*iso_n < iso_max) {
+                for (i = 0; i < *path_idx; ++i) {
+                    iso_path[*iso_n][i] = path[i];
+                }
+                iso_path_idx[*iso_n] = *path_idx;
+                (*iso_n)++;
+            } else {
+                (*iso_n)++;
+            }
+        }
+    } else { // recursively visit all next-node
+        for (i = 0; i < node[cur_id].next_n; ++i) {
+            next_id = node[cur_id].next_id[i];
+            if (next_id <= sink && !node_visit[next_id-src] && is_con_matrix(con_matrix, cur_id, next_id)) {
+                enum_gen_cand_asm_core(iso_path, iso_path_idx, iso_n, iso_max, sg, con_matrix, next_id, src, sink, node_visit, path, path_idx);
+            }
+        }
+    }
+    // remove current node and mark it as unvisited
+    (*path_idx)--;
+    node_visit[cur_id-src] = 0;
+}
+/*
 void enum_gen_cand_asm_core(cmptb_map_t **iso_map, int **iso_se, int *iso_n, int iso_max, int map_n, SG *sg, uint8_t **con_matrix, int cur_id, int src, int sink, uint8_t *node_visit, gec_t *path, gec_t *path_idx) {
     int next_id, i;
     SGnode *node = sg->node;
@@ -318,8 +394,24 @@ void enum_gen_cand_asm_core(cmptb_map_t **iso_map, int **iso_se, int *iso_n, int
     // remove current node and mark it as unvisited
     (*path_idx)--;
     node_visit[cur_id-src] = 0;
-}
+}*/
 
+// return: iso_exon_path, iso_start_end
+int enum_gen_cand_asm(SG *sg, uint8_t **con_matrix, int src, int sink, gec_t **iso_path, gec_t *iso_path_idx, sg_para *sgp) {
+    int i, iso_n = 0, iso_max = sgp->iso_cnt_max;
+    gec_t *path = (gec_t*)_err_calloc(sink-src+1, sizeof(gec_t)); gec_t path_idx = 0;
+    uint8_t *node_visit = (uint8_t*)_err_calloc(sink-src+1, sizeof(uint8_t));
+
+    for (i = 0; i < iso_max; ++i) {
+        iso_path[i] = (gec_t*)_err_calloc(sg->node_n, sizeof(gec_t));
+    }
+
+    enum_gen_cand_asm_core(iso_path, iso_path_idx, &iso_n, iso_max, sg, con_matrix, src, src, sink, node_visit, path, &path_idx);
+    if (iso_n > iso_max) iso_n = 0;
+    free(node_visit); free(path);
+    return iso_n;
+}
+/*
 int enum_gen_cand_asm(SG *sg, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp) {
     int i, iso_n = 0, iso_max = sgp->iso_cnt_max;
     gec_t *path = (gec_t*)_err_calloc(sink-src+1, sizeof(gec_t)); gec_t path_idx = 0;
@@ -334,7 +426,8 @@ int enum_gen_cand_asm(SG *sg, uint8_t **con_matrix, int src, int sink, cmptb_map
     if (iso_n > iso_max) iso_n = 0;
     free(node_visit); free(path);
     return iso_n;
-}
+}*/
+
 
 
 int bias_flow_full_iso_core(SG *sg, char **cname, double **W, uint8_t **con_matrix, int src, int sink, int iso_max, sg_para *sgp) {
@@ -372,6 +465,77 @@ int bias_flow_gen_full_iso(SG *sg, char **cname, double **W, uint8_t **con_matri
     return iso_n;
 }
 
+// return: iso_exon_path, iso_start_end
+int anno_gen_cand_asm(SG *sg, gene_t *gene, uint8_t **con_matrix, int src, int sink, gec_t **iso_path, gec_t *iso_path_idx, sg_para *sgp) {
+    int i, j, iso_n = 0, iso_max = sgp->iso_cnt_max;
+    int start, end, src_ei=-1, sink_ei=-1, pre_id=-1, cur_id=-1;
+    gec_t *path = (gec_t*)_err_calloc(sink-src+1, sizeof(gec_t)), path_idx = 0;
+
+    for (i = 0; i < iso_max; ++i) {
+        iso_path[i] = (gec_t*)_err_calloc(sg->node_n, sizeof(gec_t));
+    }
+
+    trans_t *trans; exon_t *exon;
+    for (i = 0; i < gene->trans_n; ++i) {
+        trans = gene->trans + i;
+        path_idx = 0; src_ei=-1, sink_ei=-1, pre_id=-1, cur_id=-1;
+        // find exon_id of src and sink
+        if (src == 0) {
+            src_ei = 0;
+            pre_id = trans->exon[0].sg_node_id;
+        } else {
+            start = sg->node[src].start, end = sg->node[src].end;
+            for (j = 0; j < trans->exon_n; ++j) {
+                exon = trans->exon + j;
+                if (exon->start == start && exon->end == end) {
+                    src_ei = j;
+                    pre_id = exon->sg_node_id;
+                }
+            }
+        }
+        if (sink == sg->node_n-1) sink_ei = trans->exon_n-1;
+        else {
+            start = sg->node[sink].start, end = sg->node[sink].end;
+            for (j = trans->exon_n-1; j >= 0; --j) {
+                exon = trans->exon + j;
+                if (exon->start == start && exon->end == end) sink_ei = j;
+            }
+        }
+        if (src_ei < 0 || sink_ei < 0 || pre_id < 0) 
+            continue;
+        // gen path, from src_ei to sink_ei
+        // get cur_ni for src_ei
+        path[path_idx++] = pre_id;
+        for (j = src_ei+1; j <= sink_ei; ++j) {
+            // get sg_node_id for j
+            cur_id = trans->exon[j].sg_node_id;
+            // check con_matrix
+            if (is_con_matrix(con_matrix, pre_id, cur_id))
+                path[path_idx++] = cur_id;
+            else {
+                path_idx = 0; break;
+            }
+            pre_id = cur_id;
+        }
+        // insert path_map
+        if (path_filter(path, path_idx, sg->node_n) == 0) continue;
+        if (iso_n < iso_max) {
+            int e_i;
+            for (e_i = 0; e_i < path_idx; ++e_i) {
+                iso_path[iso_n][e_i] = path[e_i];
+            }
+            iso_path_idx[iso_n] = path_idx;
+            iso_n++;
+        } else {
+            iso_n++; break;
+        }
+    }
+
+    if (iso_n > iso_max) iso_n = 0;
+    free(path);
+    return iso_n;
+}
+/*
 int anno_gen_cand_asm(SG *sg, gene_t *gene, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp) {
     int i, j, iso_n = 0, iso_max = sgp->iso_cnt_max;
     int start, end, src_ei=-1, sink_ei=-1, pre_id=-1, cur_id=-1;
@@ -439,8 +603,7 @@ int anno_gen_cand_asm(SG *sg, gene_t *gene, uint8_t **con_matrix, int src, int s
     if (iso_n > iso_max) iso_n = 0;
     free(path);
     return iso_n;
-}
-
+}*/
 int heaviest_bundling_gen_asm(SG *sg, uint8_t **con_matrix, int src, int sink, cmptb_map_t **iso_map, int **iso_se, int map_n, sg_para *sgp) {
     return 0;
 }

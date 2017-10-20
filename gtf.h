@@ -108,6 +108,7 @@ void add_intron(intron_group_t *i, intron_t i1);
 void intron_group_free(intron_group_t *i);
 
 gene_t *gene_init(void);
+gene_t *copy_gene(gene_t *g);
 void add_trans(gene_t *g, trans_t t, int novel_gene_flag);
 gene_t *trans_realloc(gene_t *g);
 void gene_free(gene_t *g);

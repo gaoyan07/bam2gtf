@@ -190,7 +190,7 @@ void cal_pre_domn(SG *sg, double **rep_W, uint8_t **con_matrix, int min_cnt);
 void cal_post_domn(SG *sg, double **rep_W, uint8_t **con_matrix, int min_cnt);
 void gtf_print_trans(FILE *fp, char *source, char *gname, char *gid, char *cname, char strand, SG *sg, gec_t *node_id, gec_t l, int iso_i);
 
-SG *build_SpliceGraph_novel_exon_core(FILE *gtf_fp, gene_t *gene, char **cname, exon_t *bam_e, int bam_e_n);
+SG *build_SpliceGraph_novel_exon_core(FILE *gtf_fp, gene_t *gene, char **cname, exon_t *bam_e, int bam_e_n, int do_split);
 SG_group *construct_SpliceGraph(char *fn, chr_name_t *cname);
 
 int build_sg(int argc, char *argv[]);
