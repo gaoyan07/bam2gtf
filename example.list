@@ -1,9 +1,0 @@
-2  # number of sample
-3  # number of replicates in sample #1
-sam1_rep1.bam
-sam1_rep2.bam
-sam1_rep3.bam
-3  # number of replicates in sample #2
-sam2_rep1.bam
-sam2_rep2.bam
-sam2_rep3.bam

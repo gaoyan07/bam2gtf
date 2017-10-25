@@ -9,7 +9,7 @@
 #include <string.h>
 #include <getopt.h>
 #include "bam2gtf.h"
-#include "htslib/htslib/sam.h"
+#include "htslib/sam.h"
 #include "utils.h"
 #include "gtf.h"
 

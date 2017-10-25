@@ -25,10 +25,6 @@
 gtools
 *gtools
 gdb_gtools
-rmats_gtools
-rgdb_gtools
-comp-gtf
-gdb_comp-gtf
 run.sh
 *.exe
 *.out
@@ -48,9 +44,3 @@ test_data/*
 #tags
 tags
 cscope.*
-
-# nano_clu
-nano_clu/*.o
-nano_clu/nanoclu
-nano_clu/gdb_nanoclu
-nano_clu/data/*

@@ -1,12 +1,24 @@
 #ifndef _BAM_SJ_H
 #define _BAM_SJ_H
 #include <stdlib.h>
-#include "htslib/htslib/sam.h"
+#include "htslib/sam.h"
 #include "gtf.h"
 #include "kseq.h"
-#include "splice_graph.h"
+#include "utils.h"
 
 KSEQ_INIT(gzFile, gzread)
+
+typedef struct {
+    uint32_t tid:30, is_uniq:1, is_splice:1;
+    int intv_n, intv_m;
+    int32_t start, end, rlen;
+    int32_t *exon_end, *intr_end; // exon_end[intv_n]: exonic, intr_end[intv_n-1]: intronic
+} ad_t;   // alignment details: start, end, intv_n, intv[]
+
+#define PAIR "paried"
+#define SING "single"
+#define PAIR_T 1
+#define SING_T 0
 
 
 #define bam_is_prop(b) (((b)->core.flag&BAM_FPROPER_PAIR) != 0)
@@ -26,15 +38,11 @@ int ad_sim_comp(ad_t *ad1, ad_t *ad2);
 int ad_comp(ad_t *ad1, ad_t *ad2);
 ad_t *ad_init(int n);
 void ad_copy(ad_t *dest, ad_t *src);
-int parse_bam_record1(bam1_t *b, ad_t *ad, sg_para *sgp);
 int push_exon_coor(exon_t **e, int *e_n, int *e_m, ad_t *ad);
 int push_sj(int **don, int *don_n, int *don_m, ad_t *ad);
 exon_t *infer_exon_coor(int *infer_e_n, exon_t *e, int e_n, int *don, int don_n);
 
 kseq_t *kseq_load_genome(gzFile genome_fp, int *_seq_n, int *_seq_m);
-int parse_bam_record(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, SG_group *sg_g, int *sg_ad_idx, ad_t **AD_group, int *AD_n, int AD_m, sj_t **SJ_group, int *SJ_n, int SJ_m, sg_para *sgp);
-int bam2cnt_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, sg_para *sgp);
-int bam2sj_core(samFile *in, bam_hdr_t *h, bam1_t *b, kseq_t *seq, int seq_n, sj_t **SJ_group, int SJ_m, sg_para *sgp);
 int bam2sj(int argc, char *argv[]);
 void free_sj_group(sj_t *sj_g, int sj_n);
 void free_ad_group(ad_t *ad_g, int ad_n);
@@ -42,12 +50,6 @@ uint8_t bam_is_uniq_NH(bam1_t *b);
 
 bam_aux_t *bam_aux_init();
 void bam_aux_destroy(bam_aux_t *aux);
-
-bam_aux_t **sg_par_input(sg_para *sgp, char *in);
-bam_aux_t **sg_par_input_list(sg_para *sgp, const char *list);
-
-
-sj_t *generate_SpliceJunction(sg_para* sgp, kseq_t *seq, int seq_n, int *sj_group_n);
 
 #define err_sam_open(in, fn) { if ((in = sam_open(fn, "rb")) == NULL) err_fatal(__func__, "fail to open \"%s\"\n", fn); }
 #define err_sam_hdr_read(h, in, fn) { if ((h = sam_hdr_read(in)) == NULL) err_fatal(__func__, "fail to read header for \"%s\"\n", fn); }

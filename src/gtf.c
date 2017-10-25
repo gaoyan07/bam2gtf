@@ -3,8 +3,7 @@
 #include <string.h>
 #include "gtf.h"
 #include "utils.h"
-#include "splice_graph.h"
-#include "htslib/htslib/sam.h"
+#include "htslib/sam.h"
 
 extern int gen_trans(bam1_t *b, trans_t *t, int exon_min);
 
@@ -205,6 +204,31 @@ void add_intron(intron_group_t *i, intron_t i1)
     i->intron[i->intron_n].uniq_c = i1.uniq_c;
     i->intron[i->intron_n].multi_c = i1.multi_c;
     i->intron_n++;
+}
+
+//XXX
+int name2id(char ref[])
+{
+    if (ref[3] == 'X') return 22;
+    else if (ref[3] == 'Y') return 23;
+    else if (ref[3] == 'M') return 24;
+    else return atoi(ref+3)-1;
+}
+
+int read_intron_group(intron_group_t *I, FILE *fp)
+{
+    if (fp == NULL) return 0;
+    char line[1024], ref[100]; int start, end, nstrand, canon, anno, uniq_map, multi_map, overlang;
+    intron_t *i = intron_init(1);
+    while (fgets(line, 1024, fp) != NULL) {
+        sscanf(line, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d", ref, &start, &end, &nstrand, &canon, &anno, &uniq_map, &multi_map, &overlang);
+        i->tid = name2id(ref); i->start = start, i->end = end;
+        i->is_rev = (nstrand == 1 ? 0 : (nstrand == 2 ? 1 : -1)); i->is_canon = canon;
+        i->uniq_c = uniq_map; i->multi_c = multi_map;
+        add_intron(I, *i);
+    }
+    free(i);
+    return I->intron_n;
 }
 
 void intron_group_free(intron_group_t *i) { free(i->intron); free(i); }
@@ -583,40 +607,4 @@ void print_gene(FILE *out, char *src, gene_t *gene, char **cname) {
         print_gtf_trans(gg.g[i], h, src, out);        
     }
 }*/
-
-void gtf_print_trans(FILE *fp, char *source, char *gname, char *gid, char *cname, char strand, SG *sg, gec_t *node_id, gec_t l, int iso_i) {
-    int i = 0, mi = 0;
-    char tmp[1024], name[1024];
-    // merge node if necessary
-    int *start = (int*)_err_malloc(l * sizeof(int)), *end = (int*)_err_malloc(l * sizeof(int));
-    start[mi] = sg->node[node_id[i]].start;
-    for (i = 1; i < l; ++i) {
-        if (sg->node[node_id[i]].start != sg->node[node_id[i-1]].end + 1) {
-            end[mi++] = sg->node[node_id[i-1]].end;
-            start[mi] = sg->node[node_id[i]].start;
-        }
-    } end[mi++] = sg->node[node_id[i-1]].end;
-
-    memset(tmp, 0, 1024); memset(name, 0, 1024);
-    if (strlen(gid) > 0) sprintf(tmp, " gene_id \"%s\";", gid), strcat(name, tmp);
-    sprintf(tmp, " transcript_id \"%s_novel_%d\";", sg->gene_name, iso_i), strcat(name, tmp);
-    if (strlen(gname) > 0) sprintf(tmp, " gene_name \"%s\";", gname), strcat(name, tmp);
-    //if (strlen(r.t[i].tname) > 0) sprintf(tmp, " transcript_name \"%s\";", r.t[i].tname), strcat(name, tmp);
-
-
-    // print transcript line
-    fprintf(fp, "%s\t%s\t%s\t%d\t%d\t%c\t%c\t%c\t%s\n", cname, source, "transcript", sg->node[node_id[0]].start, sg->node[node_id[l-1]].end, '.', strand, '.', name);
-
-    // print exon line
-    if (strand == '+') {
-        for (i = 0; i < mi; ++i) {
-            fprintf(fp, "%s\t%s\t%s\t%d\t%d\t%c\t%c\t%c\t%s\n", cname, source, "exon", start[i], end[i], '.', strand, '.', name);
-        }
-    } else {
-        for (i = mi-1; i >= 0; --i) {
-            fprintf(fp, "%s\t%s\t%s\t%d\t%d\t%c\t%c\t%c\t%s\n", cname, source, "exon", start[i], end[i], '.', strand, '.', name);
-        }
-    }
-    free(start); free(end);
-}
 

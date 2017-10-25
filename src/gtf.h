@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include "htslib/htslib/sam.h"
+#include "htslib/sam.h"
 
 #define MAX_SITE 2147483647
 #define DON_SITE_F 0
@@ -105,6 +105,8 @@ void read_trans_free(read_trans_t *r);
 intron_t *intron_init(int n);
 intron_group_t *intron_group_init(void);
 void add_intron(intron_group_t *i, intron_t i1);
+int read_intron_group(intron_group_t *I, FILE *fp);
+
 void intron_group_free(intron_group_t *i);
 
 gene_t *gene_init(void);

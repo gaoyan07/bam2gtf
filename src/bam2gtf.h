@@ -1,6 +1,6 @@
 #ifndef _BAM2GTF_H
 #define _BAM2GTF_H
-#include "htslib/htslib/sam.h"
+#include "htslib/sam.h"
 #include "gtf.h"
 
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)

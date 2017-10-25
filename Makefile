@@ -9,7 +9,7 @@ INCLUDE = -I $(HTSLIB_DIR)
 
 
 BIN_DIR =	.
-SRC_DIR =   .
+SRC_DIR =   ./src
 
 HTS_ALL =   hts_all
 SOURCE  =	$(wildcard ${SRC_DIR}/*.c) 

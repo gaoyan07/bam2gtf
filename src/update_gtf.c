@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include "htslib/htslib/sam.h"
+#include "htslib/sam.h"
 #include "utils.h"
 #include "gtf.h"
 #include "bam2gtf.h"

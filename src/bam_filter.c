@@ -3,7 +3,7 @@
 #include <getopt.h>
 #include <string.h>
 #include "utils.h"
-#include "htslib/htslib/sam.h"
+#include "htslib/sam.h"
 #include "gtf.h"
 
 #define bam_unmap(b) ((b)->core.flag & BAM_FUNMAP)
