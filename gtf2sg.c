@@ -597,13 +597,23 @@ next_exon:;
     sort_exon(t);
 }
 
+void gen_sg_node_id(SG *sg, gene_t *gene) {
+    int i, j;
+    for (i = 0; i < gene->trans_n; ++i) {
+        trans_t *trans = gene->trans+i;
+        for (j = 0; j < trans->exon_n; ++j) {
+            int sg_node_id = _err_sg_bin_sch_node(sg, trans->exon[j]);
+            trans->exon[j].sg_node_id = sg_node_id;
+        }
+    }
+}
+
 SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans, int do_split)
 {
     int i, j; exon_t e;
     // merge init/term exon
     sg_merge_end(gene);
     // generate node
-    sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, 0, 0, 0}, 0, 0);
     for (i = 0; i < gene->trans_n; ++i) {
         for (j = 0; j < gene->trans[i].exon_n; ++j) {
             e = gene->trans[i].exon[j];
@@ -623,7 +633,6 @@ SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans, int do_split)
             }
         }
     }
-    sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, MAX_SITE, MAX_SITE, 0}, MAX_SITE, MAX_SITE);
 
     if (do_split) {
         int coor_n = 0, coor_i, coor_m = gene->trans[0].exon_n; coor_pair_t *coor = (coor_pair_t*)_err_malloc(coor_m * sizeof(coor_pair_t));
@@ -650,6 +659,10 @@ SG *gen_sg_node(SG *sg, gene_t *gene, trans_t *bam_trans, int do_split)
         if (bam_trans != NULL) gen_trans_split_exon(coor, coor_n, bam_trans);
 
         for (i = 0; i < coor_n; ++i) free(coor[i].s); free(coor);
+    } else {
+        gen_sg_node_id(sg, gene);
+        sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, 0, 0, 0}, 0, 0);
+        sg_update_node(sg, (exon_t){sg->tid, sg->is_rev, MAX_SITE, MAX_SITE, 0}, MAX_SITE, MAX_SITE);
     }
     return sg;
 }
@@ -674,7 +687,7 @@ SG *build_SpliceGraph_novel_exon_core(FILE *gtf_fp, gene_t *gene, char **cname, 
     strcpy(sg->gene_name, gene->gname), strcpy(sg->gene_id, gene->gid);
     // gen sg node (pseu-exon)
     gen_sg_node(sg, gene, bam_trans, do_split);
-    if (gtf_fp != NULL) print_gene(gtf_fp, "gtools", gene, cname);
+    if (do_split!= 1 && gtf_fp != NULL) print_gene(gtf_fp, "gtools", gene, cname);
 
     // alloc for next_id/pre_id/pre_domn/post_domn
     sg_init_node(sg); sg_init_site(sg);

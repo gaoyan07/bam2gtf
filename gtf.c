@@ -408,7 +408,7 @@ void reverse_exon_order(gene_group_t *gg) {
     int i, j, k; exon_t tmp;
     for (i = 0; i < gg->gene_n; ++i) {
         for (j = 0; j < gg->g[i].trans_n; ++j) {
-            if (gg->g[i].trans[i].is_rev == 0) continue;
+            if (gg->g[i].trans[j].is_rev == 0) continue;
             int exon_n = gg->g[i].trans[j].exon_n;
             for (k = 0; k < exon_n >> 1; ++k) {
                 tmp = gg->g[i].trans[j].exon[k];

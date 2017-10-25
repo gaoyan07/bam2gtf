@@ -196,7 +196,7 @@ int path_filter(gec_t *id, gec_t l, gec_t sg_node_n) {
     for (i = 0; i < l; ++i) {
         if (id[i] != 0 && id[i] != sg_node_n-1) n++;
     }
-    return (n>=1 ? 1 : 0);
+    return (n>=2 ? 1 : 0);
 }
 
 void bias_flow_iso_core(SG *sg, double **W, uint8_t **con_matrix, int src, int sink, gec_t **iso_path, gec_t *iso_path_idx, int *iso_n, int iso_max, sg_para *sgp) {

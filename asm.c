@@ -633,7 +633,7 @@ int cmptb_map_exon_cnt(cmptb_map_t *union_map, int map_n) {
 }
 
 int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int src, int sink, int node_n, int iso_n, int type, int *whole_exon_id, int **exon_id, int *iso_exon_n, int *exon_index) {
-    int i, exon_i, iso_i;
+    int i, j, exon_i, iso_i;
     SGnode *node = sg->node; cmptb_map_t *im;
 
     int _exon_i = 0;
@@ -670,7 +670,7 @@ int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int
         // exclusion isoform
         if (iso_exon_n[1] != 2 || exon_id[1][0] != src || exon_id[1][1] != sink) return 0;
     } else if ((type == A5SS_TYPE && sg->is_rev == 0) || (type == A3SS_TYPE && sg->is_rev == 1)) { // TODO
-        // if (node_n != 3 || iso_n != 2) return 0;
+        if (node_n != 4 || iso_n != 2 || iso_exon_n[1] != 3 || iso_exon_n[2] != 3) return 0;
         // same first node
         for (i = 0; i < iso_n; ++i) {
             if (exon_id[i][0] != src) return 0;
@@ -679,12 +679,7 @@ int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int
         for (i = 0; i < iso_n; ++i) {
             if (exon_id[i][iso_exon_n[i]-1] != sink) return 0;
         } 
-        // consecutive first and second ... exon
-        for (i = 0; i < node_n-2; ++i) {
-            if (node[whole_exon_id[i]].end+1 != node[whole_exon_id[i+1]].start) return 0;
-        }
-        // last junction
-        if (node[whole_exon_id[node_n-2]].end+1 == node[whole_exon_id[node_n-1]].start) return 0;
+        if (node[exon_id[0][1]].start != node[exon_id[1][1]].start) return 0;
     } else if ((type == A3SS_TYPE && sg->is_rev == 0) || (type == A5SS_TYPE && sg->is_rev == 1)) { // TODO
         // if (node_n != 3 || iso_n != 2) return 0;
         // same first node
@@ -695,12 +690,7 @@ int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int
         for (i = 0; i < iso_n; ++i) {
             if (exon_id[i][iso_exon_n[i]-1] != sink) return 0;
         } 
-        // consecutive last  ... exon
-        for (i = 1; i < node_n-1; ++i) {
-            if (node[whole_exon_id[i]].end+1 != node[whole_exon_id[i+1]].start) return 0;
-        }
-        // first junction
-        if (node[whole_exon_id[0]].end+1 == node[whole_exon_id[1]].start) return 0;
+        if (node[exon_id[0][1]].end != node[exon_id[1][1]].end) return 0;
     } else if (type == MXE_TYPE) {
         if (iso_n != 2 || node_n != 4) return 0; // TODO node_n == 4
         if (exon_id[0][0] != src || exon_id[1][0] != src) return 0;
@@ -711,7 +701,7 @@ int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int
             if (node[whole_exon_id[i]].end+1 == node[whole_exon_id[i+1]].start) return 0;
         }        
     } else if (type == RI_TYPE) {
-        // if (node_n != 3 || iso_n != 2) return 0;
+        if (node_n != 5 || iso_n != 2 || iso_exon_n[0] != 4 || iso_exon_n[1] != 3) return 0;
         // same first node
         for (i = 0; i < iso_n; ++i) {
             if (exon_id[i][0] != src) return 0;
@@ -721,9 +711,8 @@ int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int
             if (exon_id[i][iso_exon_n[i]-1] != sink) return 0;
         } 
         // consecutive first and second ... exon
-        for (i = 0; i < node_n-1; ++i) {
-            if (node[whole_exon_id[i]].end+1 != node[whole_exon_id[i+1]].start) return 0;
-        }
+        if (node[exon_id[0][1]].start != node[exon_id[1][1]].start) return 0;
+        if (node[exon_id[0][2]].end != node[exon_id[1][1]].end) return 0;
     } else if (type == _2SE_TYPE) {
         if (iso_n != 2) return 0;
         // inclusion isoform
@@ -742,25 +731,33 @@ int check_module_type(SG *sg, cmptb_map_t *union_map, cmptb_map_t **iso_map, int
         if (node[exon_id[0][node_n-1]].start-1 == node[exon_id[0][node_n-2]].end) return 0;
         // exclusion isoform
         if (iso_exon_n[1] != 2 || exon_id[1][0] != src || exon_id[1][1] != sink) return 0;
-    } else if ((type == AIE_TYPE && sg->is_rev == 0) || (type == ATE_TYPE && sg->is_rev == 1)) { // XXX 2 node AIE
+    } else if ((type == AIE_TYPE && sg->is_rev == 0) || (type == ATE_TYPE && sg->is_rev == 1)) {
         // different first node
         for (i = 0; i < iso_n-1; ++i) {
-            if (exon_id[i][0] == exon_id[i+1][0]) return 0;
+            for (j = i+1; j < iso_n; ++j) {
+                if (exon_id[i][0] == exon_id[j][0]) return 0;
+                if (node[exon_id[i][1]].start != node[exon_id[j][1]].start) return 0;
+            }
         }
         // same last node
         for (i = 0; i < iso_n-1; ++i) {
-            if (exon_id[i][iso_exon_n[i]-1] != exon_id[i+1][iso_exon_n[i+1]-1]) return 0;
+            for (j = i+1; j < iso_n; ++j) {
+                if (exon_id[i][iso_exon_n[i]-1] != exon_id[j][iso_exon_n[j]-1]) return 0;
+            }
         }
     } else if ((type == ATE_TYPE && sg->is_rev == 0) || (type == AIE_TYPE && sg->is_rev == 1)) {
         // same first node
         for (i = 0; i < iso_n-1; ++i) {
-            if (exon_id[i][0] != exon_id[i+1][0]) return 0;
+            for (j = i+1; j < iso_n; ++j) {
+                if (exon_id[i][0] != exon_id[j][0]) return 0;
+            }
         }
         // different last node
         int j;
         for (i = 0; i < iso_n-1; ++i) {
             for (j = i+1; j < iso_n; ++j) {
                 if (exon_id[i][iso_exon_n[i]-1] == exon_id[j][iso_exon_n[j]-1]) return 0;
+                if (node[exon_id[i][iso_exon_n[i]-2]].end != node[exon_id[j][iso_exon_n[j]-2]].end) return 0;
             }
         }
     }
