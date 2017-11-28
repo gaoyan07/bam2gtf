@@ -132,7 +132,7 @@ void print_gtf_trans(gene_t g, bam_hdr_t *h, char *src, FILE *out);
 
 // for filtering splice-junction
 #define INTRON_MIN_LEN 3
-#define INTER_EXON_MIN_LEN 6
+#define INTER_EXON_MIN_LEN 3
 #define SPLICE_DISTANCE 0
 #define MIN_INTRON_NUM 0
 #define ANCHOR_MIN_LEN 1 // for annotated sj
